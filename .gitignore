@@ -4,3 +4,6 @@ artifacts/schema_audit/*.csv
 artifacts/schema_audit/*.json
 __pycache__/
 *.pyc
+
+# Download manifests record absolute machine-specific destinations (AGENTS.md section 5)
+artifacts/download_manifests/
