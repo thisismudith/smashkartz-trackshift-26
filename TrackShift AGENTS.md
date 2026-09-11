@@ -675,13 +675,19 @@ Expected order of magnitude:
 30 to 40 strategic segments per lap
 ```
 
-Store:
+Store the following segment fields:
 
 ```text
 segment_id
 start_distance_m
 end_distance_m
 segment_length_m
+
+sector
+zone
+corner_id
+corner_type
+corner_phase
 
 segment_time_s
 
@@ -700,13 +706,24 @@ coast_fraction
 mean_gradient
 elevation_change
 
+wind_head_component_mps
+wind_cross_component_mps
+wet_track_flag
+
 gap_entry
 gap_exit
 
 tyre_compound
 tyre_life
 stint
+tyre_degradation_proxy
+
+normal_race_model_eligible
 ```
+
+Segment geometry is static per track map. Weather, tyre, gap, and race-context fields are time-aligned to the segment entry. Segment summaries that use the full segment are valid for retrospective physics work, but must be tagged `OFFLINE_ONLY` and cannot become live decision features.
+
+If continuous tyre temperature, tyre pressure, brake temperature, brake pressure, or steering data is acquired, derive normalized segment summaries from it only after source validation. Do not add sparse or incompatible sensor channels to the base segment model.
 
 Target dataset:
 
@@ -864,32 +881,58 @@ Useful pair features include:
 ```text
 gap
 gap_change
+gap_to_ahead_s
+gap_to_behind_s
 
 delta_speed
 delta_exit_speed
 delta_segment_time
 delta_acceleration
-
-tyre_age_delta
-compound_pair
-
-recent_pace_delta
-
 closing_rate
 closing_rate_trend
+relative_speed_to_ahead_mps
+relative_speed_to_behind_mps
 
 brake_point_delta
+braking_intensity_delta
 
-attacker_team
-defender_team
+attacker_tyre_compound
+defender_tyre_compound
+attacker_tyre_life
+defender_tyre_life
+tyre_age_delta
+compound_pair
+attacker_tyre_degradation_proxy
+defender_tyre_degradation_proxy
 
-attacker_driver
-defender_driver
+attacker_fuel_load_kg_est
+defender_fuel_load_kg_est
+fuel_load_delta_kg_est
+attacker_ers_energy_state_est_kj
+defender_ers_energy_state_est_kj
+ers_energy_delta_kj_est
 
+recent_pace_delta
+wind_head_component_mps
+wind_cross_component_mps
+track_temperature
+wet_track_flag
+
+corner_type
+corner_phase
 track
 segment
 zone
+
+attacker_team
+defender_team
+attacker_driver
+defender_driver
 ```
+
+Fuel and ERS fields are estimates, not observations, and must retain their uncertainty values in the feature table. Models may use them only when the same estimator is available at the live decision point.
+
+Tyre temperature, tyre pressure, brake temperature, brake pressure, and steering features are source-gated. When available, use normalized attacker-versus-defender or deviation-from-stint-baseline values, not uncalibrated raw values from mixed sources.
 
 Identity features must be validated carefully to ensure models do not merely memorize drivers or teams.
 
@@ -950,44 +993,103 @@ Never split rows from the same battle between training and test sets.
 
 The pass model should not train on every telemetry row.
 
-Construct one row per meaningful overtaking opportunity.
+Construct one row per meaningful overtaking opportunity at a named decision checkpoint. Required checkpoints are:
 
-Target features may include:
+```text
+DETECTION
+ACTIVATION
+BRAKING
+```
+
+`DETECTION` rows predict from information available at or before the Detection Line. `ACTIVATION` and `BRAKING` rows are separate later decision snapshots, not extra features for a Detection-Line model.
+
+Each row must include a stable key:
+
+```text
+opportunity_id
+decision_checkpoint
+feature_cutoff_distance_m
+outcome_horizon
+```
+
+Target features include:
 
 ```text
 year
 event
+session
 lap
+regulation_era
 zone
+sector
+corner_id
+corner_type
+corner_phase
 
 attacker
 defender
 attacker_team
 defender_team
 
+gap_at_checkpoint
 gap_at_detection
 gap_at_activation
 gap_at_braking
+eligibility_margin
 
+delta_speed_checkpoint
 delta_speed_detection
 delta_speed_activation
 delta_speed_braking
+delta_acceleration_checkpoint
+closing_rate
+closing_rate_trend
+recent_pace_delta
 
+attacker_tyre_compound
+defender_tyre_compound
+attacker_tyre_life
+defender_tyre_life
 tyre_age_delta
 compound_pair
+attacker_tyre_degradation_proxy
+defender_tyre_degradation_proxy
 
-recent_pace_delta
-closing_rate
+attacker_fuel_load_kg_est
+defender_fuel_load_kg_est
+fuel_load_delta_kg_est
+attacker_ers_energy_state_est_kj
+defender_ers_energy_state_est_kj
+ers_energy_delta_kj_est
 
-eligibility
+air_temperature
+track_temperature
+humidity_pct
+air_pressure_hpa
+wind_head_component_mps
+wind_cross_component_mps
+wet_track_flag
 
+historical_drs_eligible
+historical_drs_open
+overtake_eligible
+overtake_state
+
+distance_detection_to_activation
 distance_activation_to_brake
 distance_remaining_in_zone
-
 position_context
 
-passed
+passed_by_outcome_horizon
 ```
+
+Only populate a feature whose checkpoint has already occurred. For example, a `DETECTION` row may contain `gap_at_detection` but never `gap_at_activation`, `gap_at_braking`, activation speed, braking speed, or any centered/future rolling statistic. Use checkpoint-specific models or strictly checkpoint-compatible feature sets.
+
+`passed_by_outcome_horizon` must have a fixed, versioned definition, such as completion before zone exit or before the next Detection Line. Do not use an ambiguous `passed` label. Store `pass_attempted` and the outcome timestamp/distance separately for audit, but never use either as a feature.
+
+Only normal-race-eligible, on-track green-flag opportunities enter the initial pass-model training set. Safety Car, VSC, yellow/red restrictions, pit transitions, and rows with unknown race-control state must be retained for audit but excluded from this dataset.
+
+Tyre temperature and pressure can be valuable at an opportunity, but only as source-gated features. If a continuous, compatible source is added, use per-car normalized states such as `tyre_temperature_delta_to_stint_baseline` and `tyre_pressure_delta_to_stint_baseline`, plus their attacker-defender deltas. Do not insert missing sensor data as zeros or infer it from future pace.
 
 Historical 2022 to 2025 opportunities are DRS-era priors.
 
@@ -1178,7 +1280,7 @@ The planner should optimize probability of being ahead at the horizon rather tha
 
 # 24. Rival-state dataset
 
-Create one row per battle segment.
+Create one row per normal-race-eligible battle segment.
 
 Candidate features include:
 
@@ -1191,18 +1293,35 @@ exit_speed_residual_driver
 exit_speed_residual_team
 
 brake_point_shift
+braking_intensity_proxy
 full_throttle_clipping
 
 closing_rate
 gap_change
 recent_gap_trend
+relative_speed_to_ahead_mps
 
 tyre_age
 compound
+tyre_degradation_proxy
+
+fuel_load_kg_est
+fuel_load_uncertainty_kg
+ers_energy_state_est_kj
+ers_energy_state_uncertainty_kj
+
+wind_head_component_mps
+wind_cross_component_mps
+track_temperature
+wet_track_flag
+corner_type
+corner_phase
 
 traffic_context
 race_context
 ```
+
+Tyre temperature/pressure, brake temperature, brake pressure, steering, and damage may be added only through the same source-gated policy as the telemetry lake. Never turn an unobserved channel into an assumed rival tactical state.
 
 Target conceptual hidden states:
 
@@ -1432,6 +1551,8 @@ physics + residual model
 small neural regressor
 ```
 
+At minimum, calibration and residual models must control for entry speed, segment geometry, aero/Ovt state, tyre compound and life, fuel-load estimate, wind head/cross components, track temperature, wetness, and normal-race eligibility. Optional tyre-temperature/pressure and brake channels remain source-gated.
+
 The winner must remain physically plausible.
 
 ---
@@ -1633,31 +1754,35 @@ A slow segment under yellow flags must not be interpreted as energy conservation
 
 # 38. Tyres and fuel context
 
-Tyre compound and tyre life are required contextual variables where available.
+Tyre compound, tyre life, stint, and a causal tyre-degradation proxy are required contextual variables where available. Keep attacker and defender values separately before deriving pairwise deltas.
 
-Develop tyre-normalized pace features where useful.
+Develop tyre-normalized pace features where useful. Normalization must be relative to the relevant driver, car, compound, stint, track, and session context, not one global tyre curve.
 
-Fuel load is generally not directly available.
+Tyre temperature and pressure can materially improve short-horizon pace and pass modelling, but are source-gated because they are not consistently public. If acquired from a documented continuous source, record the measurement location, units, timestamp, source, and axle/wheel coverage. Prefer deviations from the current stint baseline and attacker-defender deltas over raw values.
 
-If lap/session position is used as a fuel proxy, label it explicitly as a proxy.
+Fuel load is generally not directly available. If a fuel estimate or lap/session-position proxy is used, label it explicitly as `INFERRED` or `SIMULATED`, include its uncertainty, and use only a causal estimator.
 
-Do not represent estimated fuel as observed fuel.
+Do not represent estimated fuel, inferred tyre state, or unobserved tyre temperatures/pressures as observed telemetry.
 
 ---
 
 # 39. Weather
 
-At minimum retain:
+Retain and time-align at minimum:
 
 ```text
 rainfall
 track_temperature
 air_temperature
+humidity_pct
+air_pressure_hpa
+wind_speed_mps
+wind_direction_deg
 ```
 
-Use these as contextual variables or filters.
+Derive `wind_head_component_mps`, `wind_cross_component_mps`, `air_density_proxy`, and `wet_track_flag` using the current segment geometry. Use the derived track-relative quantities in models rather than a global raw direction.
 
-Additional weather channels may be incorporated only after demonstrating usefulness.
+Weather is shared race context, not a substitute for vehicle state. Incorporate it through leakage-safe held-out-event ablation and interaction features where justified, such as wind by straight/corner type or temperature by tyre age.
 
 ---
 
@@ -1858,12 +1983,16 @@ source
 derivation
 allowed sessions
 supported years
+availability scope
+source-gated
+decision checkpoint
 live_safe
 provenance
+uncertainty field
 consuming models
 ```
 
-This prevents training on poorly defined or unavailable features.
+`decision checkpoint` is required for opportunity features. It prevents an Activation-Line or Braking-point quantity being accidentally supplied to a Detection-Line model.
 
 ---
 
