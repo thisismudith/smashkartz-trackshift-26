@@ -5,9 +5,11 @@ Execution plan for **Owner B (Tanveer)**: Chain R (rules), Chain P (pass probabi
 - `TrackShift AGENTS.md` — engineering contract (what the system is). Section refs below are `§N` in that file.
 - `MODELS.md` — ownership split, inventory IDs (M01–M34), interface contracts (C1–C10).
 - `API.md` — the UI-facing surface every model must eventually expose.
-- **This file** — the ordered checkpoints to actually build them.
+- **`CHECKPOINTS_TANVEER.md`** (this file) — the ordered checkpoints to actually build them.
 
-Written against `TrackShift AGENTS.md` at commit `09c7691`. Rishabh's items (M02, M05, M06, M08, M09, M22–M27, M29) appear only where they block or unblock you.
+**Scope: Owner B only.** Every checkpoint here is Tanveer's to build. Rishabh's items (M02, M05, M06, M08, M09, M22–M27, M29) appear only where they block or unblock you, and are labelled as such. His equivalent plan, if written, belongs in a separate file.
+
+Written against `TrackShift AGENTS.md` at commit `09c7691`.
 
 ---
 
