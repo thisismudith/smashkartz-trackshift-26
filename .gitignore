@@ -1,0 +1,5 @@
+data/raw/
+artifacts/schema_audit/*.csv
+artifacts/schema_audit/*.json
+__pycache__/
+*.pyc
