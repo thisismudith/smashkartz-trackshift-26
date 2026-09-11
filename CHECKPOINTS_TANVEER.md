@@ -1788,3 +1788,4 @@ def test_causal(builder, lap_df):
 | T4 | C7 (`normal_race_model_eligible`) from Rishabh | CP-09 and CP-13 depend on it; track-status decoding in this file is the interim stand-in |
 | T5 | C8 (`battle_id`) and C9 (splitter) from Rishabh | CP-13 can build without them, CP-14 cannot train without C9 |
 | T6 | `outcome_horizon` definition beyond `zone_exit_v1` | Alternative: "before the next Detection Line". Compare both in CP-13. |
+| T7 | Integration of the two halves is **not** in this file | Rishabh writes his own checkpoints first, then the joint integration plan, and **owns integration**. CP-24 completes Tanveer's 9 routes, the app skeleton and the bundle generator; Rishabh's 7 routes — including `GET /battles/{id}/timeline`, which joins C3/C4/C5 — and the zero-stub demo bundle land in that plan. |

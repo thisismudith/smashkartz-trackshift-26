@@ -494,6 +494,7 @@ Answers change the plan in the stated way. Until answered, the assumption in the
 | Q5 | ~~Who owns UI / demo?~~ **Resolved:** a third contributor (Owner C), integrating through `API.md` only. | — |
 | Q6 | Hackathon date (§61 mentions one)? | Unknown; milestone table in §6.1 is ordered but undated. |
 | Q7 | ~~Should DP move to Tanveer?~~ **Resolved:** stays with Rishabh. Chain V is self-contained and develops against stubs of C3/C4/C5, so it does not block on Tanveer's chains. | — |
+| Q8 | ~~Who writes the per-owner and integration build plans?~~ **Resolved:** Tanveer's is `CHECKPOINTS_TANVEER.md`. Rishabh writes his own for the 13 models he owns (M02, M05, M06, M08, M09, M09b, M22–M27, M29). The joint integration plan is written after his, and **integration is owned by Rishabh**. | — |
 
 ---
 
