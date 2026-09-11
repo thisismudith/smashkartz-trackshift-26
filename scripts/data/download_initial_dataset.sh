@@ -19,6 +19,7 @@ MANIFEST_ROOT="$ROOT/artifacts/download_manifests"
 YEARS_CSV="2022,2023,2024,2025,2026"
 EVENTS_CSV=""
 SESSIONS_CSV=""
+DRIVERS_CSV=""
 DRY_RUN=0
 
 usage() {
@@ -37,6 +38,8 @@ Options:
                        "British Grand Prix,Italian Grand Prix"
   --sessions CSV     Exact session directory names. Overrides the default
                        session policy for every selected year.
+  --drivers CSV      Exact driver directory names, for example "HAM,RUS".
+                       Downloads their telemetry plus session metadata.
   --raw-root PATH    Destination root (default: data/raw/tracinginsights)
   --manifest-root P  Download manifest directory (default: artifacts/download_manifests)
   --dry-run          Print the selected scope without cloning or updating files
@@ -61,6 +64,7 @@ while [[ $# -gt 0 ]]; do
     --years) require_value "$1" "${2:-}"; YEARS_CSV="$2"; shift 2 ;;
     --events) require_value "$1" "${2:-}"; EVENTS_CSV="$2"; shift 2 ;;
     --sessions) require_value "$1" "${2:-}"; SESSIONS_CSV="$2"; shift 2 ;;
+    --drivers) require_value "$1" "${2:-}"; DRIVERS_CSV="$2"; shift 2 ;;
     --raw-root) require_value "$1" "${2:-}"; RAW_ROOT="$2"; RAW_ROOT_EXPLICIT=1; shift 2 ;;
     --manifest-root) require_value "$1" "${2:-}"; MANIFEST_ROOT="$2"; shift 2 ;;
     --dry-run) DRY_RUN=1; shift ;;
@@ -83,13 +87,178 @@ split_csv() {
   done
 }
 
-declare -a YEARS=() EVENTS=() OVERRIDE_SESSIONS=()
+declare -a YEARS=() EVENTS=() OVERRIDE_SESSIONS=() DRIVERS=()
 split_csv "$YEARS_CSV" YEARS
 [[ -z "$EVENTS_CSV" ]] || split_csv "$EVENTS_CSV" EVENTS
 [[ -z "$SESSIONS_CSV" ]] || split_csv "$SESSIONS_CSV" OVERRIDE_SESSIONS
+[[ -z "$DRIVERS_CSV" ]] || split_csv "$DRIVERS_CSV" DRIVERS
 
 for year in "${YEARS[@]}"; do
   [[ "$year" =~ ^202[2-6]$ ]] || die "unsupported year: $year"
+done
+
+validate_directory_name() {
+  local label="$1" value="$2"
+  [[ "$value" != */* && "$value" != *
+
+session_names_for_year() {
+  local year="$1"
+  local -n result="$2"
+  if [[ ${#OVERRIDE_SESSIONS[@]} -gt 0 ]]; then
+    result=("${OVERRIDE_SESSIONS[@]}")
+  else
+    result=("Qualifying" "Sprint Qualifying" "Sprint Shootout" "Sprint" "Race")
+    if [[ "$year" == "2026" ]]; then
+      result=("Practice 1" "${result[@]}")
+    fi
+  fi
+  return 0
+}
+
+sparse_patterns_for_year() {
+  local year="$1"
+  local -n result="$2"
+  local -a sessions event_scope
+  session_names_for_year "$year" sessions
+  result=("/README.md" "/data_dictionary.json")
+
+  if [[ ${#EVENTS[@]} -eq 0 ]]; then
+    event_scope=("*")
+  else
+    event_scope=("${EVENTS[@]}")
+  fi
+
+  local session event driver
+  for event in "${event_scope[@]}"; do
+    for session in "${sessions[@]}"; do
+      if [[ ${#DRIVERS[@]} -eq 0 ]]; then
+        result+=("/$event/$session/")
+      else
+        # Keep session-level metadata while selecting only requested drivers.
+        result+=("/$event/$session/*.json")
+        for driver in "${DRIVERS[@]}"; do
+          result+=("/$event/$session/$driver/")
+        done
+      fi
+    done
+  done
+}
+
+write_manifest() {
+  local year="$1" destination="$2" upstream="$3" source_commit="$4" telemetry_count="$5" metadata_count="$6"
+  shift 6
+  python3 - "$MANIFEST_ROOT" "$year" "$destination" "$upstream" "$source_commit" "$telemetry_count" "$metadata_count" "$YEARS_CSV" "$EVENTS_CSV" "$SESSIONS_CSV" "$DRIVERS_CSV" "$@" <<'PY'
+import json
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+(
+    root,
+    year,
+    destination,
+    upstream,
+    source_commit,
+    telemetry_count,
+    metadata_count,
+    years,
+    events,
+    sessions,
+    drivers,
+    *patterns,
+) = sys.argv[1:]
+output = Path(root) / f"initial_dataset_{year}.json"
+output.parent.mkdir(parents=True, exist_ok=True)
+payload = {
+    "dataset": "trackshift_initial_tracinginsights_scope",
+    "source": upstream,
+    "source_commit": source_commit,
+    "year": year,
+    "destination": destination,
+    "requested_scope": {
+        "years": years,
+        "events": events or "all",
+        "sessions_override": sessions or None,
+        "drivers": drivers or "all",
+    },
+    "sparse_patterns": patterns,
+    "available_files": {"telemetry": int(telemetry_count), "session_or_driver_metadata": int(metadata_count)},
+    "raw_data_policy": "immutable source mirror; sparse paths only added",
+    "created_utc": datetime.now(timezone.utc).isoformat(),
+}
+output.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+PY
+}
+
+for year in "${YEARS[@]}"; do
+  destination="$RAW_ROOT/$year"
+  # Reuse a pre-migration mirror instead of re-downloading it into the target
+  # layout. Only when the caller did not pin --raw-root explicitly.
+  if [[ "$RAW_ROOT_EXPLICIT" -eq 0 && ! -d "$destination/.git" && -d "$LEGACY_RAW_ROOT/$year/.git" ]]; then
+    destination="$LEGACY_RAW_ROOT/$year"
+    echo "[$year] reusing pre-migration mirror at $destination"
+    echo "[$year] migrate to $RAW_ROOT/$year only after the local-data audit (AGENTS.md section 7)"
+  fi
+  upstream="https://github.com/TracingInsights/$year.git"
+  declare -a patterns
+  sparse_patterns_for_year "$year" patterns
+
+  echo "[$year] source: $upstream"
+  echo "[$year] sessions: ${patterns[*]}"
+  if [[ "$DRY_RUN" -eq 1 ]]; then
+    continue
+  fi
+
+  mkdir -p "$(dirname "$destination")"
+  if [[ -d "$destination/.git" ]]; then
+    actual_upstream="$(git -C "$destination" remote get-url origin)"
+    [[ "$actual_upstream" == "$upstream" ]] || die "[$year] origin differs from expected source: $actual_upstream"
+    [[ -z "$(git -C "$destination" status --porcelain)" ]] || die "[$year] checkout has local changes: $destination"
+    echo "[$year] refreshing existing checkout"
+    git -C "$destination" pull --ff-only origin main
+    if [[ "$(git -C "$destination" config --bool core.sparseCheckout || true)" == "true" ]]; then
+      echo "[$year] extending its sparse session scope"
+      # sparse-checkout add does not accept --no-cone; cone mode is already
+      # recorded in the checkout config by the initial sparse-checkout init.
+      git -C "$destination" sparse-checkout add "${patterns[@]}"
+    else
+      echo "[$year] existing full mirror retained unchanged; no duplicate download needed"
+    fi
+  elif [[ -e "$destination" ]]; then
+    die "[$year] destination exists but is not a Git checkout: $destination"
+  else
+    echo "[$year] creating sparse checkout"
+    git clone --depth 1 --filter=blob:none --no-checkout "$upstream" "$destination"
+    git -C "$destination" sparse-checkout init --no-cone
+    git -C "$destination" sparse-checkout set --no-cone "${patterns[@]}"
+    git -C "$destination" checkout main
+  fi
+
+  telemetry_count="$(find "$destination" -type f -name '*_tel.json' | wc -l | tr -d ' ')"
+  metadata_count="$(find "$destination" -type f \( -name 'laptimes.json' -o -name 'weather.json' -o -name 'rcm.json' -o -name 'drivers.json' -o -name 'corners.json' -o -name 'session_laptimes.json' \) | wc -l | tr -d ' ')"
+  source_commit="$(git -C "$destination" rev-parse HEAD)"
+  write_manifest "$year" "$destination" "$upstream" "$source_commit" "$telemetry_count" "$metadata_count" "${patterns[@]}"
+  echo "[$year] available telemetry files: $telemetry_count; metadata files: $metadata_count"
+done
+
+if [[ "$DRY_RUN" -eq 1 ]]; then
+  echo "Dry run only. No files were created or changed."
+else
+  echo "Initial raw dataset is ready under: $RAW_ROOT"
+  echo "Manifest files: $MANIFEST_ROOT"
+  echo "Next: python3 scripts/audit_raw_data.py --raw-root \"$RAW_ROOT\" --output artifacts/schema_audit"
+fi
+\\n'* && "$value" != "." && "$value" != ".." ]] || die "invalid $label directory name: $value"
+}
+
+for event in "${EVENTS[@]}"; do
+  validate_directory_name "event" "$event"
+done
+for session in "${OVERRIDE_SESSIONS[@]}"; do
+  validate_directory_name "session" "$session"
+done
+for driver in "${DRIVERS[@]}"; do
+  validate_directory_name "driver" "$driver"
 done
 
 session_names_for_year() {
