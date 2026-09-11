@@ -9,8 +9,12 @@ sparse, read-only raw mirror. The default scope follows TrackShift AGENTS.md:
   2022-2025  Qualifying, Sprint Qualifying/Shootout, Sprint, Race
   2026       Practice 1 plus the sessions above
 
-Raw files are immutable. This script only adds sparse-checkout paths and never
-deletes or reorganises existing mirrors. It is resumable and additive.
+Raw files are immutable. The default destination is the target layout in
+AGENTS.md section 7: data/raw/tracinginsights/<year>. A pre-migration mirror at
+data/raw/<year> is reused in place when one exists, so that changing the folder
+structure never triggers a re-download (AGENTS.md section 4). This script only
+adds sparse-checkout paths and never deletes or reorganises existing mirrors.
+It is resumable and additive.
 
 .EXAMPLE
 .\scripts\data\download_initial_dataset.ps1 -DryRun
@@ -34,6 +38,8 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $Root = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
+$RawRootExplicit = [bool]$RawRoot
+$LegacyRawRoot   = Join-Path $Root "data\raw"
 if (-not $RawRoot)      { $RawRoot      = Join-Path $Root "data\raw\tracinginsights" }
 if (-not $ManifestRoot) { $ManifestRoot = Join-Path $Root "artifacts\download_manifests" }
 
@@ -89,6 +95,16 @@ $MetadataNames = @('laptimes.json','weather.json','rcm.json','drivers.json','cor
 
 foreach ($year in $YearList) {
     $destination = Join-Path $RawRoot $year
+    # Reuse a pre-migration mirror instead of re-downloading it into the target
+    # layout. Only when the caller did not pin -RawRoot explicitly.
+    $legacyDestination = Join-Path $LegacyRawRoot $year
+    if ((-not $RawRootExplicit) -and
+        (-not (Test-Path (Join-Path $destination ".git"))) -and
+        (Test-Path (Join-Path $legacyDestination ".git"))) {
+        $destination = $legacyDestination
+        Write-Host "[$year] reusing pre-migration mirror at $destination"
+        Write-Host "[$year] migrate to $(Join-Path $RawRoot $year) only after the local-data audit (AGENTS.md section 7)"
+    }
     $upstream    = "https://github.com/TracingInsights/$year.git"
     $patterns    = Get-SparsePatterns -Year $year -EventList $EventList -Override $SessionOverride
 
@@ -96,7 +112,8 @@ foreach ($year in $YearList) {
     Write-Host "[$year] sessions: $($patterns -join ' ')"
     if ($DryRun) { continue }
 
-    if (-not (Test-Path $RawRoot)) { New-Item -ItemType Directory -Force -Path $RawRoot | Out-Null }
+    $destinationParent = Split-Path -Parent $destination
+    if (-not (Test-Path $destinationParent)) { New-Item -ItemType Directory -Force -Path $destinationParent | Out-Null }
 
     if (Test-Path (Join-Path $destination ".git")) {
         $actualUpstream = (& git -C $destination remote get-url origin).Trim()
@@ -105,7 +122,14 @@ foreach ($year in $YearList) {
         if ($dirty) { throw "[$year] checkout has local changes: $destination" }
         Write-Host "[$year] refreshing existing sparse checkout"
         Invoke-Git -C $destination pull --ff-only origin main
-        Invoke-Git -C $destination sparse-checkout add @patterns
+        if ((& git -C $destination config --bool core.sparseCheckout) -eq "true") {
+            Write-Host "[$year] extending its sparse session scope"
+            # sparse-checkout add does not accept --no-cone; cone mode is already
+            # recorded in the checkout config by the initial sparse-checkout init.
+            Invoke-Git -C $destination sparse-checkout add @patterns
+        } else {
+            Write-Host "[$year] existing full mirror retained unchanged; no duplicate download needed"
+        }
     }
     elseif (Test-Path $destination) {
         throw "[$year] destination exists but is not a Git checkout: $destination"

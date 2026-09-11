@@ -5,12 +5,16 @@
 #   2022-2025: Qualifying, Sprint Qualifying/Shootout, Sprint, Race
 #   2026:      Practice 1 plus the sessions above
 #
-# Raw files are immutable. The default path deliberately matches the existing
-# data/raw/<year> layout until an audited migration is implemented.
+# Raw files are immutable. The default destination is the target layout in
+# AGENTS.md section 7: data/raw/tracinginsights/<year>. A pre-migration mirror
+# at data/raw/<year> is reused in place when one exists, so that changing the
+# folder structure never triggers a re-download (AGENTS.md section 4).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-RAW_ROOT="$ROOT/data/raw"
+RAW_ROOT="$ROOT/data/raw/tracinginsights"
+LEGACY_RAW_ROOT="$ROOT/data/raw"
+RAW_ROOT_EXPLICIT=0
 MANIFEST_ROOT="$ROOT/artifacts/download_manifests"
 YEARS_CSV="2022,2023,2024,2025,2026"
 EVENTS_CSV=""
@@ -33,14 +37,16 @@ Options:
                        "British Grand Prix,Italian Grand Prix"
   --sessions CSV     Exact session directory names. Overrides the default
                        session policy for every selected year.
-  --raw-root PATH    Destination root (default: data/raw)
+  --raw-root PATH    Destination root (default: data/raw/tracinginsights)
   --manifest-root P  Download manifest directory (default: artifacts/download_manifests)
   --dry-run          Print the selected scope without cloning or updating files
   -h, --help         Show this help message
 
-The script is resumable and additive. It reuses existing data/raw/<year> checkouts,
-never deletes or reorganizes raw mirrors, and only extends an existing sparse checkout.
-Session directories that do not exist upstream are simply absent.
+The script is resumable and additive. It never deletes or reorganizes raw mirrors
+and only extends an existing sparse checkout. When --raw-root is not given and a
+pre-migration mirror exists at data/raw/<year>, that checkout is reused in place
+rather than cloned again. Session directories that do not exist upstream are simply
+absent.
 EOF
 }
 
@@ -55,7 +61,7 @@ while [[ $# -gt 0 ]]; do
     --years) require_value "$1" "${2:-}"; YEARS_CSV="$2"; shift 2 ;;
     --events) require_value "$1" "${2:-}"; EVENTS_CSV="$2"; shift 2 ;;
     --sessions) require_value "$1" "${2:-}"; SESSIONS_CSV="$2"; shift 2 ;;
-    --raw-root) require_value "$1" "${2:-}"; RAW_ROOT="$2"; shift 2 ;;
+    --raw-root) require_value "$1" "${2:-}"; RAW_ROOT="$2"; RAW_ROOT_EXPLICIT=1; shift 2 ;;
     --manifest-root) require_value "$1" "${2:-}"; MANIFEST_ROOT="$2"; shift 2 ;;
     --dry-run) DRY_RUN=1; shift ;;
     -h|--help) usage; exit 0 ;;
@@ -163,6 +169,13 @@ PY
 
 for year in "${YEARS[@]}"; do
   destination="$RAW_ROOT/$year"
+  # Reuse a pre-migration mirror instead of re-downloading it into the target
+  # layout. Only when the caller did not pin --raw-root explicitly.
+  if [[ "$RAW_ROOT_EXPLICIT" -eq 0 && ! -d "$destination/.git" && -d "$LEGACY_RAW_ROOT/$year/.git" ]]; then
+    destination="$LEGACY_RAW_ROOT/$year"
+    echo "[$year] reusing pre-migration mirror at $destination"
+    echo "[$year] migrate to $RAW_ROOT/$year only after the local-data audit (AGENTS.md section 7)"
+  fi
   upstream="https://github.com/TracingInsights/$year.git"
   declare -a patterns
   sparse_patterns_for_year "$year" patterns
@@ -173,7 +186,7 @@ for year in "${YEARS[@]}"; do
     continue
   fi
 
-  mkdir -p "$RAW_ROOT"
+  mkdir -p "$(dirname "$destination")"
   if [[ -d "$destination/.git" ]]; then
     actual_upstream="$(git -C "$destination" remote get-url origin)"
     [[ "$actual_upstream" == "$upstream" ]] || die "[$year] origin differs from expected source: $actual_upstream"
