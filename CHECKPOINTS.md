@@ -1078,7 +1078,7 @@ CatBoostClassifier(iterations=3000, learning_rate=0.03, depth=6,
                    random_seed=42, verbose=200)
 ```
 
-**5. Small MLP** — optional (§26). CPU is adequate at this data size; the A6000 is only worth it for a sweep. See §A6000 workflow below.
+**5. Small MLP** — optional (§26). At ~40 k rows a single fit is under a minute on CPU; the A6000 is only worth it for a large hyperparameter sweep. See the A6000 decision table below.
 
 ```python
 MLPClassifier(hidden_layer_sizes=(64, 32), activation="relu", alpha=1e-3,
@@ -1443,7 +1443,7 @@ t_k(d, L) = t_base,k - a_k · ΔE + c_k · L
 | Linear / ridge | `Ridge(alpha=1.0)` per segment, or pooled with segment interactions |
 | Gradient boosting | `LGBMRegressor(n_estimators=1500, learning_rate=0.03, num_leaves=31, min_child_samples=40, subsample=0.8, colsample_bytree=0.8, random_state=42)` |
 | Physics + residual | CP-20 rung 5 |
-| Small neural regressor | 2×64 MLP — the one genuinely GPU-worthy model in your chain |
+| Small neural regressor | 2×64 MLP — **the one genuinely GPU-worthy model you own**; 1.24 M rows (2026) to 6.4 M (all years). See the A6000 section for the export recipe. |
 
 **The winner must remain physically plausible** (§30) — this constraint overrides raw MAE.
 
@@ -1580,74 +1580,166 @@ FastAPI, pydantic and uvicorn are already installed.
 
 ---
 
-# A6000 workflow
+# A6000 remote workflow — 38 GB budget
 
-Per your constraint: **remote storage is limited, so export only the dataset one model needs, train one model at a time, and pull the artifact back.**
+Remote disk is **38 GB**. That is the binding constraint, and it rules out the obvious approach: the raw mirror alone is **27.6 GB measured**, and a CUDA PyTorch install is ~6.5 GB, so raw data plus torch does not fit. It never needs to.
 
-### When the A6000 is actually needed
+**The rule: features are built locally on CPU. Only a pruned training matrix crosses the wire.** Everything the A6000 trains on is tens of megabytes, not gigabytes.
 
-| Model | GPU worth it? |
-|---|---|
-| Logistic, LightGBM, XGBoost, CatBoost (CP-14) | **No.** CPU is fine at 10–40 k rows. |
-| MLP (CP-14) | Only for a hyperparameter sweep |
-| Neural regressor (CP-21) | **Yes** — the one genuinely GPU-shaped model you own |
-| Ablation sweeps (CP-23) | Yes when the grid is large |
-| Parameter draws (CP-22) | No — vectorised NumPy is enough |
+## Measured data volumes
 
-Everything else in your three chains is CPU work by design (§54).
+| Data | Volume | Ships to remote? |
+|---|---|---|
+| Raw telemetry, 5 years | **27.6 GB** (measured, 177,288 laps at ~150 KB) | **Never** |
+| 20 m lake, all years | 41.0 M rows, est. 5–6.5 GB | **Never** |
+| 20 m lake, 2026 only | 7.9 M rows, est. ~1 GB | **Never** |
+| Segments, all years | 6.38 M rows, est. ~1.3 GB | Only pruned |
+| Segments, 2026 only | 1.24 M rows, est. ~250 MB | Yes, pruned to ~50–80 MB |
+| Overtake opportunities | tens of thousands of rows | Trivially, single-digit MB |
 
-### The four-step loop
+Basis: measured mean `tel.json` size per year, real median lap length 4,629 m → 231 rows per lap at 20 m spacing, 36 segments per lap.
 
-**1. Export the minimal dataset.** Never sync the raw mirror or the full lake.
+## Which models actually go remote
+
+| Model | Rows | GPU? | Why |
+|---|---|---|---|
+| M10 Logistic | ~40 k | **No** | Seconds on CPU |
+| M10 LightGBM / XGBoost / CatBoost | ~40 k × ~40 feat | **No** | CPU histogram builds take seconds to a minute at this size. GPU tree training only pays off past a few million rows. |
+| M10 MLP, single fit | ~40 k | **No** | 2×64 net, under a minute on CPU |
+| M10 MLP, hyperparameter sweep | ~40 k × 100+ configs | **Optional** | Only if the grid is large; otherwise run it locally overnight |
+| **M16 neural segment-time regressor** | **1.24 M (2026) – 6.4 M (all years)** | **Yes** | The one genuinely GPU-shaped model you own |
+| M15 physics calibration | — | **No** | `scipy.optimize.least_squares`; a GPU cannot help a Levenberg–Marquardt fit |
+| M17 uncertainty draws | 200 draws | **No** | Vectorised NumPy, milliseconds |
+| M14 / M34 energy twin, fuel | — | **No** | Deterministic physics over Parquet |
+| M03 / M04 / M33 / M30 foundations | — | **No** | Median and threshold work |
+| M18–M21 rules | — | **No** | Config, state machine, deterministic logic |
+| M28 ablation | many refits | **Only if** the underlying model is the GPU one | For tree ablations, more CPU cores beat a GPU |
+
+**So: one model needs the A6000 (M16 neural), one optionally (the M10 MLP sweep).** Everything else in your three chains is CPU by design (§54: do not use GPU merely because it is available).
+
+If the remote were unavailable entirely you would lose exactly one benchmark candidate out of five in CP-21 — and that checkpoint selects on physical plausibility over raw MAE (§30), which favours physics+residual anyway. **The A6000 is a convenience here, not a dependency.** Do not let it block the critical path.
+
+## The 38 GB budget
+
+| Item | Size | Note |
+|---|---|---|
+| Base venv (pandas, numpy, pyarrow, sklearn, lightgbm) | ~1.2 GB | from `requirements.lock.txt` |
+| `torch` + CUDA 12.4 `nvidia-*` wheels | ~6.5 GB | the single biggest item |
+| pip cache **if not disabled** | up to 3 GB | always `--no-cache-dir` |
+| Pruned training matrix, one model | 50–300 MB | see below |
+| Model artifact, best checkpoint only | ~50 MB | not one per epoch |
+| Logs | ~100 MB | |
+| **Working total** | **~8–9 GB** | |
+| **Headroom** | **~29 GB** | stays that way only if raw never lands there |
+
+Comfortable — *provided* you never rsync `data/raw/` or `data/processed/telemetry_20m/`. Put both in an rsync exclude file so it cannot happen by reflex:
+
+```text
+# .rsync-exclude  (committed)
+data/raw/
+data/processed/telemetry_20m/
+.venv/
+artifacts/demo/
+```
+
+## Shrinking the export — three techniques, ~10× together
+
+Applied in `scripts/data/export_training_set.py`:
+
+**1. Column pruning.** Ship only the features the registry declares for that model, plus the label and the split key. A segment row has ~60 columns; M16 needs about 25.
+
+**2. `float32`, not `float64`.** Halves the numeric footprint. Telemetry-derived features carry nowhere near 15 significant digits.
+
+**3. `zstd` compression, not snappy.** Roughly 30% smaller on smooth numeric columns.
+
+```python
+numeric = df[cols].select_dtypes("number").columns
+df[cols].astype({c: "float32" for c in numeric}).to_parquet(
+    out, compression="zstd", compression_level=9, index=False
+)
+```
+
+Result for M16, all years: 6.38 M rows × 25 float32 columns ≈ 640 MB uncompressed → **roughly 200–300 MB on disk**. Restricted to 2026: **50–80 MB**. The M10 opportunity table is a few MB either way.
+
+> **Verify at CP-04.** Once the first Parquet exists, `du -sh` it, divide by row count, and write the measured bytes-per-row into the export script docstring. The figures above are derived from measured raw sizes and real lap lengths, but a measured number beats a derived one.
+
+## The rotation protocol — one model at a time
+
+**1. Preflight locally.** The export script refuses to write a file that would not fit:
 
 ```powershell
 python scripts/data/export_training_set.py `
-  --model segment_time --split train,val `
+  --model segment_time --split train,val --years 2026 `
+  --float32 --compression zstd --max-export-mb 500 `
   --out artifacts/export/segment_time_v1.parquet
-# Expect tens of MB, not GB. Verify before uploading.
 ```
 
-The exporter writes the Parquet plus a sidecar `.json` recording git commit, feature schema, split definition and row counts, so the remote run is reproducible and the artifact can be traced.
+It writes a sidecar `.json` with git commit, feature schema, split definition, row count and exact file size, so the remote run is reproducible and the returned artifact is traceable.
 
-**2. Upload and set up** (first time only for the env):
+**2. Check remote free space before uploading:**
 
 ```bash
-scp artifacts/export/segment_time_v1.parquet USER@A6000:~/trackshift/data/
+ssh USER@A6000 'df -h ~ | tail -1'
+```
+
+Abort below 10 GB free. A transfer that fills the disk mid-copy is worse than not starting.
+
+**3. One-time remote setup.** `--no-cache-dir` is not optional at 38 GB:
+
+```bash
 ssh USER@A6000
-cd ~/trackshift
+mkdir -p ~/trackshift/{data,artifacts} && cd ~/trackshift
 python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.lock.txt -r requirements-gpu.txt
+pip install --no-cache-dir -r requirements.lock.txt
+pip install --no-cache-dir -r requirements-gpu.txt
+pip cache purge
+du -sh .venv                     # expect ~7.7 GB
 ```
 
-Keep `requirements.lock.txt` as the single source of truth so local and remote match.
-
-**3. Train one model, then stop:**
-
-```bash
-python scripts/train/train_segment_time.py \
-  --input data/segment_time_v1.parquet \
-  --candidate neural --device cuda \
-  --out artifacts/models/segment_time/neural_v1
-```
-
-**4. Pull the artifact back and verify it on CPU:**
+**4. Upload, train, pull back:**
 
 ```powershell
-scp -r USER@A6000:~/trackshift/artifacts/models/segment_time/neural_v1 artifacts/models/segment_time/
+scp artifacts/export/segment_time_v1.parquet USER@A6000:~/trackshift/data/
+ssh USER@A6000 "cd ~/trackshift && source .venv/bin/activate && python scripts/train/train_segment_time.py --input data/segment_time_v1.parquet --candidate neural --device cuda --keep-best-only --out artifacts/segment_time_neural_v1"
+scp -r USER@A6000:~/trackshift/artifacts/segment_time_neural_v1 artifacts/models/segment_time/
+```
+
+`--keep-best-only` matters: a checkpoint per epoch over 200 epochs turns a 50 MB artifact into 10 GB.
+
+**5. Clear the remote before the next model:**
+
+```bash
+ssh USER@A6000 'rm -rf ~/trackshift/data/* ~/trackshift/artifacts/*; df -h ~ | tail -1'
+```
+
+The venv stays; datasets and artifacts do not. This is what makes "one model at a time" a storage strategy rather than a scheduling preference.
+
+**6. Verify on CPU locally, then commit:**
+
+```powershell
 python scripts/evaluate/verify_cpu_inference.py --artifact artifacts/models/segment_time/neural_v1
 ```
 
-**Then delete the dataset from the remote** before exporting the next one.
+## ⚠️ If storage becomes a problem
 
-### Non-negotiable rules
+| Symptom | Cause | Fix |
+|---|---|---|
+| Remote disk fills during `pip install` | pip cache | `pip install --no-cache-dir`, then `pip cache purge`. Recovers up to 3 GB. |
+| Disk fills during training | Per-epoch checkpoints | `--keep-best-only`. Also check the logger is not writing per-step tensors. |
+| Export is larger than expected | No column pruning, or float64 | Confirm the registry filter is applied and the dtype cast happened before `to_parquet`, not after |
+| Transfer is slow | Shipping the lake instead of the training matrix | You should be moving tens of MB. If it takes minutes, you are moving the wrong file. |
+| A future dataset genuinely will not fit | Multi-year full-resolution training | Shard by year and train incrementally, deleting each shard after its epoch group; or stratified-subsample to 30% for the benchmark and only train the winner on everything; or mount over sshfs and stream (slower per epoch, zero remote storage). Do not just compress harder — first re-check whether the model needs to be remote at all. |
+| Two models needed at once | Scheduling pressure | Do not. Sequential is the whole point at 38 GB. Queue them. |
 
-- Every artifact must load and run on CPU (`map_location="cpu"`), verified by `verify_cpu_inference.py` before merge (MODELS.md §1.1)
+## Non-negotiable rules
+
+- Every artifact must load and run on CPU (`map_location="cpu"`), verified before merge (MODELS.md §1.1)
 - Save `state_dict`, never a pickled module
-- `--device` is always a CLI argument; every script must run end-to-end on CPU
+- `--device` is always a CLI argument; every script runs end-to-end on CPU
+- `requirements.lock.txt` is the single source of truth for both environments
 - Remote host, user and paths live in ignored local config — never committed (§5)
-- The artifact manifest records `device_trained_on` and `cpu_inference_verified: true`
-
----
+- The manifest records `device_trained_on` and `cpu_inference_verified: true`
+- **`data/raw/` and `data/processed/telemetry_20m/` never leave this machine**
 
 # Cross-checkpoint invariants
 
