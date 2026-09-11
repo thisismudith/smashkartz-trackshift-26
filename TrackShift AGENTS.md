@@ -464,7 +464,7 @@ Do not create thousands of tiny Parquet files unnecessarily.
 
 # 11. Canonical telemetry fields
 
-The 20 m lake should preserve or derive fields including:
+The 20 m lake should preserve or derive the following core fields where the source supports them:
 
 ```text
 year
@@ -487,6 +487,7 @@ throttle_pct
 brake_on
 
 aero_or_drs_raw
+drs_open_observed
 
 x_m
 y_m
@@ -498,36 +499,79 @@ acc_vertical_mps2
 
 driver_ahead
 distance_to_driver_ahead_m
+driver_behind
+distance_to_driver_behind_m
+gap_to_ahead_s
+gap_to_behind_s
 
 race_position
+sector
 tyre_compound
 tyre_life_laps
 stint
 
 track_status
+race_control_state
+safety_car_active
+virtual_safety_car_active
+pit_state
+pit_stop_duration_s_offline
 
 air_temperature
 track_temperature
 rainfall
+humidity_pct
+air_pressure_hpa
+wind_speed_mps
+wind_direction_deg
 ```
 
-Every field must have a known source and unit.
+Use `pit_state` rather than only a Boolean. Its normalized values are `ON_TRACK`, `PIT_IN`, `PIT_LANE`, `PIT_OUT`, and `UNKNOWN`. `pit_stop_duration_s_offline` is retained for retrospective analysis and labels only.
 
-Fields unavailable in a season must remain explicitly unavailable rather than fabricated.
+`drs_open_observed` may be populated only after the source-specific meaning of the raw DRS/aero channel has been verified. It must otherwise remain unavailable.
+
+Fuel and ERS state are high-value context, but are not public observations in the current sources. The lake may contain the following estimates only after the energy twin has produced them:
+
+```text
+fuel_load_kg_est
+fuel_load_uncertainty_kg
+ers_energy_state_est_kj
+ers_deployment_est_kw
+ers_harvest_est_kw
+```
+
+All five must carry `INFERRED` or `SIMULATED` provenance. Never name, store, or train on an estimate as if it were observed telemetry.
+
+The following suggested channels are source-gated extensions, not part of the current core schema:
+
+```text
+brake_pressure
+steering_angle
+tyre_temperature
+tyre_pressure
+brake_temperature
+damage
+fuel_consumption
+```
+
+Add one only when a documented source provides continuous values with defined units and an availability pattern compatible with the intended deployment data. Do not synthesize these channels from a future pit stop, post-race report, or an unvalidated proxy. An unknown damage state must remain `UNKNOWN`, never be encoded as no damage.
+
+Every field must have a known source, unit, provenance, and availability scope. Fields unavailable in a season must remain explicitly unavailable rather than fabricated. Missing and unavailable are not numeric zero.
 
 ---
 
 # 12. Derived telemetry features
 
-Derive meaningful physical/contextual features rather than feeding arbitrary raw channels into models.
+Derive meaningful physical and contextual features rather than feeding arbitrary raw channels into models. Every live-model feature must use only information available at or before that 20 m row.
 
-Examples include:
+Core physical and geometry features include:
 
 ```text
 speed_mps
 longitudinal_acceleration
 gradient
 curvature_proxy
+track_heading_deg
 
 full_throttle_flag
 throttle_lift_flag
@@ -535,18 +579,78 @@ coasting_flag
 
 brake_onset
 brake_release
+braking_intensity_proxy
 
 straight_flag
+corner_id
 corner_phase
+corner_type
 
 distance_to_next_brake
 distance_to_next_detection_line
 distance_to_next_activation_line
 ```
 
-Do not assume raw `x`, `y`, or `z` coordinates generalize across circuits.
+`corner_type` must be a versioned, geometry-based track classification, for example hairpin, chicane, slow, medium, fast, left, right, or straight. It is not a free-text circuit label.
 
-Prefer geometry derived from them.
+Weather must be transformed into track-relative effects before modelling:
+
+```text
+wind_head_component_mps
+wind_cross_component_mps
+air_density_proxy
+wet_track_flag
+```
+
+Project wind direction onto the local `track_heading_deg`; raw wind direction alone is not comparable between circuit segments. Keep raw weather values in the lake and decide their use by held-out-event ablation.
+
+Derive explicit race-context and data-quality features:
+
+```text
+normalized_race_control_state
+normal_race_model_eligible
+race_control_transition_flag
+pit_transition_flag
+green_flag_elapsed_s
+```
+
+`normal_race_model_eligible` is true only for on-track, normal green-flag racing with no Safety Car, VSC, red/yellow restriction, pit-lane state, or unknown control state affecting the row. Safety Car and VSC telemetry must be retained in the lake for audit and future strategy work, but be excluded from the initial normal-race baselines, battle extraction, pass model, rival-state model, and energy/segment-time calibration.
+
+A race-control or pit-state transition is a hard sequence boundary. Do not smooth, resample windows, calculate rolling features, or continue a battle episode across it. This prevents Safety Car/VSC pace from being mislearned as lifting, coasting, energy saving, or a passing signal.
+
+Pit-lane, pit-in, and pit-out rows are retained with `pit_state` but are outside the initial normal-race model family. `pit_stop_duration_s_offline` is known only after the stop completes and must never be a live feature.
+
+Derive pair-aware battle features explicitly:
+
+```text
+relative_speed_to_ahead_mps
+relative_speed_to_behind_mps
+closing_rate_ahead_mps
+closing_rate_behind_mps
+relative_acceleration_to_ahead_mps2
+gap_trend_ahead_s_per_s
+gap_trend_behind_s_per_s
+```
+
+These features must be calculated from aligned contemporaneous or strictly trailing observations. Do not use centered windows or future telemetry. Relative speed must not be skipped: it is a core short-horizon signal for both attack and defence, and complements rather than duplicates the later pass-probability model.
+
+Derive regulated aero and energy context without conflating regulation eras:
+
+```text
+historical_drs_eligible
+historical_drs_open
+overtake_eligible
+overtake_state
+fuel_load_kg_est
+fuel_load_uncertainty_kg
+ers_energy_state_est_kj
+ers_deployment_est_kw
+ers_harvest_est_kw
+```
+
+For 2022 to 2025, DRS values are historical covariates only. For 2026, derive `overtake_eligible` and `overtake_state` exclusively through the rule engine and FIA event configuration, never from a raw DRS channel. Fuel and ERS estimates must be causal, uncertainty-aware, and tagged `INFERRED` or `SIMULATED`.
+
+Do not assume raw `x`, `y`, or `z` coordinates generalize across circuits. Prefer geometry and track-relative quantities derived from them. A candidate feature group earns inclusion only through leakage-safe, held-out-event ablation with the same availability it will have at deployment.
 
 ---
 
