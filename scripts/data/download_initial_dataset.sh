@@ -93,8 +93,11 @@ session_names_for_year() {
     result=("${OVERRIDE_SESSIONS[@]}")
   else
     result=("Qualifying" "Sprint Qualifying" "Sprint Shootout" "Sprint" "Race")
-    [[ "$year" == "2026" ]] && result=("Practice 1" "${result[@]}")
+    if [[ "$year" == "2026" ]]; then
+      result=("Practice 1" "${result[@]}")
+    fi
   fi
+  return 0
 }
 
 sparse_patterns_for_year() {
