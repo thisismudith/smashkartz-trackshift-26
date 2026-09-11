@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Fetch the five upstream telemetry repositories without modifying them.
+# Fetch the five upstream telemetry repositories without modifying their files.
 # Run from any directory: bash scripts/fetch_phase1_raw.sh
 set -euo pipefail
 
@@ -14,9 +14,8 @@ for year in "${YEARS[@]}"; do
   upstream="https://github.com/TracingInsights/$year.git"
 
   if [[ -d "$destination/.git" ]]; then
-    echo "[$year] already present: fetching latest metadata"
-    git -C "$destination" fetch --depth 1 origin main
-    git -C "$destination" reset --hard origin/main
+    echo "[$year] already present: fetching upstream changes"
+    git -C "$destination" pull --ff-only origin main
   elif [[ -e "$destination" ]]; then
     echo "[$year] exists but is not a valid git checkout: $destination" >&2
     echo "Move it aside after checking it, then rerun this script." >&2
