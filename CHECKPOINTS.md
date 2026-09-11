@@ -1,0 +1,1696 @@
+# TrackShift — Tanveer's Build Checkpoints
+
+Execution plan for **Owner B (Tanveer)**: Chain R (rules), Chain P (pass probability), Chain E (energy/physics), and the shared foundations M01, M03, M04, M30, M33, plus M28 and M31.
+
+- `TrackShift AGENTS.md` — engineering contract (what the system is). Section refs below are `§N` in that file.
+- `MODELS.md` — ownership split, inventory IDs (M01–M34), interface contracts (C1–C10).
+- `API.md` — the UI-facing surface every model must eventually expose.
+- **This file** — the ordered checkpoints to actually build them.
+
+Written against `TrackShift AGENTS.md` at commit `09c7691`. Rishabh's items (M02, M05, M06, M08, M09, M22–M27, M29) appear only where they block or unblock you.
+
+---
+
+## 0. How to use this file
+
+Each checkpoint has the same shape:
+
+| Field | Meaning |
+|---|---|
+| **Goal** | The one thing that must be true when it is done |
+| **Depends on** | Checkpoints that must be complete first |
+| **Dataset** | Exact scope: years, events, sessions, drivers, expected row counts |
+| **Steps** | Concrete, runnable |
+| **Models & parameters** | What to fit, with starting hyperparameters |
+| **✅ Check** | Numeric acceptance gates — do not proceed until these pass |
+| **⚠️ If output is bad** | Symptom → likely cause → fix |
+| **Deliverables** | Files that must exist |
+
+**Two rules that apply to every checkpoint:**
+
+1. **Never touch the 2026 British Grand Prix during development.** It is the demo event *and* the final held-out test (§40, MODELS.md §7.6). Use `--exclude-event "British Grand Prix"` on every training run until the model and feature set are frozen. There is a guard script in CP-01 that fails the build if BGP rows appear in a training split.
+2. **Every artifact writes a manifest** with git commit, source datasets, config, schema version, feature schema, seed, and `cpu_inference_verified` (§53, MODELS.md §6.4).
+
+### Progress tracker
+
+| CP | Item | IDs | Status |
+|---|---|---|---|
+| 00 | Environment and dependencies | — | ☐ |
+| 01 | Local data audit | §51, §63 | ☐ |
+| 02 | Registries scaffold | M31 | ☐ |
+| 03 | Rule config skeleton, 14 tracks | M18 | ☐ |
+| 04 | Build the 20 m lake | Phase 2 | ☐ |
+| 05 | **Track segmentation — freeze `segment_id`** | M03 | ☐ |
+| 06 | Track-relative weather | M33 | ☐ |
+| 07 | Practice lap classifier | M01 | ☐ |
+| 08 | Tyre degradation and normalised pace | M30 | ☐ |
+| 09 | Segment baselines | M04 | ☐ |
+| 10 | Overtake state machine | M20 | ☐ |
+| 11 | Rule engine | M19 | ☐ |
+| 12 | Eligibility probability | M21 | ☐ |
+| 13 | Overtake-opportunity dataset | M07 | ☐ |
+| 14 | Pass-model benchmark | M10 | ☐ |
+| 15 | Probability calibration | M11 | ☐ |
+| 16 | Ensemble spread | M12 | ☐ |
+| 17 | Regulation-era handling | M13 | ☐ |
+| 18 | Energy twin | M14 | ☐ |
+| 19 | Fuel-load estimator | M34 | ☐ |
+| 20 | Physics calibration hierarchy | M15 | ☐ |
+| 21 | Segment-time model (ΔE→Δt) | M16 | ☐ |
+| 22 | Physics uncertainty | M17 | ☐ |
+| 23 | Ablation harness | M28 | ☐ |
+| 24 | Service routes and replay bundle | API.md | ☐ |
+
+---
+
+## What is actually on your disk
+
+Verified 2026-09-12, so you can size the work rather than guess.
+
+```text
+data/raw/tracinginsights/{2022,2023,2024,2025,2026}/    177,288 telemetry files
+```
+
+| Year | Telemetry files | Notes |
+|---|---|---|
+| 2022 | 31,854 | DRS era |
+| 2023 | 35,473 | DRS era |
+| 2024 | 37,959 | DRS era |
+| 2025 | 37,666 | DRS era |
+| 2026 | 34,336 | Overtake era, current regulations |
+
+**2026 events on disk: 14 Grands Prix + 3 pre-season tests.** Sprint weekends (5 sessions) are British, Canadian, Chinese, Dutch, Miami. The rest have Practice 1 / Qualifying / Race. The Spanish Grand Prix directory has only Practice and no `corners.json` — treat it as incomplete.
+
+Historical events (2022–2025) have **Qualifying and Race only** — no Practice. This matters: physics calibration (§9) can only use 2026 Practice 1.
+
+**Per-session files:** `corners.json`, `drivers.json`, `rcm.json`, `weather.json`, `session_laptimes.json`, then one directory per driver holding `laptimes.json` and `<lap>_tel.json`.
+
+### Raw field reference
+
+`tel.json` — columnar arrays, one entry per sample:
+
+```text
+time distance rel_distance speed rpm gear throttle brake drs
+x y z acc_x acc_y acc_z DriverAhead DistanceToDriverAhead dataKey
+```
+
+Sample lap (HAM, 2026 British GP, Race, lap 10): **715 rows, 5,819 m, median Δt 0.129 s** (min 0.008 s, max 1.011 s). At 20 m spacing that lap yields **291 rows**.
+
+`laptimes.json` — per lap: `time lap sesT lST s1 s2 s3 vi1 vi2 vfl vst compound life fresh stint pos status pb pin pout iacc del delR drv dNum team` plus a weather snapshot `wT wAT wH wP wR wTT wWD wWS`.
+
+`weather.json` — `wT` (session time), `wAT` (air temp), `wH` (humidity), `wP` (pressure), `wR` (rain bool), `wTT` (track temp), `wWD` (wind bearing), `wWS` (wind speed). 156 samples per race session.
+
+`corners.json` — **columnar**, keys `CornerNumber X Y Angle Distance` as arrays plus a scalar `Rotation`. Silverstone: 18 corners at 463…5,674 m, `Rotation = 92.0`. Monaco 19 corners, `Rotation = 315.0`. Italy 11 corners, `Rotation = 95.0`.
+
+`rcm.json` — **columnar**, keys `time cat msg status flag scope sector dNum lap`. 2026 British GP Race has 248 messages: `cat` ∈ {Flag 175, Other 65, SafetyCar 8}; `flag` ∈ {BLUE, CLEAR, YELLOW, DOUBLE YELLOW, BLACK AND WHITE, GREEN, CHEQUERED}.
+
+### Three findings that shape the plan
+
+**1. The 2026 `drs` channel is dead.** Across 60 sampled 2026 British GP laps, `drs` is `0` in every single sample. The same sampling on 2022 gives 11/40 laps with non-zero DRS. §20 already forbids inferring Overtake eligibility from this channel; the data confirms it is not merely wrong but empty. `drs_open_observed` (§11) must stay **unavailable** for 2026.
+
+**2. `rcm.json` is your race-control Overtake source.** Every 2026 event carries `OVERTAKE ENABLED` / `OVERTAKE DISABLED` messages — 51 enable and 23 disable events across the season. The 2022 equivalent is `DRS ENABLED` / `DRS DISABLED`. This is where the rule engine's `race_control.overtake_disabled` state comes from, and it is genuinely `OBSERVED` → `RULE`.
+
+**3. Detection and Activation line positions are nowhere in the raw data.** A regex over every 2026 `rcm.json` for `DETECTION|ACTIVATION|ZONE|MGU|ENERGY` returns nothing but 46 `SAFETY CAR DEPLOYED` hits. These values must come from FIA documents (§21). CP-03 handles this honestly with a two-tier provenance scheme.
+
+### Track status codes
+
+`laptimes.json.status` is a **string of concatenated single-digit status codes** that occurred during that lap, not one code. HAM's 2026 British GP race gives `'1'` on 41 laps and `'12'`, `'167'`, `'126'`, `'671'`, `'24'`, `'4'` on the rest — laps 49–52 are `'4'` (Safety Car), matching the two `SAFETY CAR DEPLOYED` messages in `rcm.json`.
+
+| Digit | Meaning |
+|---|---|
+| 1 | Track clear (green) |
+| 2 | Yellow flag |
+| 4 | Safety Car |
+| 5 | Red flag |
+| 6 | Virtual Safety Car deployed |
+| 7 | VSC ending |
+
+Decode by iterating characters, not by parsing the integer. `'167'` means green, VSC deployed, and VSC ending all occurred within that lap. **Any lap whose status contains anything other than `1` is not `normal_race_model_eligible`** — this is your primary cross-check against Rishabh's M02 (C7).
+
+---
+
+# CP-00 — Environment and dependencies
+
+**Goal:** a reproducible `.venv` that every later checkpoint runs in, with a `requirements.txt` committed so the A6000 and Rishabh's machine can rebuild it byte-for-byte.
+
+**Depends on:** nothing. **This is a hard blocker** — `build_phase2_dataset.py` raises `SystemExit` without `pyarrow`, which is not installed.
+
+Current state: system Python 3.13.14, no venv. Present: `pandas 3.0.1`, `numpy 2.4.3`, `pyyaml`, `pytest`, `fastapi`, `pydantic`, `uvicorn`. **Missing: `pyarrow`, `scipy`, `scikit-learn`, `lightgbm`, `xgboost`, `catboost`, `matplotlib`, `duckdb`.**
+
+### Steps
+
+**1. Create the venv** (PowerShell):
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+```
+
+If activation is blocked: `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass` for that session only, or call `.\.venv\Scripts\python.exe` directly everywhere.
+
+**2. Write `requirements.txt`** at the repo root:
+
+```text
+# Core data
+pandas>=2.2,<4
+numpy>=1.26,<3
+pyarrow>=16
+duckdb>=1.0
+
+# Physics and stats
+scipy>=1.13
+scikit-learn>=1.5
+statsmodels>=0.14
+
+# Tree models (Chain P)
+lightgbm>=4.3
+xgboost>=2.1
+catboost>=1.2
+
+# Config, service, testing
+PyYAML>=6
+pydantic>=2.7
+fastapi>=0.110
+uvicorn>=0.29
+pytest>=8
+
+# Plots for validation reports
+matplotlib>=3.8
+```
+
+`torch` is deliberately **not** here — it is only needed for the optional MLP (M10) and neural regressor (M16), and only on the A6000. Keep it in `requirements-gpu.txt`:
+
+```text
+--extra-index-url https://download.pytorch.org/whl/cu124
+torch>=2.3
+```
+
+**3. Install and freeze:**
+
+```powershell
+pip install -r requirements.txt
+pip freeze > requirements.lock.txt
+```
+
+Commit `requirements.txt` and `requirements.lock.txt`. The lock file is what the A6000 installs from, so the two environments cannot drift.
+
+**4. Add `.venv/` to `.gitignore`.**
+
+### ✅ Check
+
+```powershell
+python -c "import pandas, pyarrow, scipy, sklearn, lightgbm, xgboost, catboost; print('all import OK')"
+python -m pytest -q          # expect: 6 passed
+python -c "import pandas as pd; pd.DataFrame({'a':[1]}).to_parquet('_t.parquet'); print(pd.read_parquet('_t.parquet').shape)"; rm _t.parquet
+```
+
+### ⚠️ If output is bad
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| `lightgbm`/`catboost` wheel fails on 3.13 | Wheels lag new Python releases | Build the venv on Python 3.12: `py -3.12 -m venv .venv`. Pin `python_requires` in the README so the team matches. |
+| `pyarrow` install is very slow | Building from source | Force a wheel: `pip install --only-binary :all: pyarrow` |
+| `pandas 3.0` API breaks the existing scripts | Pandas 3 removed some 2.x behaviour | Pin `pandas>=2.2,<3` in `requirements.txt` and reinstall. The Phase 2 script only uses `DataFrame` + `to_parquet`, so this is unlikely, but the tests will tell you. |
+
+### Deliverables
+
+`requirements.txt`, `requirements.lock.txt`, `requirements-gpu.txt`, `.gitignore` updated, `.venv/` working.
+
+---
+
+# CP-01 — Local data audit
+
+**Goal:** a machine-readable inventory of what is on disk, and the guard that keeps the demo event out of training. §51 and §63 both make this the prerequisite for everything.
+
+**Depends on:** CP-00.
+
+**Dataset:** all five years, all events, all sessions — read-only.
+
+### Steps
+
+**1. Run the existing audit** (it already exists and is correct):
+
+```powershell
+python scripts/audit_raw_data.py --raw-root data/raw/tracinginsights --output artifacts/schema_audit
+```
+
+Note the `--raw-root`: the script defaults to `data/raw`, but your mirror is at `data/raw/tracinginsights` per §7.
+
+**2. Extend it** — the current script covers telemetry schema but not the session-level inventory you need for scoping. Add `scripts/data/inventory.py` producing `artifacts/schema_audit/inventory.csv` with one row per (year, event, session): driver count, lap-file count, presence of each session file, total bytes, and for 2026 the count of `OVERTAKE ENABLED`/`DISABLED` messages.
+
+**3. Write the demo-event guard** at `src/trackshift/data/guards.py`:
+
+```python
+DEMO = {"year": "2026", "event": "British Grand Prix"}
+
+def assert_demo_held_out(df, context: str) -> None:
+    """Raise if the frozen demo event leaked into a training or calibration split."""
+    hit = df[(df["year"].astype(str) == DEMO["year"]) & (df["event"] == DEMO["event"])]
+    if len(hit):
+        raise RuntimeError(
+            f"{context}: {len(hit)} rows from the held-out demo event "
+            f"({DEMO['year']} {DEMO['event']}). See AGENTS.md section 40."
+        )
+```
+
+Call it at the top of every `scripts/train/*.py`. A test in CP-14 asserts it fires.
+
+### ✅ Check
+
+- `artifacts/schema_audit/` contains `field_inventory.csv`, `events.csv`, `lap_quality.csv`, `summary.json`, `inventory.csv`
+- Summary shows five years `present`, zero parse errors
+- `lap_quality.csv` row count ≈ 177,288
+- `distance_monotonic` is true for **>99%** of laps — anything worse means the validator will reject at scale
+- `inventory.csv` lists 14 complete 2026 GPs
+
+### ⚠️ If output is bad
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| Parse errors on some `_tel.json` | Interrupted sparse checkout | `git -C data/raw/tracinginsights/<year> status`, then re-run the downloader for that year. Do **not** delete the mirror. |
+| `distance_monotonic` false on many laps | Real upstream artefact at lap boundaries | Do not repair raw data (§7). The validator already rejects these; record the rate in the audit and move on. Investigate only if >2%. |
+| Audit takes very long | 177k files, single-threaded | Run per year: `--raw-root data/raw/tracinginsights` is fine, but add a `--years 2026` flag and run overnight for the rest. 2026 alone unblocks CP-04. |
+
+### Deliverables
+
+`artifacts/schema_audit/*`, `scripts/data/inventory.py`, `src/trackshift/data/guards.py`, `tests/test_guards.py`.
+
+---
+
+# CP-02 — Registries scaffold (M31)
+
+**Goal:** `config/data_registry.yaml` and `config/feature_registry.yaml` exist with a loader and a schema test, so every later checkpoint registers what it produces in the same PR.
+
+**Depends on:** CP-00.
+
+Per §45, §46 and the MODELS.md update, each feature records the base fields **plus** `availability_scope`, `source_gated`, `decision_checkpoint`, and `uncertainty_field`.
+
+### Steps
+
+**1. `config/feature_registry.yaml`** — one entry per feature:
+
+```yaml
+schema_version: 1
+features:
+  - name: gap_at_checkpoint_s
+    definition: Time gap to the car ahead, sampled at a named decision checkpoint.
+    unit: s
+    source: derived from DistanceToDriverAhead and speed
+    derivation: gap_m / speed_mps at the checkpoint distance
+    allowed_sessions: [Race, Sprint]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: DERIVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: [DETECTION, ACTIVATION, BRAKING]
+    uncertainty_field: null
+    consuming_models: [M07, M10]
+
+  - name: tyre_temperature
+    definition: Tyre surface temperature.
+    unit: C
+    source: NOT AVAILABLE - no documented continuous source in TracingInsights
+    live_safe: null
+    provenance: OBSERVED
+    availability_scope: none
+    source_gated: true          # absent until a documented source exists (section 11)
+    decision_checkpoint: null
+    uncertainty_field: null
+    consuming_models: []
+```
+
+Pre-register all seven §11 source-gated channels with `availability_scope: none` so nobody silently zero-fills them: `brake_pressure`, `steering_angle`, `tyre_temperature`, `tyre_pressure`, `brake_temperature`, `damage`, `fuel_consumption`.
+
+**2. `config/data_registry.yaml`** — one entry per processed dataset (name, description, source, schema_version, partitioning, primary key, producer script, consuming components, live/offline status). Seed it with `telemetry_20m`.
+
+**3. `src/trackshift/data/registry.py`** — `load_feature_registry()`, `load_data_registry()`, `feature(name)`, and `assert_registered(columns, context)` which raises listing any column absent from the registry.
+
+### ✅ Check
+
+- `pytest tests/test_registry.py` passes: every entry has all required keys; `live_safe` is not null unless `availability_scope: none`; no duplicate names
+- `assert_registered` raises on an unknown column
+- All seven source-gated channels present with `availability_scope: none`
+
+### ⚠️ If output is bad
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| Registry drifts from real Parquet columns | Registration treated as an afterthought | Make `assert_registered` a hard call at the end of every builder script, not a lint. A dataset that writes an unregistered column should fail the build. |
+| Two features with near-identical names | Chain P and Chain E naming independently | The registry is the single namespace. Search before adding; `test_registry.py` should also flag names differing only by suffix. |
+
+### Deliverables
+
+`config/data_registry.yaml`, `config/feature_registry.yaml`, `src/trackshift/data/registry.py`, `tests/test_registry.py`.
+
+---
+
+# CP-03 — Rule config skeleton, all 14 tracks (M18)
+
+**Goal:** `config/rules/2026/` holds `common.yaml` plus one file per 2026 event, every value carrying a provenance tier and a source string. Per your decision: **all 2026 tracks, not just Silverstone**, sourced from public FIA material.
+
+**Depends on:** CP-01.
+
+### The honesty problem, and how to handle it
+
+Three tiers of value, and the config must distinguish them, because §57/§58 govern what the demo may claim:
+
+| Tier | `value_source` | Meaning | Usable for |
+|---|---|---|---|
+| **A** | `RULE_FIA` | Cited to an FIA Sporting/Technical Regulation article or event note | Everything. "Legal by construction" claims. |
+| **B** | `OBSERVED_RCM` | Derived from `rcm.json` race-control messages in the raw mirror | Race-control state. Genuinely observed. |
+| **C** | `PROXY_HISTORICAL_DRS` | Inferred from where DRS was active at the same circuit in 2022–2025 | Development and DP shape only. **Never** in a demo claim. |
+
+Every key gets `value_source` and `source`. The rule engine (CP-11) refuses to start if any Tier-C value is used while `strict_mode: true`.
+
+### Steps
+
+**1. `config/rules/2026/common.yaml`** — season-wide values:
+
+```yaml
+schema_version: 1
+season: 2026
+overtake:
+  detection_gap_s:
+    value: 1.0
+    value_source: RULE_FIA          # replace with UNVERIFIED until cited
+    source: "TODO: FIA 2026 Sporting Regulations, Overtake article"
+    note: "Gap threshold at the Detection Line for Overtake to arm."
+power:
+  normal_envelope_kw:
+    value: null
+    value_source: UNVERIFIED
+    source: "TODO: FIA 2026 Technical Regulations, MGU-K"
+  overtake_envelope_kw:
+    value: null
+    value_source: UNVERIFIED
+    source: "TODO: FIA 2026 Technical Regulations, Overtake mode"
+energy:
+  deploy_limit_per_lap_kj:
+    value: null
+    value_source: UNVERIFIED
+    source: "TODO: FIA 2026 Technical Regulations, energy flow limits"
+strict_mode: false                   # set true before any demo claim
+```
+
+**2. One file per event** — 14 of them, named from the directory (`british_grand_prix.yaml`, `monaco_grand_prix.yaml`, …):
+
+```yaml
+schema_version: 1
+event: british_grand_prix
+event_display: British Grand Prix
+circuit: silverstone
+year: 2026
+lap_length_m:
+  value: 5819.0
+  value_source: DERIVED_TELEMETRY
+  source: "median max(distance) over accepted 2026 Race laps"
+geometry:
+  corner_count: 18
+  rotation_deg: 92.0
+  source: "data/raw/tracinginsights/2026/British Grand Prix/Race/corners.json"
+overtake:
+  enabled: true
+  zones:
+    - zone: 1
+      name: "TODO"
+      detection_line_m:
+        value: null
+        value_source: UNVERIFIED
+        source: "TODO: FIA event notes 2026 British Grand Prix"
+      activation_line_m:
+        value: null
+        value_source: UNVERIFIED
+        source: "TODO: FIA event notes 2026 British Grand Prix"
+race_control:
+  # generated by scripts/data/extract_race_control.py from rcm.json
+  overtake_windows_source: "artifacts/race_control/2026_british_grand_prix.json"
+  value_source: OBSERVED_RCM
+```
+
+**3. `scripts/data/extract_race_control.py`** — parse every 2026 `rcm.json`, emit per event/session a timeline of `OVERTAKE ENABLED` / `OVERTAKE DISABLED` windows with session times, plus SC/VSC/flag windows. This is Tier B and needs no FIA document. Write to `artifacts/race_control/<year>_<event>.json`.
+
+**4. `scripts/data/derive_drs_zones.py`** — Tier C fallback. For each circuit, take 2022–2025 Race laps at that track, find distance ranges where `drs != 0` for a meaningful share of laps, and emit candidate activation zones. Mark every output `PROXY_HISTORICAL_DRS`. This gives the DP realistic zone geometry to develop against while the FIA values are still `UNVERIFIED`. **Silverstone's zones from 2022 DRS are a proxy for 2026 Overtake zones, not a substitute** (§41).
+
+**5. Sourcing task** (do this in parallel, it is research not code): FIA 2026 Sporting Regulations and Technical Regulations from `fia.com`; per-event "Event Notes" from the race director, which historically carry the DRS/Overtake zone definitions. Record the document title, date, and article number in each `source` field. Convert `UNVERIFIED` → `RULE_FIA` one key at a time.
+
+**6. `src/trackshift/rules/config.py`** — loader with a pydantic schema, plus `resolve(event, key)` returning `(value, value_source, source)` and raising in strict mode on `UNVERIFIED` or `PROXY_*`.
+
+### ✅ Check
+
+- 14 event files exist, one per complete 2026 GP directory (the incomplete Spanish GP is explicitly excluded with a comment)
+- `pytest tests/test_rules_config.py`: every file validates; every leaf value has both `value_source` and `source`; no `value_source: RULE_FIA` with a `source` containing "TODO"
+- `artifacts/race_control/*.json` covers all 14 events; totals reconcile to **51 enable / 23 disable** messages across 2026
+- `resolve()` raises in strict mode for every key still `UNVERIFIED`
+- Lap lengths derived from telemetry are within ±50 m of published circuit lengths
+
+### ⚠️ If output is bad
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| FIA event notes not findable for 2026 | Documents not published or moved | Keep the key `UNVERIFIED`, use the Tier-C proxy, and record the search in the `source` field ("searched fia.com/documents 2026-09-12, not found"). The plan does not block on this — only demo claims do. |
+| DRS-proxy zones look wrong (too many, too long) | Threshold too loose, or DRS-in-traffic noise | Require the zone to be active on ≥25% of laps and ≥300 m long; drop zones that overlap a braking region from CP-05. |
+| Two events share a circuit with different values | Layout changed between years | Key rule files by **event**, not circuit, exactly as the directory names are. Record `circuit` as metadata only. |
+| Rule value changes later | Regulations updated | Bump `schema_version` in the event file and record it in every artifact manifest that consumed it. Never edit silently. |
+
+### Deliverables
+
+`config/rules/2026/common.yaml` + 14 event files, `scripts/data/extract_race_control.py`, `scripts/data/derive_drs_zones.py`, `artifacts/race_control/*.json`, `src/trackshift/rules/config.py`, `tests/test_rules_config.py`.
+
+---
+
+# CP-04 — Build the 20 m lake
+
+**Goal:** `data/processed/telemetry_20m/` populated for the scope you need, deterministically, with manifests.
+
+**Depends on:** CP-00 (needs `pyarrow`).
+
+**Dataset — build in this order:**
+
+| Stage | Scope | Purpose | Approx rows |
+|---|---|---|---|
+| 4a | 2026 British GP, Race, HAM + ANT | Smoke test on the demo battle | ~30 k |
+| 4b | 2026 British GP, all sessions, all drivers | Demo event complete | ~1.5 M |
+| 4c | 2026 all 14 GPs, Practice 1 + Qualifying + Race (+ Sprints) | Chain E and Chain P 2026 domain | ~20 M |
+| 4d | 2022–2025 all events, Qualifying + Race | DRS-era priors for Chain P | ~35 M |
+
+Estimate basis: Silverstone lap = 5,819 m ÷ 20 m = 291 rows per lap; a 22-driver race with ~52 laps ≈ 333 k rows.
+
+### Steps
+
+**1. Smoke test:**
+
+```powershell
+python scripts/build_phase2_dataset.py `
+  --raw-root "data/raw/tracinginsights" `
+  --output-root "data/processed/telemetry_20m" `
+  --year 2026 --event "British Grand Prix" --session Race `
+  --drivers HAM ANT --dry-run
+```
+
+Expect `discovered_laps: 104, accepted_laps: ~104, rejected_laps: small`. Then drop `--dry-run`.
+
+**2. Add a batch driver** — `scripts/data/build_lake.py` looping over year/event/session with `--years`, `--events`, `--sessions`, `--exclude-event`, `--jobs`, calling the existing builder per session. Keep `build_phase2_dataset.py` unchanged; it works and is tested (§3: do not rewrite working Phase 2 components).
+
+**3. Verify determinism** (MODELS.md §6.3 depends on it — you and Rishabh each build locally and the outputs must match): build one session twice into different roots and compare content hashes of the Parquet, ignoring file mtime.
+
+### Models & parameters
+
+None — this is deterministic resampling. Policy already fixed in `resample.py`: continuous channels linearly interpolated onto the grid, discrete channels zero-order hold from the preceding sample, grid at exact multiples of `spacing_m` from the first sample at or above `distance[0]`.
+
+### ✅ Check
+
+- Acceptance rate **>95%** overall; inspect `rejected_laps.csv` if lower
+- Rejection codes are dominated by `NON_MONOTONIC_DISTANCE` and `INSUFFICIENT_VALID_SAMPLES`, not `MISSING_TEL_OBJECT` (which would mean broken files)
+- `run_manifest.json` present per output root with `schema_version: phase2_20m_v1`
+- Row count per lap ≈ `lap_length_m / 20` ± 2
+- `gap_ahead_m` non-null rate >95% in Race sessions; near 0 in Qualifying is expected and fine
+- Two builds of the same session produce identical Parquet content hashes
+
+### ⚠️ If output is bad
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| Many `NON_MONOTONIC_DISTANCE` rejections | Lap-boundary artefacts upstream | Expected at some rate. Do not repair raw data. If >5%, consider a validator option to trim a trailing non-monotonic tail — but implement it as an explicit, recorded policy with a test, not a silent fix. |
+| `drs_open` all zero for 2026 | **Not a bug** — the channel is genuinely dead | Leave it. Mark `drs_open_observed` unavailable for 2026 in the registry (§11). Overtake state comes from CP-10, never from here. |
+| Output files are tiny and numerous | One Parquet per session | §10 warns against thousands of tiny files. If a session file is <5 MB, consider partitioning at event level instead of session for the historical years. |
+| Build is very slow | 177k JSON files, single process | Parallelise at the session level in `build_lake.py` (`--jobs 8`). Do not parallelise inside a session — determinism first. |
+| Disk fills up | ~55 M rows total | Parquet with compression should be a few GB. Check with `du -sh data/processed`. Build 4a–4c first; 4d only when Chain P needs it. |
+
+### Deliverables
+
+`data/processed/telemetry_20m/**`, `scripts/data/build_lake.py`, per-root `run_manifest.json`, `lap_manifest.csv`, `rejected_laps.csv`, `quality_summary.csv`.
+
+---
+
+# CP-05 — Track segmentation (M03) ⭐ critical path
+
+**Goal:** a **static, versioned** segment map per circuit, and `data/processed/segments/` built from it. `segment_id` becomes the join key for every downstream table, so it is frozen after this checkpoint.
+
+**Depends on:** CP-04 (needs the lake), CP-03 (needs FIA line positions where available).
+
+This is the single most important checkpoint you own. M05, M07, M08 and everything downstream join on `segment_id`; if it moves later, every dataset must be rebuilt.
+
+### The key design decision
+
+**Segment boundaries are a property of the circuit, not of a lap.** Derive them once from a reference lap set, store them in `config/geometry/<circuit>.yaml`, then apply them to every lap. If you instead detect brake points per lap, `segment_id` means a different piece of track on every lap and all baselines are meaningless.
+
+### Steps
+
+**1. Build the reference lap set** per circuit: 2026 Race + Qualifying laps that are `iacc: true`, status `'1'` only, not in/out laps, and accepted by the validator. Silverstone gives roughly 22 drivers × 40 clean laps ≈ 880 laps.
+
+**2. Derive candidate boundaries** from the median profile across reference laps:
+
+| Boundary type | Rule |
+|---|---|
+| Brake onset | Distance where median `brake_on` crosses 0→1 |
+| Throttle return | Distance where median `throttle_pct` first exceeds 95 and stays above for ≥60 m |
+| Corner apex | `Distance` from `corners.json` (18 for Silverstone) |
+| FIA lines | `detection_line_m`, `activation_line_m` from CP-03 where available |
+| Zone edges | Start/end of activation zones |
+
+**3. Merge and clean:**
+- Merge any segment shorter than **40 m** into its neighbour
+- Target **30–40 segments per lap** (§13). Silverstone with 18 corners should land near 36
+- Number sequentially by distance from the start/finish line
+- Classify each: `STRAIGHT | BRAKING | CORNER | EXIT`
+
+**4. Derive static geometry per segment** (§12, §13): `sector`, `zone`, `corner_id`, `corner_type`, `corner_phase`, `track_heading_deg`.
+
+`corner_type` must be a **versioned, geometry-based classification**, not a free-text label. Compute a curvature proxy from the median `x`/`y` centreline, then bin:
+
+| `corner_type` | Rule (median apex speed and curvature) |
+|---|---|
+| `STRAIGHT` | curvature below threshold |
+| `HAIRPIN` | apex speed < 100 km/h |
+| `SLOW` | 100–160 km/h |
+| `MEDIUM` | 160–220 km/h |
+| `FAST` | > 220 km/h |
+| `CHICANE` | two curvature sign changes within 150 m |
+
+Suffix `_LEFT`/`_RIGHT` from the curvature sign. Store the thresholds in the geometry file and stamp `geometry_version` (for example `silverstone-geom-v1`) — API.md requires it in `/track`, and every downstream artifact records it.
+
+`track_heading_deg` = `atan2(dy, dx)` along the smoothed centreline, corrected by the `Rotation` scalar from `corners.json` (92.0 at Silverstone). M33 depends on this being right.
+
+**5. Write `config/geometry/<circuit>.yaml`** and `scripts/features/build_segments.py` which applies it to the lake and emits `data/processed/segments/` per C1.
+
+**6. Emit the C1 columns**, live fields aligned to **segment entry**, full-segment summaries in separate `OFFLINE_ONLY` columns.
+
+### ✅ Check
+
+- Segment count per lap in **[30, 40]** for every circuit; Silverstone ≈ 36
+- No segment shorter than 40 m
+- `segment_id` for a given `(circuit, geometry_version)` is **identical across every lap, driver, session and year** — assert by hashing the boundary array
+- Boundary stability: brake-onset boundary distance has a standard deviation across reference laps of **< 25 m**
+- `sum(segment_length_m) == lap_length_m` ± 20 m
+- `corner_id` present on every `CORNER` segment and matches the count in `corners.json`
+- `track_heading_deg` is continuous mod 360 — no jumps >45° between adjacent segments
+- Rejection manifest exists; no lap silently dropped (§49)
+
+### ⚠️ If output is bad
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| 60+ segments per lap | Merge threshold too low; noisy brake detection | Raise merge threshold to 60 m; require brake_on true for ≥3 consecutive 20 m rows before calling it an onset |
+| < 25 segments | Over-merging, or a circuit with few corners (Monza has 11) | Accept a lower count on low-corner circuits but record it. Add throttle-return boundaries on long straights to split them. |
+| Boundary std > 25 m across laps | Using per-lap detection instead of the median profile | Re-read the design decision above. Derive once from the reference set. |
+| `corner_type` unstable between years | Thresholds tuned to one season's speeds | Bin on curvature primarily, speed secondarily. Bump `geometry_version` if you retune, and rebuild everything downstream. |
+| `track_heading_deg` jumps wildly | Coordinate frame not rotation-corrected, or `x`/`y` noise | Apply `Rotation` from `corners.json`; smooth the centreline over 5 points before differencing. |
+| Segment sum ≠ lap length | Grid starts above 0 m (resampler skips samples below `distance[0]`) | Expected — the first segment starts at the first grid point. Record the offset rather than forcing it to zero. |
+
+### Deliverables
+
+`config/geometry/*.yaml`, `src/trackshift/track/segmentation.py`, `scripts/features/build_segments.py`, `data/processed/segments/**`, `tests/test_segmentation.py`, registry entries.
+
+---
+
+# CP-06 — Track-relative weather (M33)
+
+**Goal:** wind projected onto the track, not a compass bearing. §12 and §39.
+
+**Depends on:** CP-05 (needs `track_heading_deg`).
+
+**Dataset:** `weather.json` per session (156 samples in a race — roughly one per 40 s, so interpolate onto lap time), joined to segments by session time.
+
+### Steps
+
+**1. Time-align** weather samples to segment entry by interpolating on `wT` (session time) against the segment's `session_time_s`.
+
+**2. Derive** (§12):
+
+```python
+# wWD is the bearing the wind comes FROM; track_heading_deg is the direction of travel
+rel = radians(wWD - track_heading_deg)
+wind_head_component_mps  = wWS * cos(rel)    # positive = headwind
+wind_cross_component_mps = wWS * sin(rel)    # positive = from the right
+air_density_proxy        = (wP * 100) / (287.05 * (wAT + 273.15))   # kg/m3
+wet_track_flag           = bool(wR)
+```
+
+**3. Keep raw** `wAT`, `wTT`, `wH`, `wP`, `wWS`, `wWD` in the lake (§39) but mark `wWD` **not live-safe for models** in the registry — only the derived components go to models.
+
+### ✅ Check
+
+- `air_density_proxy` in **[1.0, 1.35] kg/m³** for realistic conditions; Silverstone in July with ~1013 hPa and 25 °C gives ≈1.18
+- `wind_head_component_mps² + wind_cross_component_mps² ≈ wWS²` to within 1e-6
+- Sign test: on a segment whose `track_heading_deg` equals `wWD`, head component ≈ `+wWS` and cross ≈ 0
+- Head component changes sign roughly twice per lap on a typical circuit (the car goes out and comes back)
+- `wet_track_flag` false for all 156 samples at 2026 British GP — matches `wR` in the raw file
+
+### ⚠️ If output is bad
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| Head component never changes sign | Heading not varying — segmentation geometry is wrong | Go back to CP-05; check the `Rotation` correction |
+| Sign inverted | `wWD` is "from", not "towards" | The formula above assumes "from". Verify against a session with strong known wind; the test in `tests/test_weather.py` pins the convention |
+| Weather join produces NaN at session start | First segment precedes the first weather sample | Forward-fill from the first sample and flag `weather_extrapolated: true`; do not interpolate backwards from nothing |
+
+### Deliverables
+
+`src/trackshift/track/weather.py`, `tests/test_weather.py`, weather columns on `segments`, registry entries.
+
+---
+
+# CP-07 — Practice lap classifier (M01)
+
+**Goal:** every Practice lap labelled `PUSH | LONG_RUN | COOLDOWN | OUT_LAP | IN_LAP | INTERRUPTED | INVALID | UNKNOWN` (§9), so physics calibration uses clean-air laps only.
+
+**Depends on:** CP-04.
+
+**Dataset:** 2026 Practice 1 only — historical years have no Practice on disk. 2026 British GP P1 alone has **613 tel laps across 22 drivers**; the full season gives roughly 8,500 P1 laps.
+
+### Steps
+
+Start **deterministic** (§9 allows deterministic, inferred or hybrid). A rule-based classifier is interpretable, needs no labels, and is sufficient. Only escalate to a model if the rules leave a large `UNKNOWN` share.
+
+| Label | Rule |
+|---|---|
+| `OUT_LAP` | `pout` set on this lap, or previous lap had `pin` |
+| `IN_LAP` | `pin` set on this lap |
+| `INVALID` | `del: true`, or `iacc: false` |
+| `INTERRUPTED` | lap `status` contains any digit other than `1` |
+| `PUSH` | lap time within **107%** of the driver's session best, tyre `life` ≤ 5, not out/in |
+| `LONG_RUN` | part of a run of ≥4 consecutive green laps with lap-time spread < 3% and increasing tyre `life` |
+| `COOLDOWN` | lap time > 115% of session best, not in/out, following a `PUSH` |
+| `UNKNOWN` | anything else |
+
+Record `provenance: DERIVED` for all of these, and store the thresholds in `config/lap_classification.yaml` so they are versioned.
+
+### ✅ Check
+
+- `UNKNOWN` share **< 15%** across 2026 P1
+- `PUSH` laps are **5–20%** of the session — P1 has few genuine qualifying simulations
+- `LONG_RUN` laps 20–50%
+- Every `OUT_LAP`/`IN_LAP` reconciles with a `pin`/`pout` in `laptimes.json`
+- Spot-check five `PUSH` laps by hand against the session best
+
+### ⚠️ If output is bad
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| `UNKNOWN` > 30% | Thresholds too tight, or a red-flagged session | Loosen the `PUSH` window to 108%; check whether the session had a long stoppage (`status` digits) |
+| Almost everything is `PUSH` | Session best is itself slow (wet, or a short session) | Use the *field* best for the session as a secondary reference, and never classify laps from a session whose best is >110% of the Qualifying best |
+| `LONG_RUN` never fires | Run detection requires consecutive laps; in/out laps break runs | Allow a run to continue across a single `UNKNOWN`, but not across an `IN_LAP` |
+
+### Deliverables
+
+`src/trackshift/track/lap_classifier.py`, `config/lap_classification.yaml`, `tests/test_lap_classifier.py`, `practice_lap_class` column, registry entries.
+
+---
+
+# CP-08 — Tyre degradation and normalised pace (M30)
+
+**Goal:** a **causal** `tyre_degradation_proxy` plus tyre-normalised pace, normalised relative to driver, car, compound, stint, track and session — **not one global tyre curve** (§38).
+
+**Depends on:** CP-05, CP-07.
+
+**Dataset:** 2026 Race + Sprint (stints with `compound`, `life`, `stint` from `laptimes.json`), all 14 events. HAM at 2026 British GP: HARD 25 laps, MEDIUM 23, SOFT 4, pit in on laps 23 and 48.
+
+### Steps
+
+**1. Reconstruct stints** from `stint`, `compound`, `life`, `pin`, `pout`. A stint is bounded by pit events; `life` includes laps from earlier sessions on used sets, so use `fresh` to distinguish.
+
+**2. Fit a per-(driver, compound, stint) pace trend** on green-flag, non-in/out laps only. Causal means: at lap *k*, the proxy may only use laps ≤ *k*.
+
+```text
+tyre_degradation_proxy(k) = (rolling median lap time over laps [k-4, k])
+                          - (median of the first 3 green laps of the stint)
+```
+
+Normalise by the driver's clean-air reference for the circuit so it is comparable across cars.
+
+**3. Tyre-normalised pace**: residual of segment time against the driver's own median for that segment on the same compound at similar tyre life, so it does not double-count what M04 baselines already remove.
+
+### ✅ Check
+
+- Proxy is **monotonically non-decreasing** within a stint for >80% of stints — tyres do not get faster with age, fuel effects aside
+- Proxy resets to ~0 at every stint start
+- SOFT degrades faster than MEDIUM faster than HARD, on average, at the same circuit
+- **Causality test**: computing the proxy on a truncated stint (first *k* laps) gives the identical value at lap *k* as computing it on the full stint. This is the test that catches accidental lookahead — put it in `tests/test_tyre.py`
+- Fuel burn confound is visible: pace usually improves early in a stint even as tyres age. Document that the proxy mixes the two until M34 provides the fuel estimate, then re-derive.
+
+### ⚠️ If output is bad
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| Proxy decreases through the stint | Fuel burn dominating tyre wear | Expected before M34 exists. Note it in the registry `definition`, and revisit this checkpoint after CP-19 to subtract the fuel effect. |
+| Wild values on short stints | Fewer than 3 green laps to baseline against | Emit `null` with `reason: "stint too short"`, never 0 |
+| Proxy differs between two builds | Rolling window crossing a race-control transition | §12: transitions are hard boundaries. Reset the rolling window at any `race_control_transition_flag` (C7 from Rishabh). |
+
+### Deliverables
+
+`src/trackshift/features/tyre_pace.py`, `tests/test_tyre.py`, `tyre_degradation_proxy` on `segments`, registry entries.
+
+---
+
+# CP-09 — Segment baselines (M04)
+
+**Goal:** driver, team and field median baselines per segment (§14, §15), the C2 contract, computed on `normal_race_model_eligible` rows only.
+
+**Depends on:** CP-05, and Rishabh's C7 gate (M02). If C7 is not ready, use the track-status decoding from this file's reference section as a stand-in and swap it for C7 later — record which one was used in the manifest.
+
+**Dataset:** all years, Race + Sprint + Qualifying, grouped by `(circuit, segment_id)`.
+
+### Steps
+
+Compute, for each of `segment_time_s`, `exit_speed_kmh`, `brake_onset_m`, `full_throttle_fraction`, `max_speed_kmh`:
+
+```text
+driver baseline: median over (same driver, same circuit, same segment_id)
+team   baseline: median over (same team,   same circuit, same segment_id)
+field  baseline: median over (all cars,    same circuit, same segment_id)
+```
+
+Emit median **and** sample count `n`. Rows with `n` below a declared minimum carry `baseline_valid = false` rather than being omitted (C2).
+
+Minimum `n`: **driver 15, team 25, field 100.** Store in `config/baselines.yaml`.
+
+Residuals are `x_current - baseline`, computed at consumption time, not stored per row.
+
+### ✅ Check
+
+- Field baseline `n` ≥ 100 for every segment at every circuit with a full race
+- Driver baselines exist for all 22 drivers at circuits they raced
+- Residual distributions are roughly centred: median driver residual within ±0.02 s of zero by construction
+- `baseline_valid: false` rows are present, not silently dropped — count them
+- A known-fast driver shows negative segment-time residuals against the field at most segments; sanity-check one
+
+### ⚠️ If output is bad
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| Baselines dominated by Safety Car laps | The eligibility gate is not applied | This is the exact failure §37 warns about. Verify the filter before anything else. |
+| Team baseline `n` tiny | Driver changes mid-season, or a team with one entry | Fall back to field baseline and set `baseline_valid: false` for the team level only |
+| Residuals huge at one segment | Segment spans a pit entry, or a boundary sits mid-corner | Re-check CP-05 boundaries at that `segment_id`; exclude pit-lane rows via `pit_state` |
+| Baselines differ between years at the same circuit | Regulation change (2022–2025 vs 2026), resurfacing | Key baselines by `(circuit, year_group, segment_id)` where `year_group` ∈ {`drs_era`, `2026`}. Do not pool across the era boundary (§41). |
+
+### Deliverables
+
+`src/trackshift/track/baselines.py`, `scripts/features/build_baselines.py`, `data/processed/{driver,team,field}_segment_baselines/`, `config/baselines.yaml`, `tests/test_baselines.py`.
+
+---
+
+# CP-10 — Overtake state machine (M20)
+
+**Goal:** the 2026 Overtake state machine as an explicit, deterministic transition system (§20). **Never** inferred from the `drs` channel — which for 2026 is all zeros anyway.
+
+**Depends on:** CP-03, CP-05.
+
+### The state machine
+
+```text
+NOT_ARMED ──(cross Detection Line with gap < detection_gap_s)──> ARMED
+ARMED ─────(cross Activation Line)──────────────────────────────> ACTIVE
+ACTIVE ────(leave zone / lift / end of zone)────────────────────> NOT_ARMED
+any ───────(race control OVERTAKE DISABLED)─────────────────────> DISABLED
+DISABLED ──(race control OVERTAKE ENABLED)──────────────────────> NOT_ARMED
+```
+
+`DISABLED` comes from CP-03's `artifacts/race_control/*.json` windows (Tier B, genuinely observed). The other transitions need the line positions (Tier A or C).
+
+### Steps
+
+**1. `src/trackshift/rules/state_machine.py`** — a pure function `step(state, position_m, gap_s, race_control, event_rules) -> state`, no I/O, no data frames.
+
+**2. Enumerate transitions in a table** and drive the implementation from it, so the tests can enumerate the same table.
+
+**3. Apply across the lake** to produce `overtake_state` and `overtake_eligible` per segment, `RULE` provenance.
+
+**4. For 2022–2025**, produce `historical_drs_eligible` and `historical_drs_open` instead, from the `drs` channel plus `DRS ENABLED/DISABLED` messages. These are **historical covariates only** (§41) — never named `overtake_*`.
+
+### ✅ Check
+
+- `pytest tests/test_rules.py` covers **below, at, and above** every threshold (§52) — gap at `detection_gap_s - ε`, exactly `detection_gap_s`, and `+ ε`
+- Detection, Activation, and disabled behaviour each have a test
+- No state transition happens without crossing a line or a race-control message
+- Applied to 2026 British GP: `ARMED` occurs on a plausible number of segments; `ACTIVE` is a subset of `ARMED`; `DISABLED` windows match the 3 disable messages in that event
+- `overtake_state` is never non-null for 2022–2025, and `historical_drs_*` is never non-null for 2026
+
+### ⚠️ If output is bad
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| Nothing ever arms | Line positions still `null` from CP-03 | Use the Tier-C DRS-proxy zones so development can continue; the state machine logic is testable independent of the values |
+| Everything arms | `detection_gap_s` too large, or gap computed in metres not seconds | `DistanceToDriverAhead` is **metres**. Convert: `gap_s = gap_m / speed_mps`. This is a very easy mistake and it will silently ruin Chain P. |
+| `ACTIVE` without `ARMED` | Transition order wrong when both lines fall in one segment | Evaluate at 20 m resolution inside the segment, not once per segment |
+| Disabled windows do not line up | Session-time vs lap-time confusion | `rcm.json` `time` is a timestamp; `laptimes.json` `sesT`/`lST` are session-relative seconds. Align on session time, and unit-test the conversion. |
+
+### Deliverables
+
+`src/trackshift/rules/state_machine.py`, `tests/test_rules.py` (threshold triples), `overtake_state`/`overtake_eligible`/`historical_drs_*` columns.
+
+---
+
+# CP-11 — Rule engine (M19)
+
+**Goal:** `legal_actions(state, event_rules) -> ActionSet` — contract C3. **Illegal actions are absent from the set, never low-scored** (§31, §32).
+
+**Depends on:** CP-10.
+
+### Steps
+
+**1. Action space** (§31): `deploy_level ∈ {0, 0.25, 0.5, 0.75, 1.0}` × `lift_amount ∈ {0, 0.25, 0.5}` = 15 candidates before filtering.
+
+**2. Filters, each with its own rule key and test:**
+
+| Filter | Removes |
+|---|---|
+| Power envelope | `deploy_level` above `normal_envelope_kw` when not `ACTIVE`, above `overtake_envelope_kw` when `ACTIVE` |
+| Per-lap energy | Any action whose `delta_e_kj` would exceed `deploy_limit_per_lap_kj` for the lap so far |
+| Energy state | Any deployment exceeding the current estimated `energy_kj` |
+| Race control | All deployment above baseline when `overtake_disabled` |
+| Eligibility | Overtake-envelope actions when state is not `ACTIVE` |
+
+**3. Return `excluded`** alongside `actions` — each entry naming the rule and its source, so the UI can explain the exclusion on hover (API.md §5.6).
+
+**4. Strict mode**: refuse to start if any consumed rule value is `UNVERIFIED` or `PROXY_*` while `strict_mode: true`.
+
+**5. Stub mode** (`--stub`): return a fixed legal set with the correct schema so Rishabh's DP can develop against C3 before the real values land (MODELS.md §6.1).
+
+### ✅ Check
+
+- **Zero illegal actions** in any returned set, asserted over a sweep of 10,000 random states
+- `actions` is never empty — coasting (`deploy_level: 0, lift_amount: 0`) must always be legal
+- Every excluded action names a rule key that exists in the config
+- Threshold triples tested for every numeric limit
+- Strict mode raises on the current `UNVERIFIED` config, and passes once values are `RULE_FIA`
+- Unknown event raises `UNKNOWN_EVENT`; missing rule key raises `RULE_KEY_MISSING` and **never defaults to enabled** (C3)
+
+### ⚠️ If output is bad
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| Empty action set | Energy filter too aggressive at low SOC | Coasting must never be filtered. Add an explicit assertion, not a fallback. |
+| DP produces illegal plans | DP scoring illegal actions low instead of the engine removing them | §31 is explicit: they must not enter the candidate set. Fix in the engine, tell Rishabh. |
+| Engine is slow inside DP | Rebuilding config per call | Load config once, cache per event; the function must stay pure but the config can be a bound argument |
+
+### Deliverables
+
+`src/trackshift/rules/engine.py`, `src/trackshift/rules/api.py` (C3), `tests/test_rules.py` extended, stub mode.
+
+---
+
+# CP-12 — Eligibility probability (M21)
+
+**Goal:** `P(gap at Detection Line < threshold)` and the §22 derived features — not a deterministic boolean when uncertainty is material.
+
+**Depends on:** CP-10, CP-11.
+
+### Steps
+
+**1. Project the gap forward** to the Detection Line from the current segment, using the current closing rate and its recent variance.
+
+**2. Model the projected gap as a distribution**, not a point:
+
+```text
+projected_gap_at_detection ~ Normal(mu, sigma)
+mu    = gap_now - closing_rate * time_to_detection_line
+sigma = std of closing rate over the trailing 5 segments, propagated
+p_eligible = P(projected_gap < detection_gap_s) = Phi((threshold - mu) / sigma)
+```
+
+Use a **trailing** window only — §12 forbids centred windows for live features.
+
+**3. Derive the rest of §22:** `eligibility_margin = threshold - gap_at_detection`, `energy_required_to_unlock_kj` (from CP-21's ΔE→Δt inverted: how much energy closes the remaining margin), `distance_detection_to_activation`, `distance_activation_to_brake`, `delta_v_at_activation`.
+
+`energy_required_to_unlock_kj` depends on CP-21 — emit `null` until then, then backfill.
+
+### ✅ Check
+
+- `p_eligible ∈ [0,1]`, and → 1 as the gap goes well below threshold, → 0 well above
+- Calibration: bin `p_eligible` into deciles over historical opportunities and compare against the observed arming rate. Expected calibration error **< 0.10**
+- `sigma` grows with distance to the Detection Line — a projection 2 km out must be less certain than one 200 m out
+- `eligibility_margin` sign convention: positive means eligible
+- No centred-window leakage — the truncation test from CP-08 applies here too
+
+### ⚠️ If output is bad
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| `p_eligible` always 0 or 1 | `sigma` collapsing to ~0 | Floor `sigma` at a physically sensible minimum (0.05 s); a perfectly certain projection is not real |
+| Badly calibrated | Normal assumption wrong; closing rate is skewed | Try a Student-t, or an empirical quantile approach over historical projections at the same distance-to-line bucket |
+| Feature is null everywhere | No Detection Line in config for that event | Expected while CP-03 is `UNVERIFIED`. Use the Tier-C proxy for development and record which tier produced each value. |
+
+### Deliverables
+
+`src/trackshift/rules/eligibility.py`, `src/trackshift/features/overtake_features.py`, C6 columns, `tests/test_eligibility.py`.
+
+---
+
+# CP-13 — Overtake-opportunity dataset (M07)
+
+**Goal:** the §19 dataset — **one row per opportunity per decision checkpoint**, with a strict feature-cutoff rule. This is the biggest change from the original plan and the foundation of Chain P.
+
+**Depends on:** CP-12, and Rishabh's C8 (battle episodes, M05). If C8 is late, you can define opportunities directly from `DriverAhead`/`DistanceToDriverAhead` and swap to `battle_id` later — but the split (C9) needs `battle_id`, so do not train before it lands.
+
+### Definition of an opportunity
+
+An attacker–defender pair approaching a Detection Line where the gap is plausibly close enough to matter. Concretely: `gap_s < detection_gap_s * 2` at the Detection Line, both cars `normal_race_model_eligible`, in a Race or Sprint session.
+
+### The three checkpoints
+
+Each opportunity emits **three rows**, one per checkpoint, sharing an `opportunity_id`:
+
+| `decision_checkpoint` | `feature_cutoff_distance_m` | May contain |
+|---|---|---|
+| `DETECTION` | Detection Line distance | Everything at or before the Detection Line |
+| `ACTIVATION` | Activation Line distance | Also activation-time quantities |
+| `BRAKING` | Braking-point distance | Also braking-point quantities |
+
+**A `DETECTION` row must never contain `gap_at_activation`, activation speed, braking speed, or any centred/future rolling statistic.** Enforce this in code, not by convention: the builder holds a per-checkpoint allowlist from the registry's `decision_checkpoint` field, and raises if a disallowed column is populated.
+
+### The label
+
+`passed_by_outcome_horizon` with a **fixed, versioned** definition. Start with `zone_exit_v1`: the attacker is ahead at the exit of the activation zone in which the opportunity occurred. Store the definition string in every row and in the artifact manifest.
+
+`pass_attempted` and the outcome distance are stored **for audit only** and must never be used as features (§19).
+
+### Row key and features
+
+```text
+opportunity_id  decision_checkpoint  feature_cutoff_distance_m  outcome_horizon
+year event session lap zone battle_id attacker defender attacker_team defender_team
+regulation_era
+gap_at_checkpoint  eligibility_margin  delta_speed_checkpoint  delta_acceleration_checkpoint
+closing_rate  closing_rate_trend  recent_pace_delta
+attacker_tyre_compound defender_tyre_compound attacker_tyre_life defender_tyre_life
+attacker_tyre_degradation_proxy defender_tyre_degradation_proxy
+fuel_load_delta_kg_est  ers_energy_delta_kj_est          # null until CP-18/CP-19
+historical_drs_eligible historical_drs_open              # 2022-2025 only
+overtake_eligible overtake_state                          # 2026 only, rule engine
+sector corner_id corner_type corner_phase
+wind_head_component_mps wind_cross_component_mps track_temperature wet_track_flag
+distance_detection_to_activation distance_activation_to_brake distance_remaining_in_zone
+position_context
+passed_by_outcome_horizon                                 # label
+pass_attempted outcome_distance_m                         # audit only, never features
+```
+
+**Only `normal_race_model_eligible`, green-flag opportunities enter the training set.** SC/VSC/pit/unknown rows are built and retained for audit with a flag, but excluded from the model set.
+
+### Expected volume
+
+Rough estimate: a race has 20–60 close approaches to a Detection Line. Across 2026's 14 events plus sprints, expect **~1,500–4,000 opportunities → 4,500–12,000 rows**. Across 2022–2025 (DRS era, more events, more DRS passes), expect **~15,000–40,000 opportunities**. If your numbers are an order of magnitude off, the gap threshold or the zone definition is wrong.
+
+### ✅ Check
+
+- Exactly 3 rows per `opportunity_id`, no more, no fewer
+- **Leakage test** (`tests/test_opportunities.py`): for every `DETECTION` row, every activation- and braking-scoped column is null. This test is non-negotiable.
+- `feature_cutoff_distance_m` strictly increases across the three checkpoints of one opportunity
+- Label base rate is plausible: 10–35% passes. Below 5% or above 60% means the opportunity definition is wrong.
+- Every row's `battle_id` exists in C8
+- Zero rows with `normal_race_model_eligible: false` in the model set
+- 2026 rows have `overtake_*` populated and `historical_drs_*` null; 2022–2025 the reverse
+
+### ⚠️ If output is bad
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| Far too many opportunities | Gap threshold too loose, or counting every segment | One opportunity per (battle, zone, lap), not per segment |
+| Base rate ~2% | Counting hopeless approaches as opportunities | Tighten to `gap_s < detection_gap_s * 1.5`; require a positive closing rate |
+| Base rate ~70% | Only counting cases that were already passes | Check that opportunities are defined at the Detection Line, before the outcome is known |
+| Leakage test fails | Builder populates all columns then filters | Build per checkpoint from a checkpoint-scoped view of the telemetry, truncated at `feature_cutoff_distance_m`. Never build the full row and blank fields afterwards. |
+| Label ambiguous on multi-car battles | Attacker passes one car, another repasses | `zone_exit_v1` is about *this* pair only. Document it; the counterattack case is M23 (Rishabh's), not the label. |
+
+### Deliverables
+
+`src/trackshift/features/opportunities.py`, `scripts/features/build_opportunities.py`, `data/processed/overtake_opportunities/`, `tests/test_opportunities.py`, registry entries with `decision_checkpoint` on every feature.
+
+---
+
+# CP-14 — Pass-model benchmark (M10)
+
+**Goal:** the §26 benchmark set trained **per decision checkpoint** — 3 checkpoints × 5 families = **15 fits** — selected on calibration quality, not accuracy.
+
+**Depends on:** CP-13, and C9 (Rishabh's leakage-safe splitter).
+
+### Splits (§40)
+
+Never random. Use C9 with `unit="battle_id"`.
+
+| Split | Content |
+|---|---|
+| Train | 2022–2024, all events |
+| Validation | 2025, all events |
+| Test | 2026, **excluding British Grand Prix** |
+| Frozen final test | 2026 British Grand Prix — untouched until model and features are frozen |
+
+Also run leave-one-track-out on 2026 as a secondary generalisation check.
+
+### Models and starting parameters
+
+Train each on the same feature matrix per checkpoint. Fix `random_state=42` everywhere and record it.
+
+**1. Logistic Regression** — the interpretable baseline (§26). Every other model must beat it or lose.
+
+```python
+LogisticRegression(penalty="l2", C=1.0, solver="lbfgs", max_iter=2000,
+                   class_weight=None, random_state=42)
+# Standardise numeric features; one-hot the categoricals; keep the pipeline in the artifact.
+```
+
+**2. LightGBM**
+
+```python
+LGBMClassifier(n_estimators=2000, learning_rate=0.03, num_leaves=31,
+               max_depth=-1, min_child_samples=40, subsample=0.8,
+               subsample_freq=1, colsample_bytree=0.8,
+               reg_alpha=0.0, reg_lambda=1.0, random_state=42)
+# early_stopping_rounds=100 on the validation split, metric="binary_logloss"
+```
+
+**3. XGBoost**
+
+```python
+XGBClassifier(n_estimators=2000, learning_rate=0.03, max_depth=5,
+              min_child_weight=5, subsample=0.8, colsample_bytree=0.8,
+              reg_lambda=1.0, eval_metric="logloss",
+              early_stopping_rounds=100, random_state=42)
+```
+
+**4. CatBoost** — handles the categorical pairs (`compound_pair`, `corner_type`, teams) natively.
+
+```python
+CatBoostClassifier(iterations=3000, learning_rate=0.03, depth=6,
+                   l2_leaf_reg=3.0, loss_function="Logloss",
+                   eval_metric="Logloss", od_type="Iter", od_wait=100,
+                   random_seed=42, verbose=200)
+```
+
+**5. Small MLP** — optional (§26). CPU is adequate at this data size; the A6000 is only worth it for a sweep. See §A6000 workflow below.
+
+```python
+MLPClassifier(hidden_layer_sizes=(64, 32), activation="relu", alpha=1e-3,
+              learning_rate_init=1e-3, max_iter=500, early_stopping=True,
+              n_iter_no_change=25, random_state=42)
+```
+
+### Feature groups (for CP-23 ablation)
+
+Declare these in the registry so the ablation harness can toggle them: `geometry`, `tyre`, `weather`, `team_identity`, `driver_identity`, `rolling_battle_trends`, `race_context`, `fuel_ers` (null until CP-19).
+
+### Metrics (§26, §55)
+
+Report all, with **N**:
+
+```text
+Brier score      <- primary
+log loss
+calibration ECE and a reliability plot
+ROC-AUC
+PR-AUC           <- matters, the classes are imbalanced
+```
+
+**Selection rule (§26): a model with slightly lower ROC-AUC but materially better calibration wins.** The DP consumes probabilities, not classifications.
+
+### ✅ Check
+
+- All 15 fits complete and produce artifacts with locked feature schemas
+- Every model beats a constant-base-rate predictor on Brier
+- LightGBM/XGBoost/CatBoost beat Logistic Regression on log loss — if not, the features are weak, not the models
+- `ACTIVATION` and `BRAKING` models outperform `DETECTION` (they see more) — if `DETECTION` wins, suspect leakage
+- The demo-event guard fires when you deliberately include BGP — test it
+- Leave-one-track-out variance is modest: Brier std across folds < 0.05. High variance means the model is memorising circuits.
+- Identity features (§17): train with and without driver/team identity. If identity alone carries most of the signal, the model is memorising drivers rather than learning racecraft.
+
+### ⚠️ If output is bad
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| ROC-AUC > 0.95 | Leakage — almost certainly a post-outcome feature | Check the CP-13 leakage test; check `pass_attempted` and `outcome_distance_m` are excluded; check the split is by `battle_id` |
+| All models ≈ base rate | Features carry no signal, or the label is noise | Verify the label by hand on 20 opportunities. Then check `gap_at_checkpoint` alone — it should have real signal on its own. |
+| Trees hugely beat logistic | Strong non-linearity, or one dominant feature | Inspect feature importance; if one feature dominates, confirm it is legitimately available at that checkpoint |
+| Validation good, 2026 test poor | Regulation-era shift — this is exactly what §41 predicts | This is CP-17's job, not a bug. Record the gap; it motivates era handling. |
+| Calibration poor but AUC fine | Tree probabilities are typically miscalibrated | Expected — that is what CP-15 exists for. Do not tune it away here. |
+
+### Deliverables
+
+`src/trackshift/pass_model/candidates.py`, `scripts/train/train_pass_model.py`, `artifacts/models/pass/<version>/` per checkpoint with `feature_schema.json` and `manifest.json`, `artifacts/validation/pass_model_report.md`.
+
+---
+
+# CP-15 — Probability calibration (M11)
+
+**Goal:** compare uncalibrated vs Platt/sigmoid vs isotonic (§27), fitted on data **separate from the final test**.
+
+**Depends on:** CP-14.
+
+### Steps
+
+**1. Calibration data must not be the test data** (§27: "Do not calibrate and evaluate on the same event"). Use the 2025 validation split to fit calibrators, evaluate on 2026-excluding-BGP.
+
+**2. Fit all three variants** per checkpoint per model family:
+
+```python
+CalibratedClassifierCV(base_estimator, method="sigmoid", cv="prefit")   # Platt
+CalibratedClassifierCV(base_estimator, method="isotonic", cv="prefit")  # isotonic
+```
+
+Isotonic needs data — with fewer than ~1,000 calibration samples it overfits; prefer Platt below that. Record which you used and why.
+
+**3. Reliability diagrams** into `artifacts/validation/` — 10 equal-count bins, predicted vs observed, with counts per bin.
+
+### ✅ Check
+
+- ECE improves after calibration; target **< 0.05**
+- Reliability curve within the diagonal's confidence band in every bin with n ≥ 50
+- Brier improves or holds; log loss improves
+- Calibration does not materially hurt ROC-AUC (ranking is monotone-preserved by both methods, so any change means a bug)
+- Calibrator fitted on 2025, evaluated on 2026 — assert the disjointness in code
+
+### ⚠️ If output is bad
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| Isotonic makes it worse | Too few calibration samples; step function overfits | Switch to Platt; report both |
+| Calibration good on validation, bad on test | Era shift again | Fit the calibrator on 2026 data (excluding BGP) instead, and note that historical calibration does not transfer |
+| Predictions cluster at 0 and 1 | Overconfident trees | Reduce depth/`num_leaves`, increase `min_child_samples`, then recalibrate |
+
+### Deliverables
+
+`src/trackshift/pass_model/calibration.py`, reliability plots, calibrated artifacts, `tests/test_calibration.py` asserting bounds and disjointness.
+
+---
+
+# CP-16 — Ensemble spread (M12)
+
+**Goal:** `ensemble_spread` for API.md and §42 — the uncertainty the UI shows next to `p_pass`.
+
+**Depends on:** CP-15.
+
+### Steps
+
+Train **5 seeds** of the selected family per checkpoint (`random_state` 42, 43, 44, 45, 46), calibrate each on the same calibration split, and report:
+
+```text
+p_pass          = mean of member probabilities
+ensemble_spread = standard deviation across members
+```
+
+Keep members in the artifact so the API can recompute; they are small.
+
+### ✅ Check
+
+- Spread is larger in sparse regions of feature space — plot spread against `gap_at_checkpoint`; it should widen where data is thin
+- Mean of the ensemble is at least as well calibrated as any single member
+- Spread is not ~0 everywhere (that means the seeds are not actually different — check that subsampling is on)
+- Spread is not enormous (> 0.25 typical) — that means the model is unstable and needs regularisation
+
+### ⚠️ If output is bad
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| Spread ≈ 0 everywhere | Members are identical — the seed is not reaching the sampler | Confirm `subsample < 1.0` and `colsample_bytree < 1.0`; a fully deterministic learner needs bagged data (different bootstrap per member), not just a different seed |
+| Spread huge (> 0.3) in dense regions | Model genuinely unstable, not uncertain | Regularise: fewer leaves, higher `min_child_samples`. Large spread where data is plentiful is a defect, not information. |
+| Spread uncorrelated with data density | Members overfitting the same noise | Increase member diversity: vary `num_leaves` as well as the seed, or bag the training rows |
+| Ensemble mean worse calibrated than a single member | Averaging before calibration | Calibrate each member on the same split, then average — not the reverse |
+
+### Deliverables
+
+`src/trackshift/pass_model/ensemble.py`, 5 member artifacts per checkpoint, spread column in C4.
+
+---
+
+# CP-17 — Regulation-era handling (M13, pass side)
+
+**Goal:** decide, by evaluation, how 2022–2025 DRS-era data should inform the 2026 pass model (§41).
+
+**Depends on:** CP-14, CP-15.
+
+### The five strategies to compare (§41)
+
+| Strategy | Implementation |
+|---|---|
+| A. Era feature | One model, `regulation_era` as a categorical feature |
+| B. Historical pretraining | Fit on 2022–2025, then continue training on 2026 |
+| C. 2026 recalibration | Historical model, calibrator refit on 2026 only |
+| D. Domain weighting | Sample weights: 2026 rows weighted 3–5×, historical 1× |
+| E. Separate models | Independent historical and 2026 models, compared |
+
+Evaluate all five on 2026-excluding-BGP with the same splits and metrics.
+
+### ✅ Check
+
+- All five are actually run and reported — §34 forbids picking on sophistication
+- The winner is selected on **calibration first** (§26)
+- The 2026-only model is included as a baseline: if it beats everything, historical data is not helping and you should say so plainly
+- Sample-size honesty: 2026-only training data is much smaller. Report N for each strategy.
+
+### ⚠️ If output is bad
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| Historical data always hurts | The eras genuinely differ — DRS ≠ Overtake, exactly as §41 warns | A legitimate finding. Use 2026-only, and record it in the report. Do not force historical data in. |
+| Era feature does nothing | Trees already split on year-correlated features | Check for a proxy leak (a feature that encodes the year, like a circuit only raced in one era) |
+
+### Deliverables
+
+`src/trackshift/pass_model/era.py`, comparison table in `artifacts/validation/pass_model_report.md`, selected strategy recorded in the manifest.
+
+---
+
+# CP-18 — Energy twin (M14)
+
+**Goal:** the longitudinal power balance producing `ers_energy_state_est_kj`, `ers_deployment_est_kw`, `ers_harvest_est_kw` — all tagged `SIMULATED`, never `OBSERVED` (§28, §58).
+
+**Depends on:** CP-05, CP-06, CP-07.
+
+### The physics (§28)
+
+```text
+P_wheel = m·a·v + P_drag + P_rolling + P_gradient
+
+P_drag     = 0.5 · rho · CdA · v^3           rho from air_density_proxy (CP-06)
+P_rolling  = Crr · m · g · v
+P_gradient = m · g · sin(theta) · v          theta from mean_gradient (CP-05)
+m·a·v      from acc_x and speed
+
+P_K ≈ P_wheel / eta - P_ICE
+```
+
+Wind matters: use `v_air = v + wind_head_component_mps` in the drag term. That is why CP-06 comes first.
+
+### Parameters and starting values
+
+| Parameter | Start | Source / note |
+|---|---|---|
+| `mass_kg` | 800 (2026 minimum) + fuel | Fuel from M34 (CP-19); until then use a linear lap-based proxy, explicitly labelled a proxy (§38) |
+| `CdA_m2` | 1.0 low-drag … 1.4 high-downforce | Per circuit; calibrated in CP-20 |
+| `Crr` | 0.012 | Literature; calibrate |
+| `eta_drivetrain` | 0.92 | Calibrate |
+| `P_ICE_max_kw` | 400 | 2026 regulations pending CP-03 |
+| `g` | 9.81 | Constant |
+
+Store all in `config/physics/priors.yaml` with a `source` per key.
+
+### Steps
+
+**1. Implement the balance** in `src/trackshift/twin/power_balance.py` as a pure function over a segment.
+
+**2. Integrate** `P_K` over distance to get deployment/harvest energy per segment; accumulate to a running `ers_energy_state_est_kj`.
+
+**3. Tag everything `SIMULATED`** and carry uncertainty (CP-22 formalises it).
+
+**4. Causality**: the estimate at distance *d* uses only telemetry at or before *d* (§12). This is what `causal_cutoff_distance_m` in API.md C5 records.
+
+### ✅ Check
+
+- On a **2026 Practice 1 `PUSH` lap in clean air**, estimated `P_wheel` peaks in a plausible range (roughly 700–1,000 kW at full deployment on a long straight)
+- Harvest is negative deployment under braking, and its magnitude is bounded
+- Integrated deployment per lap does not exceed the regulatory per-lap limit by more than the model's stated uncertainty — if it does by a wide margin, a parameter is wrong
+- Energy state does not drift monotonically to absurd values over a race — plot it for a full stint
+- Sign conventions: positive `acc_x` under acceleration; positive gradient uphill
+- **Causality test**: truncating the lap at distance *d* gives the identical estimate at *d*
+
+### ⚠️ If output is bad
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| Power an order of magnitude off | Unit error — `speed` is **km/h**, must be m/s | Convert once, at the boundary, and unit-test it |
+| Energy state diverges over a race | No harvest model, or harvest efficiency too low | Bound the state to a physically sensible window and report clipping rate; then calibrate in CP-20 |
+| Huge noise segment-to-segment | `acc_x` is noisy at 20 m resolution | Smooth `acc_x` over 3 segments with a **trailing** window (never centred), or derive acceleration from the speed trace instead and compare |
+| Gradient term dominates | `z` is noisy or in the wrong units | Silverstone is nearly flat — the gradient term should be small there. Test on a flat circuit first, then Spa. |
+| Estimates differ between drivers implausibly | Team-level aero differences | Expected. That is why CP-20 has a team calibration rung. |
+
+### Deliverables
+
+`src/trackshift/twin/power_balance.py`, `config/physics/priors.yaml`, `tests/test_twin.py` (units, signs, causality, `SIMULATED` tagging).
+
+---
+
+# CP-19 — Fuel-load estimator (M34)
+
+**Goal:** `fuel_load_kg_est` + `fuel_load_uncertainty_kg`, **causal**, tagged `INFERRED` (§11, §38). The only permitted source of fuel context for any live feature.
+
+**Depends on:** CP-18.
+
+### Steps
+
+Fuel is not observable. Build a causal estimator, not a lookahead:
+
+```text
+fuel_kg(lap k) = start_fuel_kg - sum(consumption per lap up to k)
+```
+
+- `start_fuel_kg`: race distance × a per-circuit consumption rate, bounded by the regulatory maximum
+- Per-lap consumption: from the energy twin's ICE work, or a circuit constant calibrated so that fuel reaches ~1 kg at the end of a green-flag race
+- Uncertainty grows with laps since the last anchor point
+
+**Explicitly label it a proxy** (§38). Never present it as observed. The registry entry must say so, and the API returns `provenance: INFERRED`.
+
+### ✅ Check
+
+- Monotonically decreasing within a stint, resetting only at the race start (no refuelling in F1)
+- Ends a full race between 0 and 3 kg
+- Uncertainty widens with distance from the start
+- Correlates with the known lap-time fuel effect: roughly 0.03 s per kg per lap — regress lap time against the estimate on green laps and check the coefficient is in a plausible range
+- Causality test as before
+
+### ⚠️ If output is bad
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| Ends far from zero | Consumption rate wrong for that circuit | Calibrate per circuit against total race distance; store per-circuit in `config/physics/priors.yaml` |
+| Lap-time coefficient wrong sign | Confounded with tyre degradation (CP-08 flagged this) | Fit fuel and tyre effects jointly on green laps, or use Qualifying (low fuel) vs Race (high fuel) as the contrast |
+
+### Deliverables
+
+`src/trackshift/twin/fuel.py`, `tests/test_fuel.py`, `fuel_load_kg_est` and `fuel_load_uncertainty_kg` columns, registry entries. Then **revisit CP-08** to subtract the fuel effect from the tyre proxy.
+
+---
+
+# CP-20 — Physics calibration hierarchy (M15)
+
+**Goal:** all five rungs of §29 fitted and compared, with the required controls.
+
+**Depends on:** CP-18, CP-19.
+
+### The five rungs
+
+| Rung | What is fitted |
+|---|---|
+| 1. Pure analytical | Nothing — priors only |
+| 2. Global calibrated | One `(CdA, Crr, eta, P_ICE)` set across all cars and circuits |
+| 3. Team-specific | Per-team parameters |
+| 4. Event-specific | Per-team, per-circuit |
+| 5. Physics + ML residual | Rung 4 plus a learned residual: `prediction = physics(x) + MLResidual(x)` |
+
+### Required controls (§29 update)
+
+The calibration and the residual model must control for: entry speed, segment geometry, aero/Overtake state, tyre compound and life, fuel-load estimate, wind head/cross components, track temperature, wetness, and `normal_race_model_eligible`.
+
+### Fitting
+
+Target: observed segment time. Loss: weighted least squares over segments. Data: 2026 Practice 1 `PUSH` and `LONG_RUN` laps (clean air, §9) plus Qualifying for the high-performance envelope.
+
+```python
+scipy.optimize.least_squares(
+    residual_fn, x0=[CdA, Crr, eta, P_ICE_max],
+    bounds=([0.6, 0.005, 0.85, 300], [1.8, 0.025, 0.98, 500]),
+    loss="soft_l1",   # robust to outlier segments
+    f_scale=0.05,
+)
+```
+
+Bounds are physical constraints — a fit that runs to a bound is telling you the model is wrong, not that the bound should move.
+
+Residual model (rung 5): LightGBM with `n_estimators=500, learning_rate=0.05, num_leaves=15, min_child_samples=50` — deliberately small, because a large residual model just memorises the physics error.
+
+### ✅ Check
+
+- Each rung improves held-out MAE over the previous, or is rejected (§34)
+- MAE targets: rung 2 < 0.15 s/segment, rung 4 < 0.08 s, rung 5 < 0.06 s
+- **Zero physical constraint violations** — no negative drag, no efficiency > 1, no fitted parameter at a bound
+- Error broken down by speed regime and by segment type (§29) — a model good on straights and bad in corners is not usable for the DP
+- Residual model does not exceed ~30% of total predicted variation; if it does, the physics is doing too little work
+- Team-specific parameters differ plausibly (§15: never assume similar PU means similar aero)
+
+### ⚠️ If output is bad
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| Fit hits a bound | Missing physics (downforce-induced drag, DRS/Overtake aero state) | Add an aero-state term rather than widening bounds |
+| Event calibration overfits | Too few clean laps per event | Require ≥30 clean laps per (team, event); otherwise fall back to the team rung and record the fallback |
+| Residual model does all the work | Physics parameters poorly initialised | Fix rungs 2–4 first; do not let rung 5 paper over them |
+| Good MAE, bad ΔE→Δt behaviour | The model fits time but not the energy *sensitivity* | That is CP-21's check, and it is the one that matters for the DP |
+
+### Deliverables
+
+`src/trackshift/twin/calibration.py`, `scripts/train/calibrate_physics.py`, `artifacts/models/twin/<version>/` per rung, `artifacts/validation/twin_report.md`.
+
+---
+
+# CP-21 — Segment-time model, ΔE→Δt (M16)
+
+**Goal:** the function the DP actually consumes — how much time a segment takes as a function of energy deployed (§30). Rishabh's DP cannot produce a meaningful shadow price without this.
+
+**Depends on:** CP-20.
+
+### The form (§30)
+
+```text
+t_k(d, L) = t_base,k - a_k · ΔE + c_k · L
+```
+
+`a_k` is the **energy sensitivity** of segment *k* — the local slope that becomes λ_E. Getting `a_k` right matters more than getting `t_base,k` right, because the DP differentiates.
+
+### Candidates to benchmark (§30)
+
+| Candidate | Parameters |
+|---|---|
+| Analytical physics | From CP-20 rung 4 |
+| Linear / ridge | `Ridge(alpha=1.0)` per segment, or pooled with segment interactions |
+| Gradient boosting | `LGBMRegressor(n_estimators=1500, learning_rate=0.03, num_leaves=31, min_child_samples=40, subsample=0.8, colsample_bytree=0.8, random_state=42)` |
+| Physics + residual | CP-20 rung 5 |
+| Small neural regressor | 2×64 MLP — the one genuinely GPU-worthy model in your chain |
+
+**The winner must remain physically plausible** (§30) — this constraint overrides raw MAE.
+
+### ✅ Check
+
+- `a_k > 0` for **every** segment — deploying energy must never make a segment slower
+- `a_k` is largest on long straights and near zero in slow corners. Plot `a_k` against segment type; if it is flat, the model has not learned the physics and the DP will produce nonsense.
+- `c_k > 0` — lifting costs time
+- Monotonicity: `t_k` strictly decreasing in ΔE across the full action range, checked on a dense sweep for every segment
+- MAE < 0.06 s/segment held out
+- Extrapolation sanity: at ΔE beyond the observed range, time does not go negative or invert
+- **Silverstone sanity**: the Hangar Straight segment should have among the highest `a_k` on that circuit
+
+### ⚠️ If output is bad
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| `a_k` negative somewhere | Confounding — high deployment correlates with defending or traffic | Restrict fitting to clean-air segments; add the race-context control. If it persists, constrain the sign in the model (monotone constraints in LightGBM: `monotone_constraints`). |
+| `a_k` flat across segment types | Model learned an average, not the geometry | Fit per segment or add explicit segment×energy interactions |
+| Tree model wins on MAE but violates monotonicity | Trees do not respect physics by default | Use `monotone_constraints=[-1]` on the energy feature, or prefer physics+residual. §30: physical plausibility outranks MAE. |
+| DP produces a flat shadow price | `a_k` has no variation across the lap | This is the headline visual failing. Go back to the geometry: `a_k` must vary. |
+
+### Deliverables
+
+`src/trackshift/twin/segment_time.py`, `scripts/train/train_segment_time.py`, `artifacts/models/segment_time/<version>/`, monotonicity test in `tests/test_twin.py`.
+
+---
+
+# CP-22 — Physics uncertainty (M17)
+
+**Goal:** parameter draws and confidence ranges so C5 can return `Uncertain` rather than point estimates (§42).
+
+**Depends on:** CP-20, CP-21.
+
+### Steps
+
+**1. Parameter covariance** from the least-squares Jacobian at the optimum (`scipy.optimize.least_squares` returns `jac`; covariance ≈ `inv(J.T @ J) * residual_variance`).
+
+**2. Draw N=200 parameter sets** from that covariance, propagate each through the twin and the segment-time model, and report mean plus 10th/90th percentiles.
+
+**3. Cache draws per (event, team)** — recomputing 200 draws inside the DP loop will be too slow.
+
+### ✅ Check
+
+- Intervals contain the observed value about 80% of the time on held-out segments (that is what an 80% interval means)
+- Intervals widen for extrapolated conditions (wet, unusual temperature, unseen team)
+- Draws respect physical bounds — no negative drag in any draw
+- Latency: 200 draws for one segment in < 10 ms so the API stays responsive
+
+### ⚠️ If output is bad
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| Coverage far below 80% | Underestimating uncertainty — Jacobian covariance ignores model misspecification | Add a residual-variance term from held-out error, not just parameter uncertainty |
+| Intervals absurdly wide | Poorly constrained parameters (correlated CdA and Crr) | Fix one from literature and fit the other, or reparameterise |
+
+### Deliverables
+
+`src/trackshift/twin/uncertainty.py`, `t_draws_s` and `low`/`high` in C5, coverage test.
+
+---
+
+# CP-23 — Ablation harness (M28)
+
+**Goal:** one implementation both owners run, so §35 feature-group decisions are evidence-based.
+
+**Depends on:** CP-14, CP-21.
+
+### Steps
+
+`src/trackshift/eval/ablation.py` reads feature groups from the registry and runs leave-one-group-out, reporting the delta in the primary metric with the same splits and seeds.
+
+Groups: `geometry`, `tyre`, `weather`, `team_identity`, `driver_identity`, `rolling_battle_trends`, `race_context`, `fuel_ers`.
+
+**Keep a group only if it improves held-out metrics or provides necessary causal context without materially degrading others** (§35).
+
+### ✅ Check
+
+- Every group has a measured delta with a confidence interval, not a point estimate
+- Identity groups are scrutinised hardest (§17) — a large identity gain with a small racecraft gain means memorisation
+- Results are reproducible across runs with the same seed
+- The harness runs on both Chain P and Chain E models
+
+### ⚠️ If output is bad
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| Every group looks useless (deltas ≈ 0) | Groups are correlated, so removing one leaves the signal in another | Report leave-one-out **and** add-one-in against a minimal baseline; a group that is redundant is a different finding from a group that is useless |
+| Deltas larger than the run-to-run noise floor cannot be distinguished | No repeats | Run each configuration over ≥3 seeds and report the interval. §35 decisions must survive noise. |
+| A group helps one checkpoint and hurts another | Genuine — features differ in value at DETECTION vs BRAKING | Keep the decision per checkpoint. The registry's `decision_checkpoint` field already allows this. |
+| Identity groups dominate everything | Memorisation, exactly the §17 risk | Report the identity-only and identity-free models side by side and let the numbers make the case for dropping identity |
+
+### Deliverables
+
+`src/trackshift/eval/ablation.py`, `scripts/evaluate/run_ablation.py`, `artifacts/validation/ablation_report.md`.
+
+---
+
+# CP-24 — Service routes and replay bundle
+
+**Goal:** your half of API.md live, plus the replay bundle generator (which is yours for the whole team).
+
+**Depends on:** CP-11, CP-14, CP-21.
+
+### Your routes (API.md §9)
+
+`GET /meta`, `GET /validation`, `GET /track/{event}`, `GET /rules/{event}`, `POST /rules/legal_actions`, `POST /rules/eligibility`, `POST /pass/predict`, `POST /twin/segment_time`, `POST /twin/energy_state`, plus `src/trackshift/serve/app.py` (error model, stub middleware) and `scripts/serve/build_replay_bundle.py`.
+
+FastAPI, pydantic and uvicorn are already installed.
+
+### ✅ Check
+
+- Every example JSON in API.md validates against `schemas.py` (`tests/serve/test_schemas.py`)
+- `CHECKPOINT_VIOLATION` raised when a `DETECTION` request carries an activation feature
+- `NOT_MODEL_ELIGIBLE` raised outside normal-race rows
+- Every number in every response carries a provenance tag
+- Replay bundle files are byte-identical in shape to live responses
+- `bundle_manifest.json` records `stubs_used: []` for the final demo
+- All routes respond on CPU only
+
+### ⚠️ If output is bad
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| Replay file and live response differ in shape | Two code paths building JSON | Generate the bundle **by calling the routes**, not by re-serialising models. `build_replay_bundle.py` should invoke the app in-process. |
+| A number reaches the UI without provenance | Serialiser drops the wrapper for plain floats | Make `Quantity`/`Uncertain` the only permitted numeric types in the response models; let pydantic reject bare floats |
+| `/plan` too slow when a slider moves | DP recomputing per request | Precomputed `plan/segNNN.json` covers scrubbing; for live what-if, cache the value table per (event, energy grid) |
+| Bundle contains stub output | A model artifact was missing at build time | `bundle_manifest.json` records `stubs_used`; fail the build if it is non-empty when `--final` is passed |
+| Routes work locally, fail for the UI owner | Machine-specific paths or a running model server assumed | The bundle must be self-contained: no absolute paths, no service dependency (§5) |
+
+### Deliverables
+
+`src/trackshift/serve/*`, `scripts/serve/run_service.py`, `scripts/serve/build_replay_bundle.py`, `artifacts/demo/2026_british_grand_prix/**`.
+
+---
+
+# A6000 workflow
+
+Per your constraint: **remote storage is limited, so export only the dataset one model needs, train one model at a time, and pull the artifact back.**
+
+### When the A6000 is actually needed
+
+| Model | GPU worth it? |
+|---|---|
+| Logistic, LightGBM, XGBoost, CatBoost (CP-14) | **No.** CPU is fine at 10–40 k rows. |
+| MLP (CP-14) | Only for a hyperparameter sweep |
+| Neural regressor (CP-21) | **Yes** — the one genuinely GPU-shaped model you own |
+| Ablation sweeps (CP-23) | Yes when the grid is large |
+| Parameter draws (CP-22) | No — vectorised NumPy is enough |
+
+Everything else in your three chains is CPU work by design (§54).
+
+### The four-step loop
+
+**1. Export the minimal dataset.** Never sync the raw mirror or the full lake.
+
+```powershell
+python scripts/data/export_training_set.py `
+  --model segment_time --split train,val `
+  --out artifacts/export/segment_time_v1.parquet
+# Expect tens of MB, not GB. Verify before uploading.
+```
+
+The exporter writes the Parquet plus a sidecar `.json` recording git commit, feature schema, split definition and row counts, so the remote run is reproducible and the artifact can be traced.
+
+**2. Upload and set up** (first time only for the env):
+
+```bash
+scp artifacts/export/segment_time_v1.parquet USER@A6000:~/trackshift/data/
+ssh USER@A6000
+cd ~/trackshift
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.lock.txt -r requirements-gpu.txt
+```
+
+Keep `requirements.lock.txt` as the single source of truth so local and remote match.
+
+**3. Train one model, then stop:**
+
+```bash
+python scripts/train/train_segment_time.py \
+  --input data/segment_time_v1.parquet \
+  --candidate neural --device cuda \
+  --out artifacts/models/segment_time/neural_v1
+```
+
+**4. Pull the artifact back and verify it on CPU:**
+
+```powershell
+scp -r USER@A6000:~/trackshift/artifacts/models/segment_time/neural_v1 artifacts/models/segment_time/
+python scripts/evaluate/verify_cpu_inference.py --artifact artifacts/models/segment_time/neural_v1
+```
+
+**Then delete the dataset from the remote** before exporting the next one.
+
+### Non-negotiable rules
+
+- Every artifact must load and run on CPU (`map_location="cpu"`), verified by `verify_cpu_inference.py` before merge (MODELS.md §1.1)
+- Save `state_dict`, never a pickled module
+- `--device` is always a CLI argument; every script must run end-to-end on CPU
+- Remote host, user and paths live in ignored local config — never committed (§5)
+- The artifact manifest records `device_trained_on` and `cpu_inference_verified: true`
+
+---
+
+# Cross-checkpoint invariants
+
+Check these at every milestone, not just once.
+
+| Invariant | Where it breaks first | §Ref |
+|---|---|---|
+| No BGP rows in any training or calibration split | CP-14, CP-15 | §40 |
+| `segment_id` stable for a given `geometry_version` | CP-05 | §13 |
+| No centred or future windows in any live feature | CP-08, CP-12, CP-18 | §12, §44 |
+| Every number carries a provenance tag | all | §43 |
+| Energy and fuel never labelled `OBSERVED` | CP-18, CP-19 | §11, §58 |
+| Illegal actions absent, never low-scored | CP-11 | §31 |
+| `normal_race_model_eligible` filter applied | CP-09, CP-13, CP-20 | §12 |
+| Checkpoint features never leak backwards | CP-13, CP-14 | §19 |
+| Every produced column is in the registry | all | §46 |
+| Every artifact has a manifest with git commit and seed | all | §53 |
+
+### The truncation test
+
+The single most valuable test you can write, and it applies to CP-08, CP-12, CP-18 and CP-19:
+
+```python
+def test_causal(builder, lap_df):
+    """A causal feature computed on a truncated lap must equal the full-lap value at
+    the truncation point. Any lookahead breaks this."""
+    full = builder(lap_df)
+    for k in (10, 25, 50):
+        truncated = builder(lap_df.iloc[:k])
+        assert truncated.iloc[k-1] == pytest.approx(full.iloc[k-1]), (
+            f"lookahead detected at row {k}"
+        )
+```
+
+---
+
+# Open items
+
+| # | Item | Status |
+|---|---|---|
+| T1 | FIA 2026 Sporting/Technical Regulations and per-event notes for all 14 tracks | Research task in CP-03; Tier-C proxy unblocks development meanwhile |
+| T2 | Whether `detection_gap_s` differs per event in 2026 | Assume season-wide in `common.yaml`; override per event when sourced |
+| T3 | Spanish Grand Prix has Practice only and no `corners.json` | Excluded from the rule config; revisit if the mirror is completed |
+| T4 | C7 (`normal_race_model_eligible`) from Rishabh | CP-09 and CP-13 depend on it; track-status decoding in this file is the interim stand-in |
+| T5 | C8 (`battle_id`) and C9 (splitter) from Rishabh | CP-13 can build without them, CP-14 cannot train without C9 |
+| T6 | `outcome_horizon` definition beyond `zone_exit_v1` | Alternative: "before the next Detection Line". Compare both in CP-13. |
