@@ -6,7 +6,9 @@ The contract between the models in `MODELS.md` and the frontend UI. This is the 
 - `MODELS.md` — who builds which model, on what compute
 - `API.md` — this file: what the UI can call, and what comes back
 
-Section references (§N) point to `TrackShift AGENTS.md`. Model IDs (M01–M32) and contract IDs (C1–C10) point to `MODELS.md`.
+Section references (§N) point to `TrackShift AGENTS.md`. Model IDs (M01–M34) and contract IDs (C1–C10) point to `MODELS.md`.
+
+Written against `TrackShift AGENTS.md` as of commit `09c7691`; shapes here follow the §11–§13, §17, §19 field definitions at that commit.
 
 ---
 
@@ -117,9 +119,43 @@ Codes:
 | `RULE_KEY_MISSING` | 500 | rule config lacks a required key; never defaults to "enabled" (C3) |
 | `FEATURE_SCHEMA_MISMATCH` | 422 | feature vector does not match the model's locked schema (§53) |
 | `OFFLINE_ONLY_FEATURE` | 422 | a live route was given an `OFFLINE_ONLY` feature (§44) |
+| `CHECKPOINT_VIOLATION` | 422 | a pass-prediction request for one decision checkpoint carried a feature that only exists at a later checkpoint (§19) |
+| `NOT_MODEL_ELIGIBLE` | 422 | the state is not `normal_race_model_eligible` (SC / VSC / pit / unknown control); models are not defined there and the UI must show the gate instead (§12) |
 | `ILLEGAL_STATE` | 422 | state is outside the energy/gap grid or violates accounting |
 | `MODEL_NOT_LOADED` | 503 | artifact missing or failed CPU load |
 | `STUB_RESPONSE` | 200 + header `X-TrackShift-Stub: true` | route is served by a stub; values are placeholders with correct shape |
+
+### 3.8 `DecisionCheckpoint`
+
+```text
+"DETECTION" | "ACTIVATION" | "BRAKING"
+```
+
+Every pass probability is attached to exactly one checkpoint (§19). A value predicted at `DETECTION` used only information available at or before the Detection Line.
+
+### 3.9 `RaceControl` — the eligibility gate
+
+```json
+{
+  "pit_state": "ON_TRACK",
+  "race_control_state": "GREEN",
+  "safety_car_active": false, "virtual_safety_car_active": false,
+  "race_control_transition_flag": false, "pit_transition_flag": false,
+  "green_flag_elapsed_s": 218.4,
+  "normal_race_model_eligible": true,
+  "provenance": "DERIVED"
+}
+```
+
+`pit_state` ∈ `ON_TRACK | PIT_IN | PIT_LANE | PIT_OUT | UNKNOWN`. `race_control_state` ∈ `GREEN | YELLOW | DOUBLE_YELLOW | VSC | SC | RED | UNKNOWN`. When `normal_race_model_eligible` is false, every model field in that step is `null` with `reason: "not normal-race eligible"` — the models are not defined there, and the UI shows the gate rather than a number.
+
+### 3.10 `RegulationEra`
+
+```json
+{ "era": "2026", "historical_drs_eligible": null, "historical_drs_open": null, "overtake_eligible": true, "overtake_state": "ARMED" }
+```
+
+For 2022–2025 rows `historical_drs_*` are populated and `overtake_*` are `null`; for 2026 the reverse. `overtake_*` come only from the rule engine (§12, §20), never from the raw DRS channel.
 
 ---
 
@@ -145,6 +181,12 @@ What the UI shows → which route → which model.
 | Legal action chips at a state | `POST /rules/legal_actions` | M19 (C3) |
 | Simulated episodes playback | `POST /simulate` | M26, M27 |
 | Rival policy picker | `GET /simulate/policies` | M27 |
+| Race-control / pit / eligibility-gate badge (greys every model panel when false) | inside timeline `race_control` | M02 (C7) |
+| Fuel-load estimate gauge, tagged INFERRED | inside timeline; `POST /twin/energy_state` | M34 (C5) |
+| ERS deployment / harvest estimate strip, tagged SIMULATED | inside timeline; `POST /twin/energy_state` | M14 (C5) |
+| Decision-checkpoint chips on the pass panel (DETECTION / ACTIVATION / BRAKING) | inside timeline `pass` | M07, M10 (C4, C6) |
+| Wind head / cross arrows on the map, corner type overlay | `GET /track/{event}` + timeline `weather` | M33, M03 (C1) |
+| Regulation-era badge (DRS-era vs 2026 Overtake) | inside timeline `era` | M07, M13 |
 | Model card / metrics panel | `GET /validation` | §55 reports |
 | Version footer | `GET /meta` | §3.6 |
 
@@ -169,8 +211,11 @@ Geometry for drawing the map. Source: M03 segments (C1) plus M18 lines.
   "segments": [
     {
       "segment_id": 22, "start_distance_m": 3080.0, "end_distance_m": 3260.0,
-      "segment_length_m": 180.0, "kind": "BRAKING" ,
+      "segment_length_m": 180.0, "kind": "BRAKING",
+      "sector": 2, "zone": 1, "corner_id": 15, "corner_type": "MEDIUM_RIGHT", "corner_phase": "ENTRY",
+      "track_heading_deg": 214.0,
       "brake_onset_m": 3210.0, "mean_gradient": -0.004,
+      "geometry_version": "silverstone-geom-v1",
       "provenance": "DERIVED"
     }
   ],
@@ -182,7 +227,7 @@ Geometry for drawing the map. Source: M03 segments (C1) plus M18 lines.
 }
 ```
 
-`centreline` is derived geometry (§12); raw `x`/`y` are never used directly across circuits. `kind` ∈ `STRAIGHT | BRAKING | CORNER | EXIT`.
+`centreline` is derived geometry (§12); raw `x`/`y` are never used directly across circuits. `kind` ∈ `STRAIGHT | BRAKING | CORNER | EXIT`. `corner_type` is the versioned geometry classification from §12 (hairpin / chicane / slow / medium / fast, with left / right / straight), never a free-text label; `geometry_version` changes whenever the classification or segment boundaries change, and every downstream artifact records it.
 
 ### 5.3 `GET /rules/{event}`
 
@@ -223,11 +268,15 @@ Query: `year`, `event`, `session` (all optional). Source: M05 battle episodes (C
       "duration_segments": 148, "duration_s": 312.4,
       "minimum_gap_s": 0.41, "maximum_closing_rate_mps": 3.2,
       "detection_opportunities": 4, "pass_attempted": true, "pass_completed": true,
+      "bounded_by": "PASS",
+      "normal_race_only": true,
       "provenance": "DERIVED"
     }
   ]
 }
 ```
+
+`bounded_by` ∈ `PASS | PAIR_SWITCH | RACE_CONTROL_TRANSITION | PIT_TRANSITION | SESSION_END` says why the episode ended (§12: a race-control or pit transition is a hard boundary; no battle continues across it). `normal_race_only` is always true for battles in the model set; SC/VSC battles exist in the lake for audit but are not listed here.
 
 ### 5.5 `GET /battles/{battle_id}/timeline`
 
@@ -245,9 +294,27 @@ Query: `include_draws=false` (set true to include uncertainty draws).
       "session_time_s": 4412.8,
 
       "race_context": { "label": "ATTACKING", "provenance": "INFERRED" },
+      "race_control": {
+        "pit_state": "ON_TRACK", "race_control_state": "GREEN",
+        "safety_car_active": false, "virtual_safety_car_active": false,
+        "race_control_transition_flag": false, "pit_transition_flag": false,
+        "green_flag_elapsed_s": 218.4,
+        "normal_race_model_eligible": true, "provenance": "DERIVED"
+      },
+      "era": { "era": "2026", "historical_drs_eligible": null, "historical_drs_open": null, "overtake_eligible": true, "overtake_state": "NOT_ARMED" },
+      "geometry": { "sector": 2, "zone": 1, "corner_id": 15, "corner_type": "MEDIUM_RIGHT", "corner_phase": "ENTRY", "track_heading_deg": 214.0 },
+      "weather": {
+        "wind_head_component_mps":  { "value": -2.1, "provenance": "DERIVED", "unit": "m/s" },
+        "wind_cross_component_mps": { "value":  3.4, "provenance": "DERIVED", "unit": "m/s" },
+        "air_density_proxy":        { "value": 1.19, "provenance": "DERIVED", "unit": "kg/m3" },
+        "track_temperature":        { "value": 41.0, "provenance": "OBSERVED", "unit": "C" },
+        "wet_track_flag": false
+      },
 
       "gap_s":              { "value": 0.78,  "provenance": "DERIVED", "unit": "s" },
       "closing_rate_mps":   { "value": 1.9,   "provenance": "DERIVED", "unit": "m/s" },
+      "relative_speed_to_ahead_mps": { "value": 1.7, "provenance": "DERIVED", "unit": "m/s" },
+      "gap_trend_ahead_s_per_s":     { "value": -0.06, "provenance": "DERIVED", "unit": "s/s" },
       "delta_speed_kmh":    { "value": 6.2,   "provenance": "DERIVED", "unit": "km/h" },
       "delta_segment_time_s": { "value": -0.11, "provenance": "DERIVED", "unit": "s" },
       "tyre_age_delta_laps": { "value": -4,   "provenance": "OBSERVED", "unit": "laps" },
@@ -268,13 +335,23 @@ Query: `include_draws=false` (set true to include uncertainty draws).
         "speed_kmh": { "value": 287.0, "provenance": "OBSERVED", "unit": "km/h" },
         "throttle_pct": { "value": 100.0, "provenance": "OBSERVED", "unit": "%" },
         "brake_on": false,
-        "energy_kj": { "mean": 1420.0, "low": 1310.0, "high": 1535.0, "provenance": "SIMULATED", "unit": "kJ" }
+        "braking_intensity_proxy": { "value": 0.0, "provenance": "DERIVED" },
+        "tyre": { "compound": "MEDIUM", "life_laps": 12, "stint": 2, "degradation_proxy": { "value": 0.31, "provenance": "DERIVED" } },
+        "energy_kj":        { "mean": 1420.0, "low": 1310.0, "high": 1535.0, "provenance": "SIMULATED", "unit": "kJ" },
+        "ers_deployment_kw": { "mean": 210.0, "low": 150.0, "high": 260.0, "provenance": "SIMULATED", "unit": "kW" },
+        "ers_harvest_kw":    { "mean": 0.0,   "low": 0.0,   "high": 20.0,  "provenance": "SIMULATED", "unit": "kW" },
+        "fuel_kg":          { "mean": 48.2,   "low": 45.0,  "high": 51.5,  "provenance": "INFERRED",  "unit": "kg" }
       },
       "defender": {
         "speed_kmh": { "value": 281.0, "provenance": "OBSERVED", "unit": "km/h" },
         "throttle_pct": { "value": 100.0, "provenance": "OBSERVED", "unit": "%" },
         "brake_on": false,
-        "energy_kj": { "mean": 1180.0, "low": 1040.0, "high": 1330.0, "provenance": "SIMULATED", "unit": "kJ" }
+        "braking_intensity_proxy": { "value": 0.0, "provenance": "DERIVED" },
+        "tyre": { "compound": "HARD", "life_laps": 16, "stint": 2, "degradation_proxy": { "value": 0.27, "provenance": "DERIVED" } },
+        "energy_kj":        { "mean": 1180.0, "low": 1040.0, "high": 1330.0, "provenance": "SIMULATED", "unit": "kJ" },
+        "ers_deployment_kw": { "mean": 140.0, "low": 90.0,  "high": 200.0, "provenance": "SIMULATED", "unit": "kW" },
+        "ers_harvest_kw":    { "mean": 0.0,   "low": 0.0,   "high": 20.0,  "provenance": "SIMULATED", "unit": "kW" },
+        "fuel_kg":          { "mean": 47.6,   "low": 44.4,  "high": 50.9,  "provenance": "INFERRED",  "unit": "kg" }
       },
 
       "rival_state": {
@@ -291,9 +368,15 @@ Query: `include_draws=false` (set true to include uncertainty draws).
       },
 
       "pass": {
-        "is_opportunity": false,
-        "p_pass": null, "ensemble_spread": null,
-        "provenance": "INFERRED", "model_version": "pass-2026.03"
+        "is_opportunity": true,
+        "opportunity_id": "2026_GBR_Race_HAM_ANT_Battle03_L31_Z1",
+        "outcome_horizon": "zone_exit_v1",
+        "checkpoints": {
+          "DETECTION":  { "reached": true,  "feature_cutoff_distance_m": 2890.0, "p_pass_by_outcome_horizon": 0.51, "ensemble_spread": 0.08, "model_version": "pass-det-2026.03" },
+          "ACTIVATION": { "reached": true,  "feature_cutoff_distance_m": 3020.0, "p_pass_by_outcome_horizon": 0.58, "ensemble_spread": 0.07, "model_version": "pass-act-2026.03" },
+          "BRAKING":    { "reached": false, "feature_cutoff_distance_m": 3210.0, "p_pass_by_outcome_horizon": null,  "ensemble_spread": null, "model_version": "pass-brk-2026.03" }
+        },
+        "provenance": "INFERRED"
       },
 
       "shadow_price_s_per_kj": { "value": 0.0031, "provenance": "DERIVED", "unit": "s/kJ" },
@@ -310,7 +393,11 @@ Notes for the UI:
 
 - `baseline_residuals` comes from C2 (M04). `n` is the sample count behind the median; when `baseline_valid` is false the residuals are `null` and the UI greys the panel rather than hiding it.
 - The `eligibility` block carries the C6 opportunity-derived features (M21): `eligibility_margin_s`, `projected_gap_at_detection_s`, `energy_required_to_unlock_kj`.
-- `pass.is_opportunity` is true only on segments that are rows in the overtake-opportunity dataset (M07). Elsewhere `p_pass` is `null` by design.
+- `race_control` is the C7 gate (M02). When `normal_race_model_eligible` is false — SC, VSC, yellow/red restriction, any pit state, or unknown control state — every model block (`baseline_residuals`, `rival_state`, `eligibility`, `pass`, `shadow_price_s_per_kj`, `recommended_action`) is `null` with a `reason`, because those models are not defined there (§12). The UI shows the gate, not a number. `race_control_transition_flag` / `pit_transition_flag` mark hard boundaries: no rolling quantity is computed across them.
+- `era` distinguishes DRS-era rows (2022–2025, `historical_drs_*`) from 2026 rows (`overtake_*`, from the rule engine only). Never present a historical DRS value as an Overtake state (§41, §58).
+- `weather` is track-relative (M33): head/cross components are wind projected onto `geometry.track_heading_deg`. Raw wind direction is not in the payload because it is not comparable between segments.
+- `fuel_kg` is `INFERRED` from a causal estimator (M34); `ers_deployment_kw` / `ers_harvest_kw` are `SIMULATED` (M14). All carry uncertainty and are never labelled observed (§11).
+- `pass.is_opportunity` is true only on segments that are rows in the overtake-opportunity dataset (M07). Elsewhere the whole `pass` block is `null`. When true, `checkpoints` holds one entry per decision checkpoint (§19); a checkpoint not yet reached at this step has `reached: false` and `null` probability. A DETECTION probability was computed from Detection-Line information only — it does not change when later checkpoints are reached; the UI shows all three side by side as they become available.
 - `rival_state.merged` lists any states merged per §25 (e.g. `["CONSERVING","DERATING"]`). If non-empty, `p` has fewer keys.
 - `live_safe` is true when every value in the step was computable from information available at that timestamp (§44). A retrospective step (e.g. one using the known outcome for labelling) is `false` and must be visually distinguished.
 - `energy_kj` is always `SIMULATED`. Label it "estimated electrical energy", never "battery" or "SOC" (§58).
@@ -345,21 +432,33 @@ Response: the `eligibility` object from the timeline step (5.5).
 
 ### 5.8 `POST /pass/predict`
 
-C4. Pass probability at an opportunity.
+C4. Pass probability at an opportunity, **at one decision checkpoint**.
 
 Request:
 
 ```json
-{ "feature_schema_id": "pass-2026.03", "features": { "gap_at_detection_s": 0.71, "delta_speed_activation_kmh": 8.1, "tyre_age_delta_laps": -4, "compound_pair": "MEDIUM_HARD", "eligibility": "ARMED", "distance_activation_to_brake_m": 640.0, "...": "..." } }
+{ "decision_checkpoint": "DETECTION", "feature_schema_id": "pass-det-2026.03",
+  "features": { "gap_at_checkpoint_s": 0.71, "delta_speed_checkpoint_kmh": 6.2, "delta_acceleration_checkpoint_mps2": 0.4,
+                "closing_rate_mps": 1.9, "closing_rate_trend": 0.2, "recent_pace_delta_s": -0.11,
+                "attacker_tyre_compound": "MEDIUM", "defender_tyre_compound": "HARD", "attacker_tyre_life": 12, "defender_tyre_life": 16,
+                "attacker_tyre_degradation_proxy": 0.31, "defender_tyre_degradation_proxy": 0.27,
+                "fuel_load_delta_kg_est": 0.6, "ers_energy_delta_kj_est": 240.0,
+                "eligibility_margin_s": 0.29, "overtake_eligible": true, "overtake_state": "NOT_ARMED",
+                "corner_type": "MEDIUM_RIGHT", "corner_phase": "ENTRY", "sector": 2, "regulation_era": "2026",
+                "wind_head_component_mps": -2.1, "track_temperature": 41.0, "wet_track_flag": false, "...": "..." } }
 ```
 
-Features are named, not positional; the server orders them against the locked schema and rejects mismatches (§53). All must be `LIVE_SAFE`. `calibration` names the M11 method that produced `p_pass` (`none | platt | isotonic`).
+Features are named, not positional; the server orders them against the locked schema **for that checkpoint** and rejects mismatches (§53). All must be `LIVE_SAFE` and must exist at or before the named checkpoint (§19): a `DETECTION` request carrying `gap_at_activation_s`, any braking-point speed, or a centred rolling statistic is refused with `CHECKPOINT_VIOLATION`. The state must be `normal_race_model_eligible`, else `NOT_MODEL_ELIGIBLE`.
 
 Response:
 
 ```json
-{ "p_pass": 0.58, "ensemble_spread": 0.07, "calibration": "isotonic", "era": "2026", "provenance": "INFERRED", "model_version": "pass-2026.03" }
+{ "decision_checkpoint": "DETECTION", "p_pass_by_outcome_horizon": 0.51, "outcome_horizon": "zone_exit_v1",
+  "ensemble_spread": 0.08, "calibration": "isotonic", "era": "2026",
+  "provenance": "INFERRED", "model_version": "pass-det-2026.03" }
 ```
+
+`outcome_horizon` names the fixed, versioned definition of the training label `passed_by_outcome_horizon` (§19: e.g. completion before zone exit, or before the next Detection Line). The label itself is never returned by a live route and never accepted as a feature. `calibration` names the M11 method that produced the probability (`none | platt | isotonic`). Artifacts are checkpoint-specific (M10), so `model_version` differs per checkpoint.
 
 ### 5.9 `POST /rival/state`
 
@@ -387,11 +486,24 @@ Response:
 
 ### 5.11 `POST /twin/energy_state`
 
-C5. Estimated electrical energy from a telemetry window.
+C5. Estimated ERS and fuel state from a causal telemetry window (M14, M34).
 
 Request: `{ "battle_id": "...", "driver": "HAM", "up_to_segment_index": 87 }`
 
-Response: `{ "energy_kj": { "...Uncertain, SIMULATED" }, "model_version": "..." }`
+Response:
+
+```json
+{
+  "energy_kj":         { "mean": 1420.0, "low": 1310.0, "high": 1535.0, "provenance": "SIMULATED", "unit": "kJ" },
+  "ers_deployment_kw": { "mean": 210.0,  "low": 150.0,  "high": 260.0,  "provenance": "SIMULATED", "unit": "kW" },
+  "ers_harvest_kw":    { "mean": 0.0,    "low": 0.0,    "high": 20.0,   "provenance": "SIMULATED", "unit": "kW" },
+  "fuel_kg":           { "mean": 48.2,   "low": 45.0,   "high": 51.5,   "provenance": "INFERRED",  "unit": "kg" },
+  "causal_cutoff_distance_m": 3140.0,
+  "model_version": { "twin": "twin-event-2026.01", "fuel": "fuel-causal-2026.01" }
+}
+```
+
+Uses only telemetry at or before `causal_cutoff_distance_m` (§12). These four are the only fuel/ERS quantities any live feature may consume; none is ever `OBSERVED` (§11, §58).
 
 ### 5.12 `GET /value/{event}/shadow_price`
 
@@ -534,8 +646,12 @@ What the UI may and may not send to live routes.
 | `OFFLINE_ONLY` | no → `OFFLINE_ONLY_FEATURE` | uses future information |
 | identity (`attacker_driver`, `defender_team`) | yes, but the registry records whether the model uses them | §17 identity caution |
 | raw `x_m`, `y_m`, driver number, timestamps | no | §36 |
+| a feature from a later decision checkpoint than the one requested | no → `CHECKPOINT_VIOLATION` | §19 |
+| source-gated channels (`brake_pressure`, `steering_angle`, `tyre_temperature`, `tyre_pressure`, `brake_temperature`, `damage`, `fuel_consumption`) | only when the registry marks a documented continuous source; never zero-filled | §11 |
+| `pit_stop_duration_s_offline`, `pass_attempted`, outcome distance | no — audit / label only | §11, §19 |
+| raw `wind_direction_deg` | no — send the track-relative head/cross components | §12, §39 |
 
-The feature registry (`config/feature_registry.yaml`, M31) is the source of truth for `live_safe` and is exported at `GET /meta` under `feature_registry_version`.
+The feature registry (`config/feature_registry.yaml`, M31) is the source of truth for `live_safe`, `decision checkpoint`, `source-gated`, and `availability scope`, and is exported at `GET /meta` under `feature_registry_version`.
 
 ---
 
@@ -596,6 +712,11 @@ The UI is part of what makes claims true or false (§57, §58). These are not op
 | Show `n` / sample size on every metric | §55 |
 | Never show one "overall accuracy" number | §55 |
 | Display `X-TrackShift-Stub` responses with a visible "stub data" badge | §3.7 |
+| When `normal_race_model_eligible` is false, grey out every model panel and show the race-control / pit state instead of any number | §12 |
+| Label `fuel_kg` as "estimated fuel (inferred)"; never as fuel load or a measured value | §11, §38 |
+| Show which decision checkpoint a pass probability belongs to; never merge DETECTION / ACTIVATION / BRAKING into one number | §19 |
+| Show DRS-era rows (2022–2025) with a "historical DRS" badge, never the 2026 Overtake iconography | §41, §58 |
+| Render wind as head / cross components relative to the track, not a compass direction | §12, §39 |
 
 ---
 
@@ -671,6 +792,9 @@ A model is "ready for UI" when every box is ticked. Tick per model.
 | Metrics with `n` in `/validation` | ☐ | ☐ | ☐ | — | — | ☐ | ☐ |
 | Demo battle files present in replay bundle | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ |
 | Not stub (`stubs_used` excludes it) | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ |
+| `CHECKPOINT_VIOLATION` raised for later-checkpoint features | ☐ | — | — | — | — | — | — |
+| `NOT_MODEL_ELIGIBLE` raised / `null` returned outside normal-race rows | ☐ | ☐ | ☐ | — | ☐ | ☐ | ☐ |
+| Causal cutoff recorded (`causal_cutoff_distance_m`, `feature_cutoff_distance_m`) | ☐ | ☐ | ☐ | — | — | — | — |
 
 ---
 

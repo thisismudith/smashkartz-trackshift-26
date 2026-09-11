@@ -6,6 +6,8 @@ Training procedures are deliberately out of scope here. Each model gets its own 
 
 The UI-facing surface of every model listed here is specified in `API.md`. `MODELS.md` says who builds what; `API.md` says what the frontend can call.
 
+Written against `TrackShift AGENTS.md` as of commit `09c7691`. If that file changes, re-run the coverage checkpoint in §9 before building against this plan.
+
 ---
 
 ## 1. Team and compute
@@ -38,21 +40,21 @@ Everything in `TrackShift AGENTS.md` that is learned, fitted, benchmarked, or is
 | ID | Component | §Ref | Phase | Kind |
 |---|---|---|---|---|
 | M01 | Practice lap classifier (PUSH / LONG_RUN / COOLDOWN / OUT_LAP / IN_LAP / INTERRUPTED / INVALID / UNKNOWN) | §9 | 3 | deterministic or hybrid classifier |
-| M02 | Race-context labeller (CLEAN_AIR / FOLLOWING / CLOSE_FOLLOWING / ATTACKING / DEFENDING / TRAFFIC / SAFETY_CAR / VSC / YELLOW / PIT_IN / PIT_OUT / WET / DRY) | §37 | 3 | deterministic, inferred, or hybrid |
-| M03 | Track segmentation (braking onset, throttle return, FIA lines, zone boundaries; 30–40 segments/lap) | §13 | 4 | deterministic algorithm *(not ML)* |
-| M04 | Driver / team / field segment baselines (median residuals) | §14, §15 | 5 | statistical |
-| M05 | Dynamic pair assignment and battle-episode extraction | §16, §18 | 6 | deterministic *(not ML)* |
-| M06 | Pairwise feature derivation (Δv, Δa, Δt, closing rate, …) | §17 | 6 | feature engineering |
-| M07 | Overtake-opportunity dataset (one row per opportunity) | §19 | 7 | dataset producer |
-| M08 | Rival-state feature dataset (one row per battle segment) | §24 | 8 | dataset producer |
+| M02 | Race-context labeller (CLEAN_AIR / FOLLOWING / CLOSE_FOLLOWING / ATTACKING / DEFENDING / TRAFFIC / SAFETY_CAR / VSC / YELLOW / PIT_IN / PIT_OUT / WET / DRY) **plus** race-control and pit-state normalisation: `pit_state` (ON_TRACK / PIT_IN / PIT_LANE / PIT_OUT / UNKNOWN), `normalized_race_control_state`, `safety_car_active`, `virtual_safety_car_active`, `race_control_transition_flag`, `pit_transition_flag`, `green_flag_elapsed_s`, and the **`normal_race_model_eligible` gate** that every downstream model dataset filters on. Transitions are hard sequence boundaries. | §11, §12, §37 | 3 | deterministic, inferred, or hybrid |
+| M03 | Track segmentation (braking onset, throttle return, FIA lines, zone boundaries; 30–40 segments/lap) plus static per-track geometry: `sector`, `zone`, `corner_id`, versioned geometry-based `corner_type` (hairpin / chicane / slow / medium / fast / left / right / straight), `corner_phase`, `track_heading_deg`, `braking_intensity_proxy`. Full-segment summaries are `OFFLINE_ONLY`; live fields are time-aligned to segment entry. | §12, §13 | 4 | deterministic algorithm *(not ML)* |
+| M04 | Driver / team / field segment baselines (median residuals), computed on `normal_race_model_eligible` rows only | §12, §14, §15 | 5 | statistical |
+| M05 | Dynamic pair assignment and battle-episode extraction; an episode never continues across a race-control or pit-state transition, and only `normal_race_model_eligible` segments enter the initial battle set | §12, §16, §18 | 6 | deterministic *(not ML)* |
+| M06 | Pairwise feature derivation: `gap_to_ahead_s` / `gap_to_behind_s`, `relative_speed_to_ahead_mps`, `relative_speed_to_behind_mps`, `closing_rate_ahead_mps`, `closing_rate_behind_mps`, `relative_acceleration_to_ahead_mps2`, `gap_trend_ahead_s_per_s`, `gap_trend_behind_s_per_s`, `brake_point_delta`, `braking_intensity_delta`, attacker/defender tyre compound, life and degradation proxies, `fuel_load_delta_kg_est` and `ers_energy_delta_kj_est` (with uncertainty), track-relative wind, `corner_type` / `corner_phase`. Aligned contemporaneous or strictly trailing observations only; no centred windows. | §12, §17 | 6 | feature engineering |
+| M07 | Overtake-opportunity dataset: **one row per opportunity per decision checkpoint** — `DETECTION`, `ACTIVATION`, `BRAKING` — keyed by `opportunity_id`, `decision_checkpoint`, `feature_cutoff_distance_m`, `outcome_horizon`. A row carries only features whose checkpoint has already occurred (a DETECTION row never holds `gap_at_activation`). Label is `passed_by_outcome_horizon` with a fixed, versioned definition; `pass_attempted` and the outcome distance are stored for audit and never used as features. Only `normal_race_model_eligible`, green-flag opportunities enter the training set. Includes `regulation_era`, `historical_drs_eligible` / `historical_drs_open` (2022–2025) and `overtake_eligible` / `overtake_state` (2026, rule engine only). | §19 | 7 | dataset producer |
+| M08 | Rival-state feature dataset (one row per `normal_race_model_eligible` battle segment): residuals, `braking_intensity_proxy`, `relative_speed_to_ahead_mps`, `tyre_degradation_proxy`, fuel and ERS estimates with uncertainty, track-relative wind, `track_temperature`, `wet_track_flag`, `corner_type` / `corner_phase`. Never turns an unobserved channel into an assumed tactical state. | §24 | 8 | dataset producer |
 | M09 | Rival-state model benchmark: HMM, HSMM, gradient-boosted rolling-window classifier, GRU, TCN, small temporal Transformer | §25 | 10 | learned, benchmark track |
 | M09b | Synthetic labelled-trajectory generator for rival state-recovery evaluation | §25, §55, §57 | 10 | simulation for evaluation |
-| M10 | Pass-probability benchmark: Logistic Regression, CatBoost or LightGBM, XGBoost, optional small MLP | §26 | 9 | learned, benchmark track |
+| M10 | Pass-probability benchmark: Logistic Regression, CatBoost or LightGBM, XGBoost, optional small MLP — trained as **checkpoint-specific models or with strictly checkpoint-compatible feature sets** (one per DETECTION / ACTIVATION / BRAKING), never one model fed later-checkpoint features | §19, §26 | 9 | learned, benchmark track |
 | M11 | Probability calibration: uncalibrated vs Platt/sigmoid vs isotonic | §27 | 9 | post-hoc fit |
 | M12 | Pass-model uncertainty: ensemble spread | §42 | 9 | ensemble |
 | M13 | Regulation-era handling: regulation-era feature, historical pretraining/prior, 2026 recalibration, domain weighting, separate historical and 2026 models followed by comparison | §41 | 9, 10 | cross-cutting on M09 and M10 |
-| M14 | Energy twin (longitudinal power balance → P_K, tagged SIMULATED) | §28 | 11 | physics model |
-| M15 | Physics calibration hierarchy: pure analytical physics → global calibrated physics → team-specific calibrated physics → event-specific calibrated physics → physics + ML residual correction | §29 | 11 | fitted physics + learned residual |
+| M14 | Energy twin (longitudinal power balance → P_K, tagged SIMULATED). Produces the lake's causal, uncertainty-tagged ERS estimates: `ers_energy_state_est_kj`, `ers_energy_state_uncertainty_kj`, `ers_deployment_est_kw`, `ers_harvest_est_kw` — `INFERRED` or `SIMULATED`, never stored or trained on as observed telemetry | §11, §12, §28 | 11 | physics model |
+| M15 | Physics calibration hierarchy: pure analytical physics → global calibrated physics → team-specific calibrated physics → event-specific calibrated physics → physics + ML residual correction. Calibration and residual models control at minimum for entry speed, segment geometry, aero/Overtake state, tyre compound and life, fuel-load estimate, wind head/cross components, track temperature, wetness, and normal-race eligibility | §29 | 11 | fitted physics + learned residual |
 | M16 | Segment-time / energy model (ΔE → Δt): analytical, linear/ridge, gradient boosting, physics + residual, small neural regressor | §30 | 11 | learned, benchmark track |
 | M17 | Physics uncertainty: parameter draws, confidence ranges | §42 | 11 | uncertainty propagation |
 | M18 | Event rule configuration (`config/rules/2026/*.yaml`, provenance RULE) | §21 | 12 | configuration *(not ML)* |
@@ -67,9 +69,11 @@ Everything in `TrackShift AGENTS.md` that is learned, fitted, benchmarked, or is
 | M27 | Explicit rival policies for the simulator | §56 | 15 | policy definitions |
 | M28 | Feature-group ablation harness (tyre, weather, team id, driver id, rolling trends, geometry, race context) | §35 | 9–11 | evaluation tooling |
 | M29 | Leakage-safe splitter (by event / battle_id / weekend / track / year; year-forward and leave-one-out designs) | §40 | 6+ | evaluation tooling |
-| M30 | Tyre-normalised pace features, fuel-proxy labelling | §38 | 5–7 | feature engineering |
-| M31 | Dataset registry and feature registry (`config/data_registry.yaml`, `config/feature_registry.yaml`) | §45, §46 | all | configuration |
+| M30 | Tyre context: a causal `tyre_degradation_proxy` and tyre-normalised pace, normalised relative to driver, car, compound, stint, track and session (not one global curve); attacker and defender kept separate before deltas. Tyre temperature / pressure remain source-gated (`*_delta_to_stint_baseline` if a documented source is added) | §38 | 5–7 | feature engineering |
+| M31 | Dataset registry and feature registry (`config/data_registry.yaml`, `config/feature_registry.yaml`). Every feature records `availability scope`, `source-gated`, `decision checkpoint`, and `uncertainty field` in addition to the §46 base fields; the registry is also where the §11 source-gated channel policy (`brake_pressure`, `steering_angle`, `tyre_temperature`, `tyre_pressure`, `brake_temperature`, `damage`, `fuel_consumption`) is enforced — a channel is absent until a documented continuous source exists, and missing is never numeric zero | §11, §45, §46 | all | configuration |
 | M32 | UI, integration, validation, demo | §59 Phase 16 | 16 | integration |
+| M33 | Track-relative weather derivation: `wind_head_component_mps`, `wind_cross_component_mps` (wind projected onto `track_heading_deg`), `air_density_proxy`, `wet_track_flag`; raw `humidity_pct`, `air_pressure_hpa`, `wind_speed_mps`, `wind_direction_deg` retained in the lake | §12, §39 | 4–5 | feature engineering |
+| M34 | Causal fuel-load estimator: `fuel_load_kg_est` + `fuel_load_uncertainty_kg`, tagged `INFERRED` or `SIMULATED`, uses no future information; the only permitted source of fuel context for live features | §11, §38 | 11 | estimator |
 
 ---
 
@@ -83,15 +87,15 @@ Models are grouped into **chains**. A chain is a sequence where each item is a d
 |---|---|---|
 | **Chain R — Rules** | M18 → M20 → M19 → M21 | CPU. Pure config, state machine, and deterministic logic. |
 | **Chain P — Pass probability** | M07 → M10 → M11 → M12 → M13 (pass side) | CPU for LogReg / LightGBM / CatBoost / XGBoost / isotonic / Platt. Optional MLP: A6000 (persistent access), artifact verified on CPU before merge. |
-| **Chain E — Energy / physics** | M14 → M15 → M16 → M17 | CPU for analytical physics, least-squares calibration, ridge, gradient boosting, residual fits. A6000 for the small neural regressor candidate in M16 and for large parameter-draw ensembles; every artifact verified on CPU before merge. |
-| **Foundations owned** | M01, M03, M04, M30 | CPU. Segmentation and baselines are median/threshold work over Parquet. |
+| **Chain E — Energy / physics** | M14 → M34 → M15 → M16 → M17 | CPU for analytical physics, least-squares calibration, ridge, gradient boosting, residual fits. A6000 for the small neural regressor candidate in M16 and for large parameter-draw ensembles; every artifact verified on CPU before merge. |
+| **Foundations owned** | M01, M03, M04, M30, M33 | CPU. Segmentation, baselines, and weather projection are median/threshold/geometry work over Parquet. |
 
 Why this grouping:
 
 - Chain R is the prerequisite for Chain P (opportunities need Detection and Activation Lines) and for Chain E's ΔE→Δt (legal envelopes bound the action set). One owner keeps line definitions, envelopes, and eligibility semantics consistent.
 - Chain P is tree-model work. CPU is the natural home; §26 puts calibration quality above raw accuracy, and calibration is a CPU fit.
 - Chain E is physics first, ML second (§29). Fitting `mass`, `CdA`, rolling resistance, efficiency, and an ICE map is scipy work.
-- M01 (Practice lap classification) belongs with Chain E because Practice is the physics-calibration session (§9). M03 segmentation is physics-derived (braking onset, throttle return). M04 baselines are a per-segment follow-up of M03.
+- M01 (Practice lap classification) belongs with Chain E because Practice is the physics-calibration session (§9). M03 segmentation is physics-derived (braking onset, throttle return). M04 baselines are a per-segment follow-up of M03. M33 needs `track_heading_deg` from M03, so it follows it. M34 (fuel estimator) is a sibling of the energy twin and its output is a required control in M15.
 
 ### 3.2 Owner A — Rishabh (RTX 4080)
 
@@ -128,6 +132,7 @@ Why this grouping:
         M03 segmentation (T)              M02 race context (R)
              |                                 |
         M04 baselines (T)                      |
+        M33 track-rel. weather (T)             |
              |                                 |
              +---------------+-----------------+
                              |
@@ -143,7 +148,7 @@ Why this grouping:
             |                            M09b synthetic eval (R)
    M10/M11/M12 pass model (T)                   |
             |                                   |
-   M14/M15/M16/M17 energy (T)                   |
+   M14/M34/M15/M16/M17 energy (T)               |
             |                                   |
             +----------------+------------------+
                              |
@@ -179,6 +184,13 @@ Per §60, each hand-off is defined by input schema, output schema, units, proven
 | `mean_gradient`, `elevation_change` | ratio, m | DERIVED |
 | `gap_entry`, `gap_exit` | s | DERIVED |
 | `tyre_compound`, `tyre_life`, `stint` | —, laps, — | OBSERVED |
+| `tyre_degradation_proxy` | ratio | DERIVED |
+| `sector`, `zone`, `corner_id`, `corner_type`, `corner_phase` (static per track map, versioned) | — | DERIVED |
+| `track_heading_deg` | deg | DERIVED |
+| `wind_head_component_mps`, `wind_cross_component_mps`, `wet_track_flag` (time-aligned to segment entry) | m/s, m/s, bool | DERIVED |
+| `normal_race_model_eligible` | bool | DERIVED (from C7) |
+
+Live fields are aligned to segment **entry**. Any summary that uses the full segment is a separate `OFFLINE_ONLY` column (§13).
 
 Failure: a lap that cannot be segmented is written to a rejection manifest, never silently dropped (§49).
 
@@ -204,15 +216,17 @@ Failure: unknown event or missing rule key raises; it never defaults to "Overtak
 **C4. Pass probability API** — `src/trackshift/pass_model/api.py`
 
 ```text
-predict_pass(features: OpportunityFeatures) -> PassPrediction
-    p_pass:            calibrated float in [0,1]
-    ensemble_spread:   float (std across ensemble members)
-    model_version:     str
-    feature_schema_id: str  (rejects a differently ordered matrix, §53)
-    provenance:        INFERRED
+predict_pass(features: OpportunityFeatures, decision_checkpoint) -> PassPrediction
+    decision_checkpoint:      DETECTION | ACTIVATION | BRAKING  (required)
+    p_pass_by_outcome_horizon: calibrated float in [0,1]
+    outcome_horizon:          str, versioned definition (e.g. "zone_exit_v1")
+    ensemble_spread:          float (std across ensemble members)
+    model_version:            str  (checkpoint-specific artifact)
+    feature_schema_id:        str  (rejects a differently ordered matrix, §53)
+    provenance:               INFERRED
 ```
 
-Input features are `LIVE_SAFE` only (§44). The model ships with `feature_schema.json`; a mismatch raises.
+Input features are `LIVE_SAFE` only (§44) **and must belong to the given checkpoint or an earlier one** (§19): a DETECTION call carrying `gap_at_activation` or any braking-point quantity raises `CheckpointViolation`. The model ships with `feature_schema.json` per checkpoint; a mismatch raises.
 
 **C5. Energy twin / segment-time API** — `src/trackshift/twin/api.py`
 
@@ -224,20 +238,23 @@ segment_time(segment_id, deploy_level, lift_amount, context) -> SegmentTimeEstim
     provenance:   SIMULATED
 
 energy_state(telemetry_window) -> EnergyEstimate
-    e_kj, e_low_kj, e_high_kj; provenance SIMULATED
+    ers_energy_state_est_kj, ers_energy_state_uncertainty_kj
+    ers_deployment_est_kw, ers_harvest_est_kw
+    fuel_load_kg_est, fuel_load_uncertainty_kg        (from M34)
+    provenance: SIMULATED (ERS), INFERRED (fuel)
 ```
 
-Never labelled OBSERVED (§28, §58).
+Causal: uses only telemetry at or before the window end (§12). Never labelled OBSERVED (§11, §28, §58). These are the only permitted sources of ERS and fuel context for any live feature.
 
-**C6. Opportunity and rule-derived features** — appended to `overtake_opportunities` and available to Chain S: `gap_at_detection`, `eligibility_margin`, `projected_gap_at_detection`, `probability_eligible`, `energy_required_to_unlock`, `distance_detection_to_activation`, `distance_activation_to_brake`.
+**C6. Opportunity and rule-derived features** — appended to `overtake_opportunities` and available to Chain S, each tagged with the checkpoint at which it becomes available: `gap_at_checkpoint`, `eligibility_margin`, `projected_gap_at_detection`, `probability_eligible`, `energy_required_to_unlock`, `delta_speed_checkpoint`, `delta_acceleration_checkpoint`, `distance_detection_to_activation`, `distance_activation_to_brake`, `overtake_eligible`, `overtake_state` (2026, rule engine only), `historical_drs_eligible`, `historical_drs_open` (2022–2025 covariates only). The registry's `decision checkpoint` field is authoritative for which rows may carry which feature.
 
 ### 5.2 Rishabh → Tanveer
 
-**C7. Race-context labels** — column set on `telemetry_20m` and `segments`: `race_context` (enum from §37) plus `race_context_provenance` ∈ {DERIVED, INFERRED}. Chain E filters Practice laps and Chain P filters opportunities on these.
+**C7. Race-context labels** — column set on `telemetry_20m` and `segments`: `race_context` (enum from §37), `race_context_provenance` ∈ {DERIVED, INFERRED}, `pit_state` (ON_TRACK / PIT_IN / PIT_LANE / PIT_OUT / UNKNOWN), `normalized_race_control_state`, `safety_car_active`, `virtual_safety_car_active`, `race_control_transition_flag`, `pit_transition_flag`, `green_flag_elapsed_s`, and **`normal_race_model_eligible`**. The gate is true only for on-track, green-flag racing with no SC/VSC/red/yellow restriction, pit state, or unknown control state. M04, M05, M07, M08 and M15 all filter on it; SC/VSC rows stay in the lake for audit. `pit_stop_duration_s_offline` is `OFFLINE_ONLY` and never a live feature.
 
 **C8. Battle episodes and pairwise rows** — `data/processed/battle_episodes/`, `data/processed/pairwise_segment_features/`
 
-Battle key `battle_id` (format `YYYY_EVT_Session_ATT_DEF_BattleNN`), `attacker`, `defender`, `start_lap`, `end_lap`, `duration_segments`, `duration_s`, `minimum_gap`, `maximum_closing_rate`, `detection_opportunities`, `pass_attempted`, `pass_completed`. Chain P builds M07 by joining opportunities onto these.
+Battle key `battle_id` (format `YYYY_EVT_Session_ATT_DEF_BattleNN`), `attacker`, `defender`, `start_lap`, `end_lap`, `duration_segments`, `duration_s`, `minimum_gap`, `maximum_closing_rate`, `detection_opportunities`, `pass_attempted`, `pass_completed`, `bounded_by` (why the episode ended: PASS / PAIR_SWITCH / RACE_CONTROL_TRANSITION / PIT_TRANSITION / SESSION_END). An episode never spans a race-control or pit-state transition, and no rolling feature is computed across one. Chain P builds M07 by joining opportunities onto these.
 
 **C9. Splitter** — `src/trackshift/data/splits.py`
 
@@ -273,12 +290,12 @@ Consumed by the planner (same owner) and exposed so Chain P can test rival-state
 
 | Milestone | Tanveer | Rishabh | Unblocks |
 |---|---|---|---|
-| **I0** | Scaffold registries (M31), rules config skeleton (M18) | Splitter (M29), race-context labels (M02) | contracts C7, C9 |
+| **I0** | Scaffold registries (M31), rules config skeleton (M18) | Splitter (M29), race-context labels **incl. the `normal_race_model_eligible` gate and transition flags** (M02) | contracts C7, C9 — every later dataset filters on the gate |
 | **I1** | Segmentation (M03) → freeze `segment_id` | — | everything |
-| **I2** | Baselines (M04), practice classifier (M01) | Pairs + battles (M05), pairwise features (M06) | C1, C2, C8 |
+| **I2** | Baselines (M04), practice classifier (M01), track-relative weather (M33) | Pairs + battles (M05), pairwise features (M06) | C1, C2, C8 |
 | **I3** | Rule engine + state machine + eligibility (M19, M20, M21) | Rival-state features (M08) | C3, C6 |
 | **I4** | Opportunities (M07) → pass benchmark (M10, M11, M12, M13) | Rival benchmark (M09, M09b, M13) | C4, C10 |
-| **I5** | Energy twin → calibration → ΔE→Δt (M14–M17) | DP + λ_E (M22, M23) using stub C4/C5 | C5 |
+| **I5** | Energy twin → fuel estimator → calibration → ΔE→Δt (M14, M34, M15–M17) | DP + λ_E (M22, M23) using stub C4/C5 | C5 |
 | **I6** | Ablations (M28) on Chains P and E | Planner (M24), baselines (M25), simulator (M26, M27) | end-to-end run |
 | **I7** | replay bundle for the demo event (API.md §7) | `/plan`, `/simulate`, `/timeline` routes (API.md) | Owner C wires the UI |
 
@@ -317,6 +334,7 @@ src/trackshift/
     track/
         segmentation.py                 (T)  M03
         baselines.py                    (T)  M04
+        weather.py                      (T)  M33
         lap_classifier.py               (T)  M01
         race_context.py                 (R)  M02
     features/
@@ -349,6 +367,7 @@ src/trackshift/
     twin/
         api.py                          (T)  C5
         power_balance.py                (T)  M14
+        fuel.py                         (T)  M34
         calibration.py                  (T)  M15
         segment_time.py                 (T)  M16
         uncertainty.py                  (T)  M17
@@ -432,7 +451,9 @@ tests/
     test_segmentation.py                (T)
     test_baselines.py                   (T)
     test_lap_classifier.py              (T)
-    test_race_context.py                (R)
+    test_race_context.py                (R)  eligibility gate; transitions are hard boundaries
+    test_weather.py                     (T)  head/cross projection sign vs track heading
+    test_opportunities.py               (T)  a DETECTION row never carries an ACTIVATION/BRAKING feature
     test_pairing.py                     (R)  driver-ahead, battle start/end, switching after pass, no self-pair
     test_splits.py                      (R)  no battle in two folds
     test_rules.py                       (T)  below / at / above every threshold; Detection, Activation, disabled
@@ -484,36 +505,39 @@ Every section of `TrackShift AGENTS.md` that names a model, fitted component, or
 |---|---|---|---|
 | §1 | Energy shadow price λ_E | M22 | R |
 | §9 | Practice lap labels | M01 | T |
-| §13 | Segment representation | M03 | T |
+| §11 | Canonical telemetry fields (race-control, pit state, weather raw channels, fuel/ERS estimates, source-gated extensions) | M02, M14, M33, M34, M31 | R, T, T, T, T |
+| §12 | Derived features (geometry, track-relative weather, race-context flags, pair-aware, regulated aero/energy context) | M03, M33, M02, M06, M07, M14 | T, T, R, R, T, T |
+| §13 | Segment representation (incl. sector / corner geometry, weather at entry, eligibility) | M03, M33 | T |
 | §14 | Baseline hierarchy | M04 | T |
 | §15 | Combining teams (global → team → driver → track → session) | M04, M13 | T / both |
 | §16 | Dynamic pair definition | M05 | R |
-| §17 | Pairwise features | M06 | R |
+| §17 | Pairwise features (relative speed, gap trends, tyre/fuel/ERS deltas, weather) | M06 | R |
 | §18 | Battle episodes | M05, M29 | R |
-| §19 | Overtake-opportunity dataset | M07 | T |
+| §19 | Overtake-opportunity dataset (DETECTION / ACTIVATION / BRAKING checkpoints, `passed_by_outcome_horizon`) | M07, M10 | T |
 | §20 | 2026 Overtake state machine | M20 | T |
 | §21 | Event rule configuration | M18 | T |
 | §22 | Overtake-derived strategic features, eligibility probability | M21 | T |
 | §23 | Counterattack modelling | M23 | R |
-| §24 | Rival-state dataset | M08 | R |
+| §24 | Rival-state dataset (normal-race-eligible, expanded features) | M08 | R |
 | §25 | Rival model benchmark (HMM, HSMM, gradient-boosted rolling-window classifier, GRU, TCN, Transformer) | M09, M09b | R |
 | §26 | Pass-probability benchmark (LogReg, CatBoost/LightGBM, XGBoost, MLP) | M10 | T |
 | §27 | Probability calibration (Platt, isotonic) | M11 | T |
 | §28 | Energy twin | M14 | T |
-| §29 | Physics calibration hierarchy | M15 | T |
+| §29 | Physics calibration hierarchy (with required controls) | M15, M34 | T |
 | §30 | Segment-time / energy model | M16 | T |
 | §31 | Dynamic programming | M22 | R |
 | §32 | Rule engine | M19 | T |
 | §33 | Planner and baselines | M24, M25 | R |
 | §35 | Feature-group ablation | M28 | T harness, both run |
 | §37 | Race-context labels | M02 | R |
-| §38 | Tyre and fuel context | M30 | T |
+| §38 | Tyre and fuel context (degradation proxy, causal fuel estimate) | M30, M34 | T |
+| §39 | Weather (raw channels retained, track-relative derivation) | M33 | T |
 | §40 | Leakage-safe splitting | M29 | R |
 | §41 | Regulation-era shift | M13 | both (per chain) |
 | §42 | Uncertainty (pass ensemble, rival distribution, twin draws, P(eligible), planner CVaR) | M12, M10/C10, M17, M21, M24 | T, R, T, T, R |
 | §44 | LIVE_SAFE / OFFLINE_ONLY | enforced in C4, C10, registry | both |
 | §45 | Dataset registry | M31 | T scaffold, both |
-| §46 | Feature registry | M31 | T scaffold, both |
+| §46 | Feature registry (availability scope, source-gated, decision checkpoint, uncertainty field) | M31 | T scaffold, both |
 | §47 | Proposed processed datasets | C1, C2, C6, C7, C8 + `telemetry_20m` (exists) | see §5 |
 | §53 | Reproducibility, feature-schema locking | §6.4 manifest | both |
 | §54 | Storage and compute | §1 | both |
@@ -535,3 +559,8 @@ Verification steps for whoever reviews this file:
 - [ ] Every hand-off in §4 has a contract in §5.
 - [ ] Every contract in §5 declares provenance and failure behaviour.
 - [ ] Every module in §7.1 maps to an inventory ID.
+- [ ] All three §19 decision checkpoints (DETECTION, ACTIVATION, BRAKING) appear under M07 and M10, and C4 requires `decision_checkpoint`.
+- [ ] Every §11 fuel/ERS estimate field (`fuel_load_kg_est`, `fuel_load_uncertainty_kg`, `ers_energy_state_est_kj`, `ers_deployment_est_kw`, `ers_harvest_est_kw`) has a producer (M14 or M34) and is never OBSERVED.
+- [ ] `normal_race_model_eligible` is produced once (M02 / C7) and named as a filter on M04, M05, M07, M08, M15.
+- [ ] Every §12 track-relative weather field has a producer (M33).
+- [ ] Every §46 registry field (availability scope, source-gated, decision checkpoint, uncertainty field) appears under M31.
