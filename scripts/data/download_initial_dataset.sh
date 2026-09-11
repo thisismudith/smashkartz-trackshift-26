@@ -99,7 +99,8 @@ done
 
 validate_directory_name() {
   local label="$1" value="$2"
-  [[ "$value" != */* && "$value" != *
+  [[ "$value" != */* && "$value" != "." && "$value" != ".." ]] || die "invalid $label directory name: $value"
+}
 
 session_names_for_year() {
   local year="$1"
