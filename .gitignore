@@ -1,4 +1,5 @@
 data/raw/
+data/2026
 artifacts/schema_audit/*.csv
 artifacts/schema_audit/*.json
 __pycache__/

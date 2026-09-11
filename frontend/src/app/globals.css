@@ -1,0 +1,57 @@
+:root {
+  --haas-white: #efefef;
+  --haas-grey: #aeaeae;
+  --haas-red: #da291c;
+  --haas-black: #111111;
+
+  /* one family for display and body (see layout.tsx) */
+  --font-body: var(--font-display);
+
+  --background: var(--haas-black);
+  --foreground: var(--haas-white);
+  --muted: var(--haas-grey);
+  --accent: var(--haas-red);
+
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  height: 100%;
+}
+
+html,
+body {
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
+body {
+  min-height: 100%;
+  color: var(--foreground);
+  background: var(--background);
+  font-family:
+    var(--font-body),
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+::selection {
+  background: var(--haas-red);
+  color: var(--haas-white);
+}
