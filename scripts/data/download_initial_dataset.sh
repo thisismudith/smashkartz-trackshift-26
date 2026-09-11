@@ -5,12 +5,12 @@
 #   2022-2025: Qualifying, Sprint Qualifying/Shootout, Sprint, Race
 #   2026:      Practice 1 plus the sessions above
 #
-# Raw files are immutable. This script only adds sparse-checkout paths and never
-# touches the older data/raw/<year> mirrors used by earlier phases.
+# Raw files are immutable. The default path deliberately matches the existing
+# data/raw/<year> layout until an audited migration is implemented.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-RAW_ROOT="$ROOT/data/raw/tracinginsights"
+RAW_ROOT="$ROOT/data/raw"
 MANIFEST_ROOT="$ROOT/artifacts/download_manifests"
 YEARS_CSV="2022,2023,2024,2025,2026"
 EVENTS_CSV=""
@@ -33,13 +33,14 @@ Options:
                        "British Grand Prix,Italian Grand Prix"
   --sessions CSV     Exact session directory names. Overrides the default
                        session policy for every selected year.
-  --raw-root PATH    Destination root (default: data/raw/tracinginsights)
+  --raw-root PATH    Destination root (default: data/raw)
   --manifest-root P  Download manifest directory (default: artifacts/download_manifests)
   --dry-run          Print the selected scope without cloning or updating files
   -h, --help         Show this help message
 
-The script is resumable and additive. It will not delete or reorganize existing
-raw mirrors. Session directories that do not exist upstream are simply absent.
+The script is resumable and additive. It reuses existing data/raw/<year> checkouts,
+never deletes or reorganizes raw mirrors, and only extends an existing sparse checkout.
+Session directories that do not exist upstream are simply absent.
 EOF
 }
 
@@ -174,9 +175,14 @@ for year in "${YEARS[@]}"; do
     actual_upstream="$(git -C "$destination" remote get-url origin)"
     [[ "$actual_upstream" == "$upstream" ]] || die "[$year] origin differs from expected source: $actual_upstream"
     [[ -z "$(git -C "$destination" status --porcelain)" ]] || die "[$year] checkout has local changes: $destination"
-    echo "[$year] refreshing existing sparse checkout"
+    echo "[$year] refreshing existing checkout"
     git -C "$destination" pull --ff-only origin main
-    git -C "$destination" sparse-checkout add --no-cone "${patterns[@]}"
+    if [[ "$(git -C "$destination" config --bool core.sparseCheckout || true)" == "true" ]]; then
+      echo "[$year] extending its sparse session scope"
+      git -C "$destination" sparse-checkout add --no-cone "${patterns[@]}"
+    else
+      echo "[$year] existing full mirror retained unchanged; no duplicate download needed"
+    fi
   elif [[ -e "$destination" ]]; then
     die "[$year] destination exists but is not a Git checkout: $destination"
   else
