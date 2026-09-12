@@ -20,6 +20,16 @@ from .weather import (
     join_weather_overlay,
     load_weather_overlay,
 )
+from .lap_classifier import (
+    KEY_COLUMNS as LAP_CLASS_KEY_COLUMNS,
+    LAP_CLASSES,
+    LAP_CLASSIFIER_SCHEMA_VERSION,
+    LAP_CLASS_PROVENANCE,
+    LapClassificationConfig,
+    LapClassificationError,
+    classify_practice_laps,
+    load_lap_classification_config,
+)
 
 __all__ = [
     "BASELINE_LEVELS",
@@ -35,4 +45,12 @@ __all__ = [
     "build_weather_overlay",
     "join_weather_overlay",
     "load_weather_overlay",
+    "LAP_CLASS_KEY_COLUMNS",
+    "LAP_CLASSES",
+    "LAP_CLASSIFIER_SCHEMA_VERSION",
+    "LAP_CLASS_PROVENANCE",
+    "LapClassificationConfig",
+    "LapClassificationError",
+    "classify_practice_laps",
+    "load_lap_classification_config",
 ]

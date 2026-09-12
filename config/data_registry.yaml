@@ -38,6 +38,25 @@ datasets:
       path length, so distance is non-monotonic. Measured on 2026: Race 94.96%
       accepted, Qualifying 75.69%. See scripts/data/quality_report.py.
 
+  - name: practice_lap_classes
+    description: >-
+      Versioned, one-row-per-lap deterministic M01 overlay for 2026 Practice 1.
+      It preserves the source telemetry lake and records an exactly-one label
+      plus DERIVED provenance for every accepted lake lap.
+    source: telemetry_20m lap metadata
+    schema_version: m01_practice_lap_class_v1
+    partitioning: year / event / session
+    primary_key: [year, event, session, driver, lap]
+    producer: scripts/features/build_practice_lap_classes.py
+    consumers: [M01, M14, M15, M16, M30]
+    live_status: OFFLINE_ONLY
+    status: built
+    notes: >-
+      M01 / CP-07. The classifier uses only the current and earlier laps for
+      the same driver/session; it never backfills a LONG_RUN label from future
+      tyre behaviour. The build emits a run manifest with complete label and
+      unknown/excluded counts, and does not mutate telemetry_20m in place.
+
   - name: segments
     description: >-
       Strategic track segments, roughly 30-40 per lap, bounded by braking onset,
