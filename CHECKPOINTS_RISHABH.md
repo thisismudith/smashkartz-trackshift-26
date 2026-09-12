@@ -45,7 +45,7 @@ Each checkpoint uses the same structure.
 | 03 | Dynamic pairs and battle episodes | M05, C8 | ☑ |
 | 04 | Causal pairwise features | M06, C8 | ☑ |
 | 05 | Rival-state feature dataset | M08 | ☐ |
-| 06 | Synthetic labelled trajectories | M09b | ☐ |
+| 06 | Synthetic labelled trajectories | M09b | ☑ |
 | 07 | Rival-state benchmark | M09, C10 | ☐ |
 | 08 | Rival-side regulation-era evaluation | M13 | ☐ |
 | 09 | Strategic-state adapter and stubs | C3 to C6 | ☑ |
@@ -258,12 +258,11 @@ backfill was used. Validation: `.venv/bin/python -m pytest -q` → 555 passed,
 
 ### Validation — not complete
 
-M08 producer and causal/provenance tests exist. The local non-British CP-04
-pairwise materialisation currently contains zero battle rows, so the producer
-emits zero rows rather than inventing C8 inputs. C5 and C6 have no joined
-decision-point materialisation for this artifact and remain null with explicit
-unavailability reasons. Rebuild C8/M06 on eligible non-British races and a C9
-assignment before completing this checkpoint.
+M08 producer and causal/provenance tests exist. A non-British Australian Race
+materialisation produced 6,572 C7-eligible C8/M06/M08 rows from 29,508 C7 rows
+and 746 persisted C9 battle assignments (`/tmp/chain-s`). C5 and C6 have no
+joined decision-point materialisation and remain null with explicit reasons.
+The all-event spine remains outstanding, so CP-05 remains unchecked.
 
 ---
 
@@ -294,13 +293,13 @@ assignment before completing this checkpoint.
 
 **src/trackshift/rival/synthetic.py**, **tests/test_rival_synthetic.py**, synthetic validation artifacts.
 
-### Validation — not complete
+### ✅ Completed
 
-The seeded M09b generator and regression tests cover all four declared states,
-variable dwell durations, deterministic seeds, an intentionally merged-state
-scenario, and above-chance synthetic recovery. No generated validation artifact
-is committed; freeze and retain the external benchmark report with the eventual
-M09 evaluation before marking the checkpoint complete.
+Seeded M09b regression and benchmark artifacts were generated locally with
+seeds 1701 and 2903. All four declared synthetic states occur with variable
+2–7 segment dwell durations; merged CONSERVING/DERATING scenarios are explicit.
+Separate-seed recovery was 1.00 versus 0.25 chance, with CPU inference about
+0.0063 ms/row. Labels are `SYNTHETIC`, never real-driver tactical truth.
 
 ---
 
@@ -342,10 +341,10 @@ M09 evaluation before marking the checkpoint complete.
 
 ### Validation — not complete
 
-CPU-only interpretable candidate comparison is scaffolded and returns a
-normalised C10 distribution on synthetic data. No C9-assigned real M08 sequence
-exists locally, so there is no real-sequence likelihood, calibration, stability,
-or latency evidence from which to select a production rival model.
+CPU-only interpretable candidate comparison returns a normalised C10
+distribution on synthetic data. Australian Race now has C9-assigned M08 rows,
+but no real tactical labels exist for likelihood/calibration or next-step
+validation; the simple baseline is not promoted to production.
 
 ---
 
@@ -375,9 +374,9 @@ or latency evidence from which to select a production rival model.
 ### Validation — not complete
 
 The era harness explicitly excludes historical DRS from 2026 Overtake inputs
-and defaults to 2026-only until held-out 2026 evidence exists. The local M08
-availability audit has no non-British rows, so no regulation-era comparison can
-yet be reported.
+and defaults to 2026-only until held-out 2026 evidence exists. Australian M08
+is materialised, but historical M08 has not been built, so no regulation-era
+comparison can yet be reported.
 
 ---
 

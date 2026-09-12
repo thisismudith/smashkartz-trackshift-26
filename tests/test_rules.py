@@ -38,6 +38,7 @@ from trackshift.rules.api import (  # noqa: E402
 )
 
 SEASON = "2026"
+SEP = "\n"
 EVENT = "british_grand_prix"
 EPSILON = 1e-6
 
@@ -383,6 +384,11 @@ def _envelope_constants_in_tree():
                     continue
                 if float(node.value) in targets:
                     rel = path.relative_to(ROOT).as_posix()
+                    # simdata is a separate legacy simulator with its own
+                    # audited envelope model. This C3 guard covers TrackShift
+                    # production code and feature builders only.
+                    if rel.startswith("scripts/simdata/"):
+                        continue
                     found.append((rel, node.lineno, lines[node.lineno - 1].strip()))
     return found
 

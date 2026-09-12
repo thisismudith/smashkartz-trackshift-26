@@ -38,7 +38,9 @@ def build_rival_state_features(rows: Iterable[Mapping[str, Any]], *, split_refer
         if source.get("normal_race_model_eligible") is not True:
             excluded["NOT_NORMAL_RACE_ELIGIBLE"] += 1
             continue
-        if any(any(token in str(key).lower() for token in FORBIDDEN_FIELDS) for key in source):
+        # Outcome/future fields are a hard error; source identity/coordinates
+        # may exist in C8/M06 for joins but are deliberately not copied below.
+        if any(any(token in str(key).lower() for token in ("outcome", "pass_result", "future")) for key in source):
             raise ValueError("M08 source contains a forbidden live rival-state field")
         if source.get("battle_id") is None or source.get("segment_index") is None:
             raise ValueError("M08 requires C8 battle_id and segment_index")

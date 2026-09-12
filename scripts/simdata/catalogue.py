@@ -9,7 +9,13 @@ import json
 from collections import defaultdict
 from pathlib import Path
 
-DATA_ROOT = Path(__file__).resolve().parent.parent.parent / "data" / "2026"
+# The old simulator export lived at ``data/2026``.  Development and CI use the
+# documented raw-mirror hierarchy instead; prefer a local export only when it
+# exists so catalogue tests are portable across both layouts.
+_REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+DATA_ROOT = _REPO_ROOT / "data" / "2026"
+if not DATA_ROOT.exists():
+    DATA_ROOT = _REPO_ROOT / "data" / "raw" / "2026"
 SCHEMA_VERSION = 1
 
 
