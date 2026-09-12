@@ -9,7 +9,7 @@ Execution plan for **Owner B (Tanveer)**: Chain R (rules), Chain P (pass probabi
 
 **Scope: Owner B only.** Every checkpoint here is Tanveer's to build. Rishabh's items (M02, M05, M06, M08, M09, M22–M27, M29) appear only where they block or unblock you, and are labelled as such. His equivalent plan, if written, belongs in a separate file.
 
-Written against `TrackShift AGENTS.md` at commit `09c7691`.
+Written against `TrackShift AGENTS.md` at commit `7d2f5fd`.
 
 ---
 
@@ -286,7 +286,7 @@ Call it at the top of every `scripts/train/*.py`. A test in CP-14 asserts it fir
 
 **Depends on:** CP-00.
 
-Per §45, §46 and the MODELS.md update, each feature records the base fields **plus** `availability_scope`, `source_gated`, `decision_checkpoint`, and `uncertainty_field`.
+Per §45, §46 and the MODELS.md update, each feature records the base fields **plus** `availability_scope`, `source_gated`, `decision_checkpoint`, `uncertainty_field`, `causal_status`, `counterfactual_safe`, `regulation_version`, `regulation_source`, and `interaction_group`.
 
 ### Steps
 
@@ -308,6 +308,11 @@ features:
     source_gated: false
     decision_checkpoint: [DETECTION, ACTIVATION, BRAKING]
     uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: false
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [gap]
     consuming_models: [M07, M10]
 
   - name: tyre_temperature
@@ -320,6 +325,11 @@ features:
     source_gated: true          # absent until a documented source exists (section 11)
     decision_checkpoint: null
     uncertainty_field: null
+    causal_status: null
+    counterfactual_safe: false
+    regulation_version: null
+    regulation_source: null
+    interaction_group: []
     consuming_models: []
 ```
 
@@ -373,6 +383,13 @@ Every key gets `value_source` and `source`. The rule engine (CP-11) refuses to s
 ```yaml
 schema_version: 1
 season: 2026
+regulation_snapshot:
+  section_issues: []
+  publication_dates: []
+  effective_date: null
+  source_documents: []
+  retrieved_at: null
+  encoded_configuration_version: rules-2026-common-v1
 overtake:
   detection_gap_s:
     value: 1.0
@@ -380,19 +397,13 @@ overtake:
     source: "TODO: FIA 2026 Sporting Regulations, Overtake article"
     note: "Gap threshold at the Detection Line for Overtake to arm."
 power:
-  normal_envelope_kw:
-    value: null
-    value_source: UNVERIFIED
-    source: "TODO: FIA 2026 Technical Regulations, MGU-K"
-  overtake_envelope_kw:
-    value: null
-    value_source: UNVERIFIED
-    source: "TODO: FIA 2026 Technical Regulations, Overtake mode"
+  envelopes: []                 # speed-, mode-, and competition-specific limits
+  competition_adjustments: []
+  source: "TODO: FIA 2026 Technical/Sporting Regulations and event configuration"
 energy:
-  deploy_limit_per_lap_kj:
-    value: null
-    value_source: UNVERIFIED
-    source: "TODO: FIA 2026 Technical Regulations, energy flow limits"
+  store_bounds_kj: null
+  recharge_budget: null
+  source: "TODO: FIA 2026 Technical Regulations, Energy Store and recharge constraints"
 strict_mode: false                   # set true before any demo claim
 ```
 
@@ -703,7 +714,7 @@ Record `provenance: DERIVED` for all of these, and store the thresholds in `conf
 
 # CP-08 — Tyre degradation and normalised pace (M30)
 
-**Goal:** a **causal** `tyre_degradation_proxy` plus tyre-normalised pace, normalised relative to driver, car, compound, stint, track and session — **not one global tyre curve** (§38).
+**Goal:** a **causal** `tyre_degradation_proxy` and tyre-normalised pace, normalised relative to driver, car, compound, stint, track and session, as evidence-based inputs to a future tyre-performance state rather than a claim to reconstruct physical tyre sensors (§38).
 
 **Depends on:** CP-05, CP-07.
 
@@ -726,9 +737,9 @@ Normalise by the driver's clean-air reference for the circuit so it is comparabl
 
 ### ✅ Check
 
-- Proxy is **monotonically non-decreasing** within a stint for >80% of stints — tyres do not get faster with age, fuel effects aside
-- Proxy resets to ~0 at every stint start
-- SOFT degrades faster than MEDIUM faster than HARD, on average, at the same circuit
+- Proxy resets to ~0 at every stint start, subject to an explicit `reason` for insufficient clean history
+- Report the within-stint trend and compound comparison with confidence intervals; do not hard-code a universal monotonicity or compound ordering
+- Compare tyre age only, the degradation proxy, and the latent tyre-performance state when it becomes available; retain the more complex state only if it improves held-out transition or decision metrics
 - **Causality test**: computing the proxy on a truncated stint (first *k* laps) gives the identical value at lap *k* as computing it on the full stint. This is the test that catches accidental lookahead — put it in `tests/test_tyre.py`
 - Fuel burn confound is visible: pace usually improves early in a stint even as tyres age. Document that the proxy mixes the two until M34 provides the fuel estimate, then re-derive.
 
@@ -736,7 +747,7 @@ Normalise by the driver's clean-air reference for the circuit so it is comparabl
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| Proxy decreases through the stint | Fuel burn dominating tyre wear | Expected before M34 exists. Note it in the registry `definition`, and revisit this checkpoint after CP-19 to subtract the fuel effect. |
+| Proxy decreases through the stint | Fuel burn, traffic, weather, or measurement noise dominates the local trend | This does not by itself invalidate the proxy. Record the uncertainty, control for causal fuel/context estimates when available, and retain the simpler representation if a latent state has no held-out benefit. |
 | Wild values on short stints | Fewer than 3 green laps to baseline against | Emit `null` with `reason: "stint too short"`, never 0 |
 | Proxy differs between two builds | Rolling window crossing a race-control transition | §12: transitions are hard boundaries. Reset the rolling window at any `race_control_transition_flag` (C7 from Rishabh). |
 
@@ -846,7 +857,7 @@ DISABLED ──(race control OVERTAKE ENABLED)───────────�
 
 # CP-11 — Rule engine (M19)
 
-**Goal:** `legal_actions(state, event_rules) -> ActionSet` — contract C3. **Illegal actions are absent from the set, never low-scored** (§31, §32).
+**Goal:** `legal_actions(state, event_rules) -> ActionSet` over the shared `StrategicState` contract C3. **Illegal actions are absent from the set, never low-scored** (§31, §32).
 
 **Depends on:** CP-10.
 
@@ -858,9 +869,9 @@ DISABLED ──(race control OVERTAKE ENABLED)───────────�
 
 | Filter | Removes |
 |---|---|
-| Power envelope | `deploy_level` above `normal_envelope_kw` when not `ACTIVE`, above `overtake_envelope_kw` when `ACTIVE` |
-| Per-lap energy | Any action whose `delta_e_kj` would exceed `deploy_limit_per_lap_kj` for the lap so far |
-| Energy state | Any deployment exceeding the current estimated `energy_kj` |
+| Power envelope | Any deployment whose requested power exceeds the applicable speed-, mode-, and competition-specific envelope |
+| Energy Store | Any deployment exceeding the current estimated Energy Store state or configured state bounds |
+| Recharge budget | Any action that violates the separate permitted/remaining recharge budget; this is not Energy Store capacity |
 | Race control | All deployment above baseline when `overtake_disabled` |
 | Eligibility | Overtake-envelope actions when state is not `ACTIVE` |
 
@@ -901,7 +912,7 @@ DISABLED ──(race control OVERTAKE ENABLED)───────────�
 
 ### Steps
 
-**1. Project the gap forward** to the Detection Line from the current segment, using the current closing rate and its recent variance.
+**1. Project the gap forward** to the Detection Line from the current time and distance gap, relative speed, relative acceleration, gap rate, tyre state, selected feasible energy action, track geometry, and causal rival-response assumption. The baseline projection may begin with closing rate and trailing variance, but it must expose which terms it actually used.
 
 **2. Model the projected gap as a distribution**, not a point:
 
@@ -914,7 +925,7 @@ p_eligible = P(projected_gap < detection_gap_s) = Phi((threshold - mu) / sigma)
 
 Use a **trailing** window only — §12 forbids centred windows for live features.
 
-**3. Derive the rest of §22:** `eligibility_margin = threshold - gap_at_detection`, `energy_required_to_unlock_kj` (from CP-21's ΔE→Δt inverted: how much energy closes the remaining margin), `distance_detection_to_activation`, `distance_activation_to_brake`, `delta_v_at_activation`.
+**3. Derive the rest of §22:** `eligibility_margin = threshold - gap_at_detection`, `energy_required_to_unlock_kj` with uncertainty (from CP-21's causal energy-to-time and energy-to-gap response under a declared target probability), `eligibility_fragility_per_kj` where supported, `distance_detection_to_activation`, `distance_activation_to_brake`, `delta_v_at_activation`.
 
 `energy_required_to_unlock_kj` depends on CP-21 — emit `null` until then, then backfill.
 
@@ -925,6 +936,7 @@ Use a **trailing** window only — §12 forbids centred windows for live feature
 - `sigma` grows with distance to the Detection Line — a projection 2 km out must be less certain than one 200 m out
 - `eligibility_margin` sign convention: positive means eligible
 - No centred-window leakage — the truncation test from CP-08 applies here too
+- Any counterfactual feature is reproducible from the decision-time state and declared action, without observed future gap or pass outcome
 
 ### ⚠️ If output is bad
 
@@ -1222,6 +1234,8 @@ Keep members in the artifact so the API can recompute; they are small.
 
 ### The five strategies to compare (§41)
 
+Regulation-version drift is evaluated separately from the 2022 to 2025 versus 2026 era shift. Never mix rows encoded under different 2026 rule snapshots without their configuration version.
+
 | Strategy | Implementation |
 |---|---|
 | A. Era feature | One model, `regulation_era` as a categorical feature |
@@ -1290,18 +1304,20 @@ Store all in `config/physics/priors.yaml` with a `source` per key.
 
 **1. Implement the balance** in `src/trackshift/twin/power_balance.py` as a pure function over a segment.
 
-**2. Integrate** `P_K` over distance to get deployment/harvest energy per segment; accumulate to a running `ers_energy_state_est_kj`.
+**2. Integrate** `P_K` over distance to obtain deployment and harvest flows per segment, then update the modelled Energy Store explicitly: `E_next = E_current + eta_h * harvest - deploy / eta_d`. Track Energy Store state, energy deployed, energy harvested, and remaining recharge budget separately.
 
-**3. Tag everything `SIMULATED`** and carry uncertainty (CP-22 formalises it).
+**3. Apply the event/session power envelope** at the current speed and mode before a deployment is admitted. Do not hard-code a universal 2026 power or recharge limit; CP-03 supplies the configured values.
 
-**4. Causality**: the estimate at distance *d* uses only telemetry at or before *d* (§12). This is what `causal_cutoff_distance_m` in API.md C5 records.
+**4. Tag everything `SIMULATED`** and carry uncertainty (CP-22 formalises it).
+
+**5. Causality**: the estimate at distance *d* uses only telemetry at or before *d* (§12). This is what `causal_cutoff_distance_m` in API.md C5 records.
 
 ### ✅ Check
 
 - On a **2026 Practice 1 `PUSH` lap in clean air**, estimated `P_wheel` peaks in a plausible range (roughly 700–1,000 kW at full deployment on a long straight)
 - Harvest is negative deployment under braking, and its magnitude is bounded
 - Integrated deployment per lap does not exceed the regulatory per-lap limit by more than the model's stated uncertainty — if it does by a wide margin, a parameter is wrong
-- Energy state does not drift monotonically to absurd values over a race — plot it for a full stint
+- Energy Store state, deployment flow, harvest flow, and recharge budget remain separately auditable over a full stint; plot each and report clipping rate
 - Sign conventions: positive `acc_x` under acceleration; positive gradient uphill
 - **Causality test**: truncating the lap at distance *d* gives the identical estimate at *d*
 
@@ -1317,7 +1333,7 @@ Store all in `config/physics/priors.yaml` with a `source` per key.
 
 ### Deliverables
 
-`src/trackshift/twin/power_balance.py`, `config/physics/priors.yaml`, `tests/test_twin.py` (units, signs, causality, `SIMULATED` tagging).
+`src/trackshift/twin/power_balance.py`, `config/physics/priors.yaml`, `tests/test_twin.py` (units, signs, causal Energy Store accounting, power-envelope/recharge boundaries, `SIMULATED` tagging).
 
 ---
 
@@ -1425,7 +1441,7 @@ Residual model (rung 5): LightGBM with `n_estimators=500, learning_rate=0.05, nu
 
 # CP-21 — Segment-time model, ΔE→Δt (M16)
 
-**Goal:** the function the DP actually consumes — how much time a segment takes as a function of energy deployed (§30). Rishabh's DP cannot produce a meaningful shadow price without this.
+**Goal:** the causal transition the DP consumes: how energy and tyre state change segment time and, where needed, projected Detection-Line gap (§30). Rishabh's DP cannot produce a meaningful shadow price without this.
 
 **Depends on:** CP-20.
 
@@ -1435,7 +1451,7 @@ Residual model (rung 5): LightGBM with `n_estimators=500, learning_rate=0.05, nu
 t_k(d, L) = t_base,k - a_k · ΔE + c_k · L
 ```
 
-`a_k` is the **energy sensitivity** of segment *k* — the local slope that becomes λ_E. Getting `a_k` right matters more than getting `t_base,k` right, because the DP differentiates.
+`a_k` is the **energy sensitivity** of segment *k* — the local slope that contributes to λ_E. The model must also test whether tyre state changes this response and whether the action changes projected future gap, not just immediate segment time.
 
 ### Candidates to benchmark (§30)
 
@@ -1458,6 +1474,8 @@ t_k(d, L) = t_base,k - a_k · ΔE + c_k · L
 - MAE < 0.06 s/segment held out
 - Extrapolation sanity: at ΔE beyond the observed range, time does not go negative or invert
 - **Silverstone sanity**: the Hangar Straight segment should have among the highest `a_k` on that circuit
+- Report MAE/RMSE for next relative speed, next time gap, and projected Detection-Line gap where those outputs are consumed by CP-12
+- Compare tyre age only, degradation proxy, and latent tyre-performance state by held-out benefit; do not retain an interaction solely because it is physically plausible
 
 ### ⚠️ If output is bad
 
@@ -1466,7 +1484,7 @@ t_k(d, L) = t_base,k - a_k · ΔE + c_k · L
 | `a_k` negative somewhere | Confounding — high deployment correlates with defending or traffic | Restrict fitting to clean-air segments; add the race-context control. If it persists, constrain the sign in the model (monotone constraints in LightGBM: `monotone_constraints`). |
 | `a_k` flat across segment types | Model learned an average, not the geometry | Fit per segment or add explicit segment×energy interactions |
 | Tree model wins on MAE but violates monotonicity | Trees do not respect physics by default | Use `monotone_constraints=[-1]` on the energy feature, or prefer physics+residual. §30: physical plausibility outranks MAE. |
-| DP produces a flat shadow price | `a_k` has no variation across the lap | This is the headline visual failing. Go back to the geometry: `a_k` must vary. |
+| DP produces a flat shadow price | `a_k` has no variation across the lap, or the gap transition ignores action | Re-check geometry and the causal energy-to-gap response before changing the planner. |
 
 ### Deliverables
 
@@ -1476,7 +1494,7 @@ t_k(d, L) = t_base,k - a_k · ΔE + c_k · L
 
 # CP-22 — Physics uncertainty (M17)
 
-**Goal:** parameter draws and confidence ranges so C5 can return `Uncertain` rather than point estimates (§42).
+**Goal:** parameter draws and confidence ranges so C5 can return `Uncertain` rather than point estimates, while retaining separate energy-state, physics-transition, tyre-state, gap/eligibility, and rival-state uncertainty where each is produced (§42).
 
 **Depends on:** CP-20, CP-21.
 
@@ -1484,7 +1502,7 @@ t_k(d, L) = t_base,k - a_k · ΔE + c_k · L
 
 **1. Parameter covariance** from the least-squares Jacobian at the optimum (`scipy.optimize.least_squares` returns `jac`; covariance ≈ `inv(J.T @ J) * residual_variance`).
 
-**2. Draw N=200 parameter sets** from that covariance, propagate each through the twin and the segment-time model, and report mean plus 10th/90th percentiles.
+**2. Draw N=200 parameter sets** from that covariance, propagate each through the twin and segment-time model, and report mean plus 10th/90th percentiles. Preserve correlation between coupled energy, time, and gap outputs instead of independently sampling incompatible values.
 
 **3. Cache draws per (event, team)** — recomputing 200 draws inside the DP loop will be too slow.
 
@@ -1518,7 +1536,7 @@ t_k(d, L) = t_base,k - a_k · ΔE + c_k · L
 
 `src/trackshift/eval/ablation.py` reads feature groups from the registry and runs leave-one-group-out, reporting the delta in the primary metric with the same splits and seeds.
 
-Groups: `geometry`, `tyre`, `weather`, `team_identity`, `driver_identity`, `rolling_battle_trends`, `race_context`, `fuel_ers`.
+Groups: `geometry`, `tyre`, `weather`, `team_identity`, `driver_identity`, `rolling_battle_trends`, `gap_dynamics`, `race_context`, `fuel_ers`, `rule_state`, `rival_belief`, `future_eligibility`.
 
 **Keep a group only if it improves held-out metrics or provides necessary causal context without materially degrading others** (§35).
 
@@ -1528,6 +1546,7 @@ Groups: `geometry`, `tyre`, `weather`, `team_identity`, `driver_identity`, `roll
 - Identity groups are scrutinised hardest (§17) — a large identity gain with a small racecraft gain means memorisation
 - Results are reproducible across runs with the same seed
 - The harness runs on both Chain P and Chain E models
+- Strategic levels report terminal `P(ahead)`, decision regret, rule violations, latency, and decision stability, not only component error
 
 ### ⚠️ If output is bad
 
@@ -1562,6 +1581,7 @@ FastAPI, pydantic and uvicorn are already installed.
 - `CHECKPOINT_VIOLATION` raised when a `DETECTION` request carries an activation feature
 - `NOT_MODEL_ELIGIBLE` raised outside normal-race rows
 - Every number in every response carries a provenance tag
+- Rule, twin, eligibility, and planner requests validate the shared `StrategicState` shape, including causal status for any supplied counterfactual field
 - Replay bundle files are byte-identical in shape to live responses
 - `bundle_manifest.json` records `stubs_used: []` for the final demo
 - All routes respond on CPU only
@@ -1758,6 +1778,8 @@ Check these at every milestone, not just once.
 | `normal_race_model_eligible` filter applied | CP-09, CP-13, CP-20 | §12 |
 | Checkpoint features never leak backwards | CP-13, CP-14 | §19 |
 | Every produced column is in the registry | all | §46 |
+| Counterfactual fields are generated from a decision-time state and declared intervention, never observed future trajectory | CP-12, CP-21, CP-24 | §40 |
+| Rule snapshot/configuration version is recorded in every rule, twin, and planner artifact | CP-03, CP-11, CP-18, CP-24 | §6, §21 |
 | Every artifact has a manifest with git commit and seed | all | §53 |
 
 ### The truncation test
