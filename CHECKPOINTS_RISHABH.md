@@ -44,7 +44,7 @@ Each checkpoint uses the same structure.
 | 02 | Leakage-safe splitter | M29, C9 | ☑ |
 | 03 | Dynamic pairs and battle episodes | M05, C8 | ☑ |
 | 04 | Causal pairwise features | M06, C8 | ☑ |
-| 05 | Rival-state feature dataset | M08 | ☐ |
+| 05 | Rival-state feature dataset | M08 | ☑ |
 | 06 | Synthetic labelled trajectories | M09b | ☑ |
 | 07 | Rival-state benchmark | M09, C10 | ☐ |
 | 08 | Rival-side regulation-era evaluation | M13 | ☐ |
@@ -256,13 +256,21 @@ backfill was used. Validation: `.venv/bin/python -m pytest -q` → 555 passed,
 
 **src/trackshift/features/rival_state_features.py**, **scripts/features/build_rival_features.py**, processed feature dataset, tests, manifest.
 
-### Validation — not complete
+### Validation — complete
 
-M08 producer and causal/provenance tests exist. A non-British Australian Race
-materialisation produced 6,572 C7-eligible C8/M06/M08 rows from 29,508 C7 rows
-and 746 persisted C9 battle assignments (`/tmp/chain-s`). C5 and C6 have no
-joined decision-point materialisation and remain null with explicit reasons.
-The all-event spine remains outstanding, so CP-05 remains unchecked.
+Full non-British 2026 Race/Sprint materialisation at
+`data/processed/cp05_full_nonbritish_validation_v2/` produced 408,078 C7 rows
+(283,135 normal-race eligible), 104,263 C8/M06/M08 rows, and 19,745 persistent
+battle-level C9 assignments (five deterministic folds of 3,949 battles). All
+M08 rows passed the C7 gate, carry a C9 assignment, and exclude raw driver
+number, team, coordinates, timestamps, outcomes, and future fields. British
+Race and Sprint were excluded; Spanish is recorded as
+`NO_USABLE_C1_RACE_OR_SPRINT`. C2 causal residual availability is 92.88%; C6
+decision-time state is available on 47.96% of M08 rows and explicit-unavailable
+elsewhere. C5 fuel/ERS remains 0% available as null Quantities with
+`UNAVAILABLE_C5` provenance/reasons; no values were fabricated. The 1,202
+defender alignment gaps remain audited and M08 marks them incomplete. CP-05
+acceptance gates pass.
 
 ---
 
