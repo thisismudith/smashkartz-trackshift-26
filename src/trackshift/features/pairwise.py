@@ -6,8 +6,9 @@ only the already-emitted rows of *that same battle* for trailing estimates.
 It never reads a battle summary, pass result, episode end, or later segment.
 
 C2 baselines and C5 energy/fuel estimates are deliberately represented as
-unavailable Quantities until their public contracts are materialised.  They
-are not approximated from telemetry in this module.
+unavailable Quantities until their public contracts are materialised.  C2 is
+joined only from its public artifact and only against a causal current value;
+C5 values are not approximated from telemetry in this module.
 """
 from __future__ import annotations
 
@@ -16,6 +17,8 @@ from dataclasses import dataclass
 from math import isfinite
 from typing import Any, Iterable, Mapping
 
+from trackshift.track.api import BASELINE_SCHEMA_VERSION, assign_year_group, residual_at_use_time
+
 __all__ = [
     "PAIRWISE_FEATURE_SCHEMA_VERSION",
     "PAIRWISE_FEATURE_SCHEMA",
@@ -23,7 +26,7 @@ __all__ = [
     "build_pairwise_features",
 ]
 
-PAIRWISE_FEATURE_SCHEMA_VERSION = "m06_pairwise_segment_features_v1"
+PAIRWISE_FEATURE_SCHEMA_VERSION = "m06_pairwise_segment_features_v2"
 TRAILING_WINDOW_SEGMENTS = 3
 
 # This compact schema is also written into the producer manifest.  It is
@@ -58,6 +61,7 @@ class PairwiseBuildResult:
     rows: list[dict[str, Any]]
     excluded_rows_by_reason: dict[str, int]
     missing_defender_segments: int
+    defender_alignment_gaps_by_reason: dict[str, int]
 
 
 def _number(value: Any) -> float | None:
@@ -78,6 +82,11 @@ def _first_number(row: Mapping[str, Any], names: tuple[str, ...]) -> float | Non
 
 def _segment_key(row: Mapping[str, Any], driver: Any) -> tuple[Any, ...]:
     """The C1/C8 contemporaneous alignment key, without an outcome field."""
+    return tuple(row.get(name) for name in ("year", "event", "session", "lap", "segment_id", "geometry_version")) + (driver,)
+
+
+def _segment_key_without_geometry(row: Mapping[str, Any], driver: Any) -> tuple[Any, ...]:
+    """Audit only: distinguishes a missing C1 row from a geometry-version mismatch."""
     return tuple(row.get(name) for name in ("year", "event", "session", "lap", "segment_id")) + (driver,)
 
 
@@ -133,26 +142,27 @@ def _quantity(value: float | None, provenance: str, unit: str, reason: str | Non
 
 
 def _unavailable_quantities(
-    *, braking_available: bool, degradation_available: bool,
+    *, baseline_reason: str | None, braking_available: bool, degradation_available: bool,
 ) -> dict[str, dict[str, Any]]:
     """API.md Quantity-compatible unavailable fields, never fake zeroes."""
     unavailable: dict[str, dict[str, Any]] = {
-        "baseline_residual_delta_s": _quantity(
-            None, "DERIVED", "s", "C2 public baseline tables are not materialised locally"
-        ),
         "fuel_load_delta_kg_est": _quantity(
-            None, "INFERRED", "kg", "C5 energy_state public contract is not available; fuel is not proxied"
+            None, "INFERRED", "kg", "UNAVAILABLE_C5: energy_state public contract is not available; fuel is not proxied"
         ),
         "fuel_load_delta_uncertainty_kg": _quantity(
-            None, "INFERRED", "kg", "C5 energy_state public contract is not available"
+            None, "INFERRED", "kg", "UNAVAILABLE_C5: energy_state public contract is not available"
         ),
         "ers_energy_delta_kj_est": _quantity(
-            None, "SIMULATED", "kJ", "C5 energy_state public contract is not available; ERS is not invented"
+            None, "SIMULATED", "kJ", "UNAVAILABLE_C5: energy_state public contract is not available; ERS is not invented"
         ),
         "ers_energy_delta_uncertainty_kj": _quantity(
-            None, "SIMULATED", "kJ", "C5 energy_state public contract is not available"
+            None, "SIMULATED", "kJ", "UNAVAILABLE_C5: energy_state public contract is not available"
         ),
     }
+    if baseline_reason is not None:
+        unavailable["baseline_residual_delta_s"] = _quantity(
+            None, "DERIVED", "s", baseline_reason
+        )
     if not braking_available:
         unavailable["braking_intensity_delta"] = _quantity(
             None, "DERIVED", "ratio", "C1 has no entry-aligned braking intensity; brake_fraction_offline is OFFLINE_ONLY"
@@ -197,8 +207,62 @@ def _value_or_none(row: Mapping[str, Any] | None, name: str) -> float | None:
     return _number(row.get(name)) if row is not None else None
 
 
+def _baseline_key(row: Mapping[str, Any], driver: Any) -> tuple[Any, ...] | None:
+    circuit = row.get("circuit")
+    if circuit is None:
+        return None
+    try:
+        year_group = assign_year_group(row.get("year"))
+    except ValueError:
+        return None
+    return (circuit, year_group, row.get("segment_id"), driver)
+
+
+def _causal_segment_time_s(row: Mapping[str, Any] | None) -> float | None:
+    """Use only a C1 value explicitly supplied as causal, never *_offline."""
+    return _value_or_none(row, "segment_time_s")
+
+
+def _c2_residual_delta_s(
+    attacker_row: Mapping[str, Any] | None,
+    defender_row: Mapping[str, Any] | None,
+    attacker: Any,
+    defender: Any,
+    driver_baselines: Mapping[tuple[Any, ...], Mapping[str, Any]] | None,
+) -> tuple[float | None, str | None]:
+    """C2 attacker-minus-defender segment-time residual, or an honest null."""
+    if driver_baselines is None:
+        return None, "UNAVAILABLE_C2: no C2 driver-baseline artifact was supplied"
+    if attacker_row is None or defender_row is None:
+        return None, "UNAVAILABLE_C2: contemporaneous C1 rows for both cars are required"
+    attacker_key = _baseline_key(attacker_row, attacker)
+    defender_key = _baseline_key(defender_row, defender)
+    if attacker_key is None or defender_key is None:
+        return None, "UNAVAILABLE_C2: C1 circuit or supported year group is unavailable"
+    attacker_baseline = driver_baselines.get(attacker_key)
+    defender_baseline = driver_baselines.get(defender_key)
+    if attacker_baseline is None or defender_baseline is None:
+        return None, "UNAVAILABLE_C2: valid driver baseline is absent for one or both cars"
+    if not attacker_baseline.get("baseline_valid") or not defender_baseline.get("baseline_valid"):
+        return None, "UNAVAILABLE_C2: driver baseline is marked baseline_valid=false"
+    attacker_time = _causal_segment_time_s(attacker_row)
+    defender_time = _causal_segment_time_s(defender_row)
+    if attacker_time is None or defender_time is None:
+        return None, "UNAVAILABLE_C2: C1 has no causal segment_time_s; segment_time_s_offline is not used"
+    attacker_residual = residual_at_use_time(
+        attacker_time, attacker_baseline.get("segment_time_s_median"), baseline_valid=True,
+    )
+    defender_residual = residual_at_use_time(
+        defender_time, defender_baseline.get("segment_time_s_median"), baseline_valid=True,
+    )
+    if attacker_residual is None or defender_residual is None:
+        return None, "UNAVAILABLE_C2: a valid C2 segment-time median is unavailable"
+    return attacker_residual - defender_residual, None
+
+
 def build_pairwise_features(
-    battle_rows: Iterable[Mapping[str, Any]], segment_rows: Iterable[Mapping[str, Any]],
+    battle_rows: Iterable[Mapping[str, Any]], segment_rows: Iterable[Mapping[str, Any]], *,
+    driver_baseline_rows: Iterable[Mapping[str, Any]] | None = None,
 ) -> PairwiseBuildResult:
     """Build one live-safe M06 row per valid C8 battle row.
 
@@ -207,14 +271,26 @@ def build_pairwise_features(
     rows inside one battle; a C7 transition clears that history defensively.
     """
     segment_index: dict[tuple[Any, ...], Mapping[str, Any]] = {}
+    segment_index_without_geometry: set[tuple[Any, ...]] = set()
     duplicate_keys: set[tuple[Any, ...]] = set()
     for row in segment_rows:
         driver = row.get("driver")
         key = _segment_key(row, driver)
+        segment_index_without_geometry.add(_segment_key_without_geometry(row, driver))
         if key in segment_index:
             duplicate_keys.add(key)
         else:
             segment_index[key] = row
+
+    driver_baselines: dict[tuple[Any, ...], Mapping[str, Any]] | None = None
+    if driver_baseline_rows is not None:
+        driver_baselines = {}
+        for baseline in driver_baseline_rows:
+            if baseline.get("schema_version") != BASELINE_SCHEMA_VERSION or baseline.get("baseline_level") != "driver":
+                continue
+            key = (baseline.get("circuit"), baseline.get("year_group"), baseline.get("segment_id"), baseline.get("driver"))
+            if all(value is not None for value in key):
+                driver_baselines.setdefault(key, baseline)
 
     grouped: dict[Any, list[tuple[int, Mapping[str, Any]]]] = defaultdict(list)
     for index, row in enumerate(battle_rows):
@@ -223,6 +299,7 @@ def build_pairwise_features(
     output: list[dict[str, Any]] = []
     excluded = Counter()
     missing_defender_segments = 0
+    defender_alignment_gaps = Counter()
     for battle_id, stream in grouped.items():
         if not battle_id:
             excluded["MISSING_BATTLE_ID"] += len(stream)
@@ -256,6 +333,16 @@ def build_pairwise_features(
             defender_row = None if defender_key in duplicate_keys else segment_index.get(defender_key)
             if defender_row is None:
                 missing_defender_segments += 1
+                unversioned_defender_key = _segment_key_without_geometry(battle, defender)
+                if battle.get("defender_resolution") not in {None, "DIRECT_AHEAD", "SESSION_ROSTER"}:
+                    defender_alignment_gaps["UNRESOLVED_IDENTITY_ROSTER_MAPPING"] += 1
+                elif defender_key in duplicate_keys or unversioned_defender_key in segment_index_without_geometry:
+                    defender_alignment_gaps["JOIN_KEY_VERSION_MISMATCH"] += 1
+                else:
+                    defender_alignment_gaps["NO_CONTEMPORANEOUS_DEFENDER_C1_SEGMENT"] += 1
+
+            attacker_key = _segment_key(battle, attacker)
+            attacker_row = None if attacker_key in duplicate_keys else segment_index.get(attacker_key)
 
             attacker_speed = _entry_speed_mps(battle)
             defender_speed = _entry_speed_mps(defender_row)
@@ -286,6 +373,9 @@ def build_pairwise_features(
             distance_gap = _distance_gap_m(battle)
             attacker_life = _value_or_none(battle, "tyre_life_laps")
             defender_life = _value_or_none(defender_row, "tyre_life_laps")
+            baseline_residual_delta, baseline_reason = _c2_residual_delta_s(
+                attacker_row, defender_row, attacker, defender, driver_baselines,
+            )
 
             row = {
                 "year": battle.get("year"), "event": battle.get("event"), "session": battle.get("session"),
@@ -313,15 +403,15 @@ def build_pairwise_features(
                 "time_gap_entry_trailing_mean_3_s": _trailing_mean(history["time_gap"], time_gap),
                 "distance_gap_entry_trailing_mean_3_m": _trailing_mean(history["distance_gap"], distance_gap),
                 "gap_rate_ahead_trailing_mean_3_s_per_s": _trailing_mean(history["gap_rate"], gap_rate),
-                # Reserved fields stay null until C2/C5 are genuinely available.
-                "baseline_residual_delta_s": None,
+                "baseline_residual_delta_s": baseline_residual_delta,
                 "fuel_load_delta_kg_est": None,
                 "fuel_load_delta_uncertainty_kg": None,
                 "ers_energy_delta_kj_est": None,
                 "ers_energy_delta_uncertainty_kj": None,
             }
             unavailable = _unavailable_quantities(
-                braking_available=braking_delta is not None, degradation_available=degradation_delta is not None,
+                baseline_reason=baseline_reason, braking_available=braking_delta is not None,
+                degradation_available=degradation_delta is not None,
             )
             _add_dynamic_unavailable(row, unavailable, defender_found=defender_row is not None)
             row["unavailable_quantities"] = unavailable
@@ -332,4 +422,7 @@ def build_pairwise_features(
                 "time": current_time, "attacker_speed": attacker_speed, "defender_speed": defender_speed,
                 "time_gap": time_gap,
             }
-    return PairwiseBuildResult(output, dict(sorted(excluded.items())), missing_defender_segments)
+    return PairwiseBuildResult(
+        output, dict(sorted(excluded.items())), missing_defender_segments,
+        dict(sorted(defender_alignment_gaps.items())),
+    )

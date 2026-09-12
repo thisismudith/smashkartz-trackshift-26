@@ -8,6 +8,7 @@ from .baselines import (
     BASELINE_METRICS,
     BASELINE_SCHEMA_VERSION,
     BaselineBuildResult,
+    assign_year_group,
     build_segment_baselines,
     residual_at_use_time,
 )
@@ -36,6 +37,7 @@ __all__ = [
     "BASELINE_METRICS",
     "BASELINE_SCHEMA_VERSION",
     "BaselineBuildResult",
+    "assign_year_group",
     "build_segment_baselines",
     "residual_at_use_time",
     "WEATHER_KEY_COLUMNS",

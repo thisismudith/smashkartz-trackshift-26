@@ -1922,12 +1922,12 @@ features:
 
   - <<: *pairwise_feature_defaults
     name: baseline_residual_delta_s
-    definition: Reserved C2 attacker-minus-defender baseline residual; null with an API Quantity reason until C2 exists.
+    definition: C2 driver-baseline attacker-minus-defender causal segment-time residual; null with an API Quantity reason when C2 or a causal current segment time is unavailable.
     unit: s
-    live_safe: null
+    live_safe: true
     provenance: DERIVED
-    availability_scope: none
-    source_gated: true
+    availability_scope: partial
+    source_gated: false
     interaction_group: [baseline, relative]
 
   - <<: *pairwise_feature_defaults
