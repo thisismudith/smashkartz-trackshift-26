@@ -52,13 +52,32 @@ def _load_segments(directory: Path, circuit: str | None) -> tuple[list[dict[str,
     return rows, [str(path) for path in paths]
 
 
+def _serialise_for_parquet(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """JSON-encode the variable-shaped explanation block.
+
+    ``unavailable_metrics`` is keyed by whichever metrics the C1 source lacked,
+    so as a Parquet struct its schema changes with the data: when every metric
+    resolves it is empty and Arrow cannot write a struct with no child fields at
+    all. Storing it as JSON keeps one stable column whatever is missing, which
+    matters because "nothing was missing" is the case that used to break the
+    write and is exactly the case we expect once C1 is complete.
+    """
+    out = []
+    for row in rows:
+        row = dict(row)
+        if "unavailable_metrics" in row:
+            row["unavailable_metrics"] = json.dumps(row["unavailable_metrics"], sort_keys=True)
+        out.append(row)
+    return out
+
+
 def _write_table(root: Path, level: str, rows: list[dict[str, Any]]) -> str:
     import pandas as pd
 
     target = root / f"{level}_segment_baselines"
     target.mkdir(parents=True, exist_ok=True)
     path = target / f"{level}_segment_baselines.parquet"
-    pd.DataFrame(rows).to_parquet(path, index=False)
+    pd.DataFrame(_serialise_for_parquet(rows)).to_parquet(path, index=False)
     return str(path)
 
 

@@ -108,3 +108,58 @@ def test_residuals_are_computed_at_use_time_and_center_on_the_driver_median():
     assert sorted(residuals)[1] == 0.0
     assert not any("residual" in name for name in baseline)
     assert residual_at_use_time(2.0, 2.0, baseline_valid=False) is None
+
+def test_baselines_write_to_parquet_when_no_metric_is_missing(tmp_path):
+    """The case that used to break the write: every C1 metric resolves.
+
+    unavailable_metrics is then empty for every row, and Arrow cannot write a
+    struct with no child fields. This is the normal case once C1 is complete,
+    so it must be the one that is exercised.
+    """
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "build_baselines", ROOT / "scripts" / "features" / "build_baselines.py"
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    result = build([row(value) for value in (1.0, 2.0, 3.0, 4.0, 5.0)])
+    assert all(not item["unavailable_metrics"] for item in result.field), (
+        "fixture no longer exercises the empty case"
+    )
+
+    written = module._write_table(tmp_path, "field", result.field)
+
+    import pandas as pd
+
+    frame = pd.read_parquet(written)
+    assert len(frame) == len(result.field)
+    assert frame["unavailable_metrics"].tolist() == ["{}"] * len(frame)
+
+
+def test_parquet_write_survives_a_partially_missing_metric(tmp_path):
+    """And the mixed case still records which metric was absent, and why."""
+    import importlib.util
+    import json
+
+    spec = importlib.util.spec_from_file_location(
+        "build_baselines", ROOT / "scripts" / "features" / "build_baselines.py"
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    rows = []
+    for value in (1.0, 2.0, 3.0, 4.0, 5.0):
+        source = row(value)
+        del source["brake_onset_m"]
+        rows.append(source)
+    result = build(rows)
+
+    import pandas as pd
+
+    frame = pd.read_parquet(module._write_table(tmp_path, "field", result.field))
+    decoded = json.loads(frame["unavailable_metrics"].iloc[0])
+    assert "brake_onset_m" in decoded
+    assert decoded["brake_onset_m"]["unit"] == "m"
+    assert decoded["brake_onset_m"]["reason"]

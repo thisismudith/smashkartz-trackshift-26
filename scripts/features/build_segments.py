@@ -87,6 +87,11 @@ def build_for_event(geometry: dict, event_display: str):
         times = block["lap_elapsed_s"].dropna()
         brake = block["brake_on"].dropna()
         throttle = block["throttle_pct"].dropna()
+        # First point in the segment where the driver is on the brakes. Null on
+        # segments with no braking at all (straights) -- that is a real absence,
+        # not a data gap, and CP-09 counts n per metric so the group stays valid.
+        braking = (block[block["brake_on"].fillna(False).astype(bool)]
+                   if "brake_on" in block.columns else None)
 
         row = {
             "year": year, "event": event, "session": session, "driver": driver, "lap": int(lap),
@@ -116,6 +121,8 @@ def build_for_event(geometry: dict, event_display: str):
             "mean_speed_kmh_offline": float(speeds.mean()) if len(speeds) else None,
             "segment_time_s_offline": (float(times.iloc[-1] - times.iloc[0]) if len(times) > 1 else None),
             "brake_fraction_offline": float(brake.mean()) if len(brake) else None,
+            "brake_onset_m_offline": (float(braking.iloc[0]["distance_m"])
+                                      if braking is not None and len(braking) else None),
             "full_throttle_fraction_offline": float((throttle >= 95).mean()) if len(throttle) else None,
             "gap_ahead_m_exit_offline": float(last["gap_ahead_m"]) if pd.notna(last.get("gap_ahead_m")) else None,
         }

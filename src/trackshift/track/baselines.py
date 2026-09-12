@@ -31,7 +31,7 @@ BASELINE_LEVELS = ("driver", "team", "field")
 BASELINE_METRICS: dict[str, tuple[str, ...]] = {
     "segment_time_s": ("segment_time_s", "segment_time_s_offline"),
     "exit_speed_kmh": ("exit_speed_kmh", "exit_speed_kmh_offline"),
-    "brake_onset_m": ("brake_onset_m", "brake_onset_distance_m"),
+    "brake_onset_m": ("brake_onset_m", "brake_onset_distance_m", "brake_onset_m_offline"),
     "full_throttle_fraction": ("full_throttle_fraction", "full_throttle_fraction_offline"),
     "max_speed_kmh": ("max_speed_kmh", "max_speed_kmh_offline"),
 }
