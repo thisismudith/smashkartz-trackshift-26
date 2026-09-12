@@ -408,12 +408,13 @@ data.
 
 **src/trackshift/rival/era.py**, comparison in rival report, selected strategy in manifest.
 
-### Validation — not complete
+### Validation — blocked (development harness complete)
 
 The era harness explicitly excludes historical DRS from 2026 Overtake inputs
-and defaults to 2026-only until held-out 2026 evidence exists. Australian M08
-is materialised, but historical M08 has not been built, so no regulation-era
-comparison can yet be reported.
+and reports N and rule-configuration fields by strategy. The current CP-05
+corpus supplies 104,263 non-British 2026 M08 rows, but no historical M08
+partitions for 2022–2025 are materialised. CP-08 therefore remains unchecked;
+no regulation-era comparison is claimed from 2026-only data.
 
 ---
 
@@ -486,6 +487,15 @@ Completed as a development-safe Chain V boundary.
 
 **src/trackshift/value/dp.py**, **src/trackshift/value/shadow_price.py**, **scripts/simulate/run_dp.py**, **tests/test_dp.py**, value tables.
 
+### Development core — complete; final validation blocked
+
+The CPU DP calls C3's public `legal_actions` before scoring and keeps excluded
+actions in a separate audit map. It uses segment, horizon, energy, gap, and
+eligibility dimensions, and computes the finite-difference shadow price at the
+same full state. A missing C5 transition returns `STUB_RESPONSE`; final mode
+rejects stub-based value output. Real calibrated C4/C5 transitions are still
+required for completion.
+
 ---
 
 # CP-11: Counterattack valuation
@@ -511,6 +521,13 @@ Completed as a development-safe Chain V boundary.
 ### Deliverables
 
 **src/trackshift/value/counterattack.py**, **tests/test_counterattack.py**, counterattack terms in value artifacts.
+
+### Development core — complete; final validation blocked
+
+Post-pass role-switch valuation and the four explanation categories are
+implemented. Missing C4/C6/C10 probabilities remain explicit nulls with
+`STUB_RESPONSE`; controlled tests show high repass risk can lower pass value.
+Real pass and calibrated energy transitions remain required.
 
 ---
 
@@ -539,6 +556,13 @@ Completed as a development-safe Chain V boundary.
 
 **src/trackshift/planner/beam.py**, planner evaluation script, **tests/test_planner.py**, planner artifact and report.
 
+### Development core — complete; final validation blocked
+
+The planner obtains C3 legal actions before scoring, consumes DP output, records
+risk criterion, alternatives, regret, mechanism, constraint, stability, rule
+version, and model versions. Stub DP/dependency responses are propagated and
+final mode rejects them. Real C4/C5-backed planning is not yet available.
+
 ---
 
 # CP-13: Planner baselines
@@ -563,6 +587,12 @@ Completed as a development-safe Chain V boundary.
 ### Deliverables
 
 **src/trackshift/planner/baselines.py**, tests, baseline table in planner report.
+
+### Development core — complete; final validation blocked
+
+All six requested baseline names share the C3 legal action set and carry an
+explicit non-deployable marker for `oracle_rival_state`. Comparative terminal
+metrics require the real C4/C5 transition and simulator validation.
 
 ---
 
@@ -591,6 +621,13 @@ Completed as a development-safe Chain V boundary.
 
 **src/trackshift/sim/simulator.py**, simulator script, **tests/test_simulator.py**, seeded episode artifacts.
 
+### Development core — complete; final validation blocked
+
+The simulator freezes the initial state, seeds the environment, routes actions
+through C3, records assumptions and model versions, and marks traces
+`SIMULATED`. Missing C4/C5 callbacks return `STUB_RESPONSE`; final episode
+artifacts must wait for real public transitions.
+
 ---
 
 # CP-15: Explicit rival policies
@@ -615,6 +652,13 @@ Completed as a development-safe Chain V boundary.
 ### Deliverables
 
 **src/trackshift/sim/rival_policies.py**, **tests/test_rival_policies.py**, policy fixtures.
+
+### Development core — complete; final validation blocked
+
+`DEFEND_CONSERVE`, `DEFEND_MIRROR`, and `ATTACK_GREEDY` have stable names,
+descriptions, parameters, unsupported-name errors, deterministic selection, and
+public-C3 routing. Final policy comparison remains dependent on CP-14's real
+transition/pass callbacks.
 
 ---
 
