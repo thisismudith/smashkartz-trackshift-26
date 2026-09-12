@@ -8,7 +8,7 @@ from typing import Any, Mapping
 import yaml
 
 from trackshift.contracts.strategic_state import validate_strategic_state
-from trackshift.rules.api import legal_actions
+from trackshift.rules import api as rules_api
 
 STUB_RESPONSE = "STUB_RESPONSE"
 DISCRETIZATION_VERSION = "strategic_state_discretization_v1"
@@ -34,6 +34,64 @@ def _q(row: Mapping[str, Any], name: str, unit: str, provenance: str = "DERIVED"
     value = row.get(name)
     return {"value": value, "unit": unit, "provenance": provenance} if value is not None else {"value": None, "unit": unit, "provenance": provenance, "reason": f"{name} unavailable at decision step"}
 
+
+def c3_candidate_actions(action_set: Mapping[str, Any] | None) -> list[dict[str, Any]]:
+    """Return only C3's legal candidates; excluded actions are audit-only.
+
+    ``actions`` is the current C3 engine field.  ``legal_actions`` is accepted
+    for API-shaped C3 responses while the public contract is being integrated.
+    An unavailable or malformed C3 response is deliberately fail-closed.
+    """
+    if not isinstance(action_set, Mapping) or action_set.get("available") is False:
+        return []
+    for key in ("actions", "legal_actions"):
+        actions = action_set.get(key)
+        if isinstance(actions, list):
+            return actions
+    return []
+
+
+def c3_excluded_actions(action_set: Mapping[str, Any] | None) -> list[dict[str, Any]]:
+    """Return C3's exclusion audit separately from selectable candidates."""
+    if not isinstance(action_set, Mapping):
+        return []
+    for key in ("excluded", "excluded_actions"):
+        excluded = action_set.get(key)
+        if isinstance(excluded, list):
+            return excluded
+    return []
+
+
+def _c3_unavailable(
+    reason: str,
+    response: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Preserve an unavailable C3 result without manufacturing an action."""
+    result = dict(response or {})
+    result["available"] = False
+    result["reason"] = str(result.get("reason") or reason)
+    result["provenance"] = result.get("provenance") or "RULE"
+    result.setdefault("actions", [])
+    result.setdefault("excluded", [])
+    return result
+
+
+def _c3_action_set(
+    state: Mapping[str, Any], event_rules: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Call only the public C3 boundary and make unavailable responses explicit."""
+    try:
+        response = rules_api.legal_actions(state, event_rules)
+    except Exception as exc:
+        return _c3_unavailable(f"C3 legal_actions unavailable: {exc}")
+    if not isinstance(response, Mapping):
+        return _c3_unavailable("C3 legal_actions returned a non-object response")
+    if response.get("error") is not None:
+        return _c3_unavailable(f"C3 legal_actions error: {response['error']}", response)
+    if not c3_candidate_actions(response):
+        return _c3_unavailable("C3 legal_actions returned no legal action set", response)
+    return dict(response)
+
 def battle_step_to_strategic_state(battle_step: Mapping[str, Any], *, event_rules: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """Adapt current-step C1/C2/C7/C8/C9 inputs; never derive missing models."""
     _check_causal(battle_step)
@@ -58,7 +116,7 @@ def battle_step_to_strategic_state(battle_step: Mapping[str, Any], *, event_rule
     if battle_step.get("speed_kmh") is not None:
         state["speed_kmh"] = battle_step["speed_kmh"]
     if event_rules is not None:
-        state["legal_actions"] = legal_actions(state, event_rules)  # C3 public boundary only
+        state["legal_actions"] = _c3_action_set(state, event_rules)  # C3 public boundary only
     return validate_strategic_state(state)
 
 def discretize_state(state: Mapping[str, Any], config_path: Path | None = None) -> dict[str, Any]:
