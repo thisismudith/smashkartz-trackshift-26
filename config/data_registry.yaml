@@ -129,14 +129,18 @@ datasets:
   - name: pairwise_segment_features
     description: Attacker/defender differentials per battle segment (section 17).
     source: segments, battle_episodes
-    schema_version: null
+    schema_version: m06_pairwise_segment_features_v1
     partitioning: year / event / session
     primary_key: [battle_id, segment_index]
-    producer: scripts/features/build_battles.py
+    producer: scripts/features/build_pairwise_features.py
     consumers: [M07, M08, M10]
     live_status: LIVE_SAFE
-    status: planned
-    notes: Contract C8, owned by Rishabh.
+    status: built
+    notes: >-
+      M06/CP-04, owned by Rishabh. One causal row per C8 battle segment;
+      rolling values use only current and earlier same-battle rows and reset at
+      C7 pit/race-control transitions. C2 baselines and C5 fuel/ERS values are
+      explicit unavailable API Quantities until their public contracts land.
 
   - name: battle_episodes
     description: Continuous attacker/defender fights, the unit of leakage-safe splitting (section 18).

@@ -29,6 +29,28 @@
 
 schema_version: 1
 
+# Defaults for the C8/M06 pairwise-table columns added in CP-04.  Individual
+# entries override availability/provenance when the public C2/C5 contract is
+# not yet materialised.  YAML merges keep this generated-table schema readable
+# without weakening the required-key registry gate.
+pairwise_feature_defaults: &pairwise_feature_defaults
+  source: C8 battle rows and contemporaneous C1 segment rows
+  derivation: scripts/features/build_pairwise_features.py
+  allowed_sessions: [Sprint, Race]
+  supported_years: [2022, 2023, 2024, 2025, 2026]
+  live_safe: true
+  provenance: DERIVED
+  availability_scope: all
+  source_gated: false
+  decision_checkpoint: null
+  uncertainty_field: null
+  causal_status: CAUSAL
+  counterfactual_safe: false
+  regulation_version: null
+  regulation_source: null
+  interaction_group: [pairwise]
+  consuming_models: [M06, M08]
+
 features:
 
   # ------------------------------------------------------------------ keys
@@ -1666,3 +1688,253 @@ features:
     regulation_source: null
     interaction_group: [gap]
     consuming_models: [M05, M06]
+
+  # ---------------------------------------------------------------- M06 C8 pairwise live features
+  - <<: *pairwise_feature_defaults
+    name: battle_id
+    definition: Stable directed C8 battle identifier.
+    unit: null
+    provenance: DERIVED
+    interaction_group: [key]
+    consuming_models: [M06, M08, M09]
+
+  - <<: *pairwise_feature_defaults
+    name: segment_index
+    definition: One-based chronological index within a C8 battle.
+    unit: null
+    provenance: DERIVED
+    interaction_group: [key]
+    consuming_models: [M06, M08, M09]
+
+  - <<: *pairwise_feature_defaults
+    name: attacker
+    definition: C8 car behind in the directed immediate-ahead relation.
+    unit: null
+    provenance: DERIVED
+    interaction_group: [identity]
+
+  - <<: *pairwise_feature_defaults
+    name: defender
+    definition: C8 immediate car ahead in the directed relation.
+    unit: null
+    provenance: DERIVED
+    interaction_group: [identity]
+
+  - <<: *pairwise_feature_defaults
+    name: time_gap_entry_s
+    definition: Attacker-to-ahead entry time gap; never converted from distance gap.
+    unit: s
+    interaction_group: [gap, time]
+
+  - <<: *pairwise_feature_defaults
+    name: distance_gap_entry_m
+    definition: Attacker-to-ahead entry distance gap; never converted from time gap.
+    unit: m
+    interaction_group: [gap, distance]
+
+  - <<: *pairwise_feature_defaults
+    name: attacker_speed_entry_mps
+    definition: Attacker C1 entry speed converted from km/h to m/s.
+    unit: m/s
+    interaction_group: [speed, attacker]
+
+  - <<: *pairwise_feature_defaults
+    name: defender_speed_entry_mps
+    definition: Contemporaneous defender C1 entry speed converted from km/h to m/s.
+    unit: m/s
+    availability_scope: partial
+    interaction_group: [speed, defender]
+
+  - <<: *pairwise_feature_defaults
+    name: relative_speed_to_ahead_mps
+    definition: Attacker minus defender entry speed; positive means attacker faster.
+    unit: m/s
+    availability_scope: partial
+    interaction_group: [speed, relative]
+
+  - <<: *pairwise_feature_defaults
+    name: attacker_acceleration_entry_mps2
+    definition: Trailing attacker entry-speed acceleration estimate within the same battle.
+    unit: m/s2
+    availability_scope: partial
+    interaction_group: [acceleration, attacker]
+
+  - <<: *pairwise_feature_defaults
+    name: defender_acceleration_entry_mps2
+    definition: Trailing defender entry-speed acceleration estimate within the same battle.
+    unit: m/s2
+    availability_scope: partial
+    interaction_group: [acceleration, defender]
+
+  - <<: *pairwise_feature_defaults
+    name: relative_acceleration_to_ahead_mps2
+    definition: Attacker trailing acceleration minus defender acceleration; positive means attacker accelerates more.
+    unit: m/s2
+    availability_scope: partial
+    interaction_group: [acceleration, relative]
+
+  - <<: *pairwise_feature_defaults
+    name: gap_rate_ahead_s_per_s
+    definition: Trailing time-gap change per elapsed second; negative means closing.
+    unit: s/s
+    availability_scope: partial
+    interaction_group: [gap, rate]
+
+  - <<: *pairwise_feature_defaults
+    name: attacker_braking_intensity
+    definition: C1 entry-aligned attacker braking intensity when materialised; no offline segment fraction is used.
+    unit: ratio
+    availability_scope: partial
+    interaction_group: [braking, attacker]
+
+  - <<: *pairwise_feature_defaults
+    name: defender_braking_intensity
+    definition: C1 entry-aligned defender braking intensity when materialised; no offline segment fraction is used.
+    unit: ratio
+    availability_scope: partial
+    interaction_group: [braking, defender]
+
+  - <<: *pairwise_feature_defaults
+    name: braking_intensity_delta
+    definition: Attacker minus defender entry braking intensity when both are live-source available.
+    unit: ratio
+    availability_scope: partial
+    interaction_group: [braking, relative]
+
+  - <<: *pairwise_feature_defaults
+    name: attacker_tyre_life_laps
+    definition: Attacker observed tyre age at segment entry.
+    unit: laps
+    provenance: OBSERVED
+    interaction_group: [tyre, attacker]
+
+  - <<: *pairwise_feature_defaults
+    name: defender_tyre_life_laps
+    definition: Defender observed tyre age at contemporaneous segment entry.
+    unit: laps
+    provenance: OBSERVED
+    availability_scope: partial
+    interaction_group: [tyre, defender]
+
+  - <<: *pairwise_feature_defaults
+    name: tyre_life_delta_laps
+    definition: Attacker tyre life minus defender tyre life.
+    unit: laps
+    provenance: OBSERVED
+    availability_scope: partial
+    interaction_group: [tyre, relative]
+
+  - <<: *pairwise_feature_defaults
+    name: tyre_compound_pair
+    definition: Attacker and defender observed tyre compounds encoded as attacker|defender.
+    unit: null
+    provenance: OBSERVED
+    availability_scope: partial
+    interaction_group: [tyre, compound]
+
+  - <<: *pairwise_feature_defaults
+    name: attacker_tyre_degradation_proxy
+    definition: C1 causal attacker tyre degradation proxy when materialised.
+    unit: ratio
+    availability_scope: partial
+    interaction_group: [tyre, attacker]
+
+  - <<: *pairwise_feature_defaults
+    name: defender_tyre_degradation_proxy
+    definition: C1 causal defender tyre degradation proxy when materialised.
+    unit: ratio
+    availability_scope: partial
+    interaction_group: [tyre, defender]
+
+  - <<: *pairwise_feature_defaults
+    name: tyre_degradation_delta
+    definition: Attacker causal tyre degradation proxy minus defender proxy when both exist.
+    unit: ratio
+    availability_scope: partial
+    interaction_group: [tyre, relative]
+
+  - <<: *pairwise_feature_defaults
+    name: relative_speed_to_ahead_trailing_mean_3_mps
+    definition: Mean of current and at most two preceding same-battle relative-speed observations.
+    unit: m/s
+    availability_scope: partial
+    interaction_group: [speed, rolling]
+
+  - <<: *pairwise_feature_defaults
+    name: time_gap_entry_trailing_mean_3_s
+    definition: Mean of current and at most two preceding same-battle entry time gaps.
+    unit: s
+    availability_scope: partial
+    interaction_group: [gap, rolling]
+
+  - <<: *pairwise_feature_defaults
+    name: distance_gap_entry_trailing_mean_3_m
+    definition: Mean of current and at most two preceding same-battle entry distance gaps.
+    unit: m
+    interaction_group: [gap, rolling]
+
+  - <<: *pairwise_feature_defaults
+    name: gap_rate_ahead_trailing_mean_3_s_per_s
+    definition: Mean of current and at most two preceding same-battle time-gap rates.
+    unit: s/s
+    availability_scope: partial
+    interaction_group: [gap, rate, rolling]
+
+  - <<: *pairwise_feature_defaults
+    name: baseline_residual_delta_s
+    definition: Reserved C2 attacker-minus-defender baseline residual; null with an API Quantity reason until C2 exists.
+    unit: s
+    live_safe: null
+    provenance: DERIVED
+    availability_scope: none
+    source_gated: true
+    interaction_group: [baseline, relative]
+
+  - <<: *pairwise_feature_defaults
+    name: fuel_load_delta_kg_est
+    definition: Reserved C5 attacker-minus-defender causal fuel estimate; never proxied or zero-filled.
+    unit: kg
+    live_safe: null
+    provenance: INFERRED
+    availability_scope: none
+    source_gated: true
+    uncertainty_field: fuel_load_delta_uncertainty_kg
+    interaction_group: [fuel, relative]
+
+  - <<: *pairwise_feature_defaults
+    name: fuel_load_delta_uncertainty_kg
+    definition: Reserved C5 uncertainty for fuel_load_delta_kg_est; unavailable with the estimate.
+    unit: kg
+    live_safe: null
+    provenance: INFERRED
+    availability_scope: none
+    source_gated: true
+    interaction_group: [fuel, uncertainty]
+
+  - <<: *pairwise_feature_defaults
+    name: ers_energy_delta_kj_est
+    definition: Reserved C5 attacker-minus-defender ERS energy estimate; never fabricated from public telemetry.
+    unit: kJ
+    live_safe: null
+    provenance: SIMULATED
+    availability_scope: none
+    source_gated: true
+    uncertainty_field: ers_energy_delta_uncertainty_kj
+    interaction_group: [ers, relative]
+
+  - <<: *pairwise_feature_defaults
+    name: ers_energy_delta_uncertainty_kj
+    definition: Reserved C5 uncertainty for ers_energy_delta_kj_est; unavailable with the estimate.
+    unit: kJ
+    live_safe: null
+    provenance: SIMULATED
+    availability_scope: none
+    source_gated: true
+    interaction_group: [ers, uncertainty]
+
+  - <<: *pairwise_feature_defaults
+    name: unavailable_quantities
+    definition: JSON-compatible API Quantity objects for unavailable pairwise values, each with null value, provenance, unit and reason.
+    unit: null
+    availability_scope: partial
+    interaction_group: [availability]
