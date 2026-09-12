@@ -8,7 +8,7 @@ The contract between the models in `MODELS.md` and the frontend UI. This is the 
 
 Section references (§N) point to `TrackShift AGENTS.md`. Model IDs (M01–M35) and contract IDs (C1–C10) point to `MODELS.md`.
 
-Written against `TrackShift AGENTS.md` including the speed-dependent power envelope; shapes follow the §11–§13, §17, §19, §20.1, §20.2 field definitions.
+Written against `TrackShift AGENTS.md` including the strategic-state and causal-transition formalism (§1, §31) and the speed-dependent power envelope (§11–§13, §17, §19, §20.1, §20.2, §28.1).
 
 ---
 
@@ -81,6 +81,10 @@ Used across all routes. Field names are exact.
 ```
 
 `event` is the snake_case key used in `config/rules/2026/<event>.yaml`. `segment_id` is stable per track (C1).
+
+#### `StrategicState`
+
+All rule, value, planner, and simulation routes consume the same decision-time state. The JSON object groups: `ref`; `energy` (Energy Store distribution, deployed/harvested energy, recharge budget); `tyre` (observed context plus inferred performance state and uncertainty); `gap` (time and distance gap, relative speed, relative acceleration, gap rate); `overtake_state`; `race_control`; `power_envelope`; `rival_state`; and `uncertainty`. A caller may omit a modelled block only when the route can derive it causally from the supplied `ref`; it must never backfill it from future telemetry.
 
 ### 3.5 `Action`
 
@@ -174,7 +178,9 @@ Values shown are illustrative of the shape; the real curve comes from `config/ru
 ```json
 {
   "ers_soc_est_mj":            { "mean": 3.42, "low": 3.05, "high": 3.80, "provenance": "SIMULATED", "unit": "MJ" },
-  "ers_remaining_est_mj":      { "mean": 1.18, "low": 0.90, "high": 1.46, "provenance": "SIMULATED", "unit": "MJ" },
+  "ers_store_capacity_mj":     { "value": 4.00, "provenance": "RULE", "unit": "MJ" },
+  "ers_deploy_budget_remaining_est_mj":  { "mean": 1.18, "low": 0.90, "high": 1.46, "provenance": "SIMULATED", "unit": "MJ" },
+  "ers_harvest_budget_remaining_est_mj": { "mean": 0.55, "low": 0.30, "high": 0.80, "provenance": "SIMULATED", "unit": "MJ" },
   "ers_energy_used_est_mj":    { "mean": 2.82, "provenance": "SIMULATED", "unit": "MJ" },
   "ers_energy_harvested_est_mj": { "mean": 0.94, "provenance": "SIMULATED", "unit": "MJ" },
   "ers_deploy_power_est_kw":   { "mean": 210.0, "low": 150.0, "high": 260.0, "provenance": "SIMULATED", "unit": "kW" },
@@ -288,6 +294,7 @@ The rule configuration as loaded by M18, with sources, for the rule panel.
 ```json
 {
   "event": "british_grand_prix", "year": 2026, "config_version": "rules-2026-bgp-r3",
+  "regulation_snapshot": { "section_issues": ["..."], "effective_for_event": "...", "source_documents": ["..."], "retrieved_at": "..." },
   "overtake": {
     "enabled": true,
     "detection_gap_s": { "value": 1.0, "provenance": "RULE", "unit": "s", "source": "FIA Sporting Regulations 2026 Art. 22.7" },
@@ -297,19 +304,21 @@ The rule configuration as loaded by M18, with sources, for the rule panel.
     "normal":   { "breakpoints_kmh": [0, 290, 340], "max_power_kw": [350, 350, 0], "source": "...", "verified": false },
     "override": { "breakpoints_kmh": [0, 337, 355], "max_power_kw": [350, 350, 0], "source": "...", "verified": false },
     "separation_speed_kmh": 290.0,
+    "competition_adjustments": [],
     "provenance": "RULE"
   },
   "energy": {
     "deploy_limit_per_lap_mj":  { "value": 4.0, "provenance": "RULE", "unit": "MJ", "source": "...", "verified": false },
     "harvest_limit_per_lap_mj": { "value": 2.0, "provenance": "RULE", "unit": "MJ", "source": "...", "verified": false },
+    "store_capacity_mj":        { "value": 4.0, "provenance": "RULE", "unit": "MJ", "source": "...", "verified": false },
     "accounting_window": "lap"
   },
   "race_control": { "overtake_disabled": false },
-  "unverified_keys": ["power_envelope.normal", "power_envelope.override", "energy.deploy_limit_per_lap_mj", "energy.harvest_limit_per_lap_mj"]
+  "unverified_keys": ["power_envelope.normal", "power_envelope.override", "energy.deploy_limit_per_lap_mj", "energy.harvest_limit_per_lap_mj", "energy.store_capacity_mj"]
 }
 ```
 
-Numbers above are placeholders; real values come from the YAML with their sources. The UI must render `source` on hover or in the panel (§21).
+Numbers above are placeholders; real values come from the YAML with their sources. The UI must render the regulation snapshot, configuration version, and source for a selected rule on hover or in the panel (§21).
 
 **Power is not a single number** (§20.1). `power_envelope` is a pair of piecewise-linear curves, and the UI should draw them rather than print a peak figure — the shape is the point. `unverified_keys` lists every key whose `verified` is false; each must be badged, and the page must not claim the system is legal by construction while that list is non-empty (§57).
 
@@ -396,10 +405,12 @@ Query: `include_draws=false` (set true to include uncertainty draws).
         "wet_track_flag": false
       },
 
-      "gap_s":              { "value": 0.78,  "provenance": "DERIVED", "unit": "s" },
+      "time_gap_s":          { "value": 0.78,  "provenance": "DERIVED", "unit": "s" },
+      "distance_gap_m":      { "value": 61.5,  "provenance": "DERIVED", "unit": "m" },
       "closing_rate_mps":   { "value": 1.9,   "provenance": "DERIVED", "unit": "m/s" },
       "relative_speed_to_ahead_mps": { "value": 1.7, "provenance": "DERIVED", "unit": "m/s" },
-      "gap_trend_ahead_s_per_s":     { "value": -0.06, "provenance": "DERIVED", "unit": "s/s" },
+      "relative_acceleration_to_ahead_mps2": { "value": 0.12, "provenance": "DERIVED", "unit": "m/s2" },
+      "gap_rate_ahead_s_per_s":      { "value": -0.06, "provenance": "DERIVED", "unit": "s/s" },
       "delta_speed_kmh":    { "value": 6.2,   "provenance": "DERIVED", "unit": "km/h" },
       "delta_segment_time_s": { "value": -0.11, "provenance": "DERIVED", "unit": "s" },
       "tyre_age_delta_laps": { "value": -4,   "provenance": "OBSERVED", "unit": "laps" },
@@ -424,7 +435,7 @@ Query: `include_draws=false` (set true to include uncertainty draws).
         "tyre": { "compound": "MEDIUM", "life_laps": 12, "stint": 2, "degradation_proxy": { "value": 0.31, "provenance": "DERIVED" } },
         "ers": {
           "ers_soc_est_mj":           { "mean": 3.42, "low": 3.05, "high": 3.80, "provenance": "SIMULATED", "unit": "MJ" },
-          "ers_remaining_est_mj":     { "mean": 1.18, "low": 0.90, "high": 1.46, "provenance": "SIMULATED", "unit": "MJ" },
+          "ers_deploy_budget_remaining_est_mj":  { "mean": 1.18, "low": 0.90, "high": 1.46, "provenance": "SIMULATED", "unit": "MJ" },
           "ers_deploy_power_est_kw":  { "mean": 210.0, "low": 150.0, "high": 260.0, "provenance": "SIMULATED", "unit": "kW" },
           "ers_harvest_power_est_kw": { "mean": 0.0, "low": 0.0, "high": 20.0, "provenance": "SIMULATED", "unit": "kW" },
           "cap_kw":                   { "value": 312.0, "provenance": "RULE", "unit": "kW" },
@@ -442,7 +453,7 @@ Query: `include_draws=false` (set true to include uncertainty draws).
         "tyre": { "compound": "HARD", "life_laps": 16, "stint": 2, "degradation_proxy": { "value": 0.27, "provenance": "DERIVED" } },
         "ers": {
           "ers_soc_est_mj":           { "mean": 2.61, "low": 2.20, "high": 3.02, "provenance": "SIMULATED", "unit": "MJ" },
-          "ers_remaining_est_mj":     { "mean": 0.74, "low": 0.45, "high": 1.03, "provenance": "SIMULATED", "unit": "MJ" },
+          "ers_deploy_budget_remaining_est_mj":  { "mean": 0.09, "low": 0.02, "high": 0.20, "provenance": "SIMULATED", "unit": "MJ" },
           "ers_deploy_power_est_kw":  { "mean": 318.0, "low": 270.0, "high": 360.0, "provenance": "SIMULATED", "unit": "kW" },
           "ers_harvest_power_est_kw": { "mean": 0.0, "low": 0.0, "high": 20.0, "provenance": "SIMULATED", "unit": "kW" },
           "cap_kw":                   { "value": 312.0, "provenance": "RULE", "unit": "kW" },
@@ -463,7 +474,8 @@ Query: `include_draws=false` (set true to include uncertainty draws).
         "p_eligible": { "value": 0.64, "provenance": "INFERRED" },
         "eligibility_margin_s": { "value": 0.22, "provenance": "DERIVED", "unit": "s" },
         "projected_gap_at_detection_s": { "mean": 0.78, "low": 0.61, "high": 0.97, "provenance": "INFERRED", "unit": "s" },
-        "energy_required_to_unlock_kj": { "value": 210.0, "provenance": "SIMULATED", "unit": "kJ" }
+        "energy_required_to_unlock_kj": { "mean": 210.0, "low": 165.0, "high": 275.0, "provenance": "SIMULATED", "unit": "kJ" },
+        "eligibility_fragility_per_kj": { "value": 0.0018, "provenance": "SIMULATED", "unit": "1/kJ" }
       },
 
       "pass": {
@@ -512,7 +524,7 @@ C3. Which actions are legally available in a state.
 Request:
 
 ```json
-{ "ref": { "...StateRef" }, "energy_kj": 1420.0, "gap_s": 0.78, "eligibility": "NOT_ARMED", "race_control": { "overtake_disabled": false } }
+{ "state": { "ref": { "...StateRef" }, "energy": { "energy_kj": 1420.0, "deployed_kj": 0.0, "harvested_kj": 0.0, "recharge_budget_remaining": "..." }, "tyre": { "performance_state": "..." }, "gap": { "time_gap_s": 0.78, "distance_gap_m": 61.5, "relative_speed_mps": 1.7, "relative_acceleration_mps2": 0.12, "gap_rate_s_per_s": -0.06 }, "overtake_state": "NOT_ARMED", "race_control": { "overtake_disabled": false }, "power_envelope": { "regime": "NORMAL" } } }
 ```
 
 Response:
@@ -529,7 +541,7 @@ Response:
 
 C3. Evaluate the Overtake state machine at a state.
 
-Request: same as 5.6 plus optional `projected_gap_s: Uncertain`.
+Request: the same `StrategicState` as 5.6 plus optional causal `projected_gap_s: Uncertain` and a declared short-horizon action sequence when requesting `energy_required_to_unlock`.
 
 Response: the `eligibility` object from the timeline step (5.5).
 
@@ -575,13 +587,15 @@ Response: the `rival_state` object from 5.5.
 
 C5. ΔE → Δt for a segment and action.
 
-Request: `{ "ref": {"...StateRef"}, "action": {"...Action"}, "context": { "tyre_compound": "MEDIUM", "tyre_life_laps": 12, "fuel_proxy_lap": 31, "aero_state": "NORMAL" } }`
+Request: `{ "state": {"...StrategicState"}, "action": {"...Action"}, "context": { "entry_speed_kmh": 287.0, "tyre_compound": "MEDIUM", "tyre_life_laps": 12, "tyre_performance_state": "...", "fuel_proxy_lap": 31, "aero_state": "NORMAL", "applicable_mode": "NORMAL" } }`
 
 Response:
 
 ```json
 { "t_s": { "mean": 9.42, "low": 9.31, "high": 9.55, "provenance": "SIMULATED", "unit": "s" },
   "delta_e_kj": { "mean": 185.0, "low": 160.0, "high": 205.0, "provenance": "SIMULATED", "unit": "kJ" },
+  "harvested_e_kj": { "mean": 0.0, "low": 0.0, "high": 12.0, "provenance": "SIMULATED", "unit": "kJ" },
+  "projected_gap_delta_s": { "mean": -0.03, "low": -0.06, "high": -0.01, "provenance": "SIMULATED", "unit": "s" },
   "calibration_level": "event", "model_version": "twin-event-2026.01" }
 ```
 
@@ -600,6 +614,10 @@ Response:
   "energy_kj":         { "mean": 1420.0, "low": 1310.0, "high": 1535.0, "provenance": "SIMULATED", "unit": "kJ" },
   "ers_deployment_kw": { "mean": 210.0,  "low": 150.0,  "high": 260.0,  "provenance": "SIMULATED", "unit": "kW" },
   "ers_harvest_kw":    { "mean": 0.0,    "low": 0.0,    "high": 20.0,   "provenance": "SIMULATED", "unit": "kW" },
+  "energy_deployed_kj": { "mean": 185.0, "low": 160.0, "high": 205.0, "provenance": "SIMULATED", "unit": "kJ" },
+  "energy_harvested_kj": { "mean": 0.0, "low": 0.0, "high": 12.0, "provenance": "SIMULATED", "unit": "kJ" },
+  "recharge_budget_remaining": { "value": null, "provenance": "RULE", "unit": "kJ", "reason": "not yet encoded for this configuration" },
+  "power_envelope": { "regime": "NORMAL", "power_limit_kw": { "value": null, "provenance": "RULE", "unit": "kW", "reason": "speed-dependent event configuration required" } },
   "fuel_kg":           { "mean": 48.2,   "low": 45.0,   "high": 51.5,   "provenance": "INFERRED",  "unit": "kg" },
   "causal_cutoff_distance_m": 3140.0,
   "model_version": { "twin": "twin-event-2026.01", "fuel": "fuel-causal-2026.01" }
@@ -612,7 +630,7 @@ Uses only telemetry at or before `causal_cutoff_distance_m` (§12). These four a
 
 M22. λ_E along the lap for a given energy, gap, and eligibility — **the headline visual**: the same kJ has different value at different places.
 
-Query: `energy_kj`, `gap_s`, `eligibility` (`NOT_ARMED|ARMED`), optional `lap_index` (0 or 1 within the two-lap horizon).
+Query: `energy_kj`, `time_gap_s`, `eligibility` (`NOT_ARMED|ARMED`), optional `tyre_state`, `relative_speed_mps`, `gap_rate_s_per_s`, `rival_state`, and `lap_index` (0 or 1 within the two-lap horizon). Omitted state dimensions use the declared replay state or grid cell and are returned in the response metadata.
 
 ```json
 {
@@ -637,7 +655,7 @@ M24 planner. Given a state, return the recommended action sequence over the hori
 Request:
 
 ```json
-{ "ref": {"...StateRef"}, "energy_kj": 1420.0, "gap_s": 0.78, "eligibility": "NOT_ARMED",
+{ "state": {"...StrategicState"},
   "rival_state": { "p": { "CONSERVING": 0.12, "BALANCED": 0.31, "DEPLOYING": 0.49, "DERATING": 0.08 } },
   "horizon_laps": 2, "include_baselines": true, "risk": { "cvar_alpha": 0.2 } }
 ```
@@ -660,6 +678,8 @@ Response:
   "cvar_p_ahead": 0.44,
   "rule_violations": 0,
   "latency_ms": 38,
+  "decision": { "dominant_mechanism": "ELIGIBILITY_UNLOCK", "primary_constraint": "NEXT_DETECTION_LINE", "decision_stability": 0.86,
+                "alternatives": [{ "action": { "deploy_level": 0.75, "lift_amount": 0.0 }, "expected_value": 0.59, "regret": 0.04 }] },
   "baselines": [
     { "name": "greedy_attack",       "p_ahead_at_horizon": 0.51, "final_energy_kj": 120.0, "rule_violations": 0 },
     { "name": "longest_straight",    "p_ahead_at_horizon": 0.55, "final_energy_kj": 380.0, "rule_violations": 0 },
@@ -681,7 +701,7 @@ M26, M27. Run seeded episodes from a state under an explicit rival policy.
 Request:
 
 ```json
-{ "ref": {"...StateRef"}, "energy_kj": 1420.0, "gap_s": 0.78, "eligibility": "NOT_ARMED",
+{ "state": {"...StrategicState"},
   "our_policy": "beam_dp", "rival_policy": "DEFEND_CONSERVE", "n_episodes": 200, "seed": 7, "horizon_laps": 2 }
 ```
 
@@ -716,7 +736,8 @@ Per-component metrics for a model-card panel (§55). Sample size is always prese
   "twin":    { "model_version": "twin-event-2026.01", "n_segments_test": 41200,
                "mae_s": 0.041, "rmse_s": 0.058, "by_speed_regime": { "low": 0.05, "mid": 0.04, "high": 0.03 }, "constraint_violations": 0 },
   "planner": { "model_version": "beam-2026.01", "n_episodes": 5000,
-               "p_ahead": 0.63, "final_energy_kj": 410.0, "rule_violations": 0, "cvar_p_ahead": 0.44, "latency_ms_p95": 61 }
+               "p_ahead": 0.63, "final_energy_kj": 410.0, "decision_regret": 0.04, "decision_stability": 0.86, "rule_violations": 0, "cvar_p_ahead": 0.44, "latency_ms_p95": 61 },
+  "strategic_ablation": { "energy_state": "...", "tyre_state": "...", "gap_dynamics": "...", "rule_state": "...", "rival_belief": "...", "future_eligibility": "..." }
 }
 ```
 
@@ -755,7 +776,7 @@ What the UI may and may not send to live routes.
 | raw `wind_direction_deg` | no — send the track-relative head/cross components | §12, §39 |
 | a hardcoded power cap from the client | no — the cap is server-side, from the one evaluator in C3 | §20.1, §32 |
 
-The feature registry (`config/feature_registry.yaml`, M31) is the source of truth for `live_safe`, `decision checkpoint`, `source-gated`, and `availability scope`, and is exported at `GET /meta` under `feature_registry_version`.
+The feature registry (`config/feature_registry.yaml`, M31) is the source of truth for `live_safe`, `decision checkpoint`, `source-gated`, `availability scope`, causal status, counterfactual safety, uncertainty field, regulation version, and interaction group, and is exported at `GET /meta` under `feature_registry_version`.
 
 ---
 
@@ -827,6 +848,8 @@ The UI is part of what makes claims true or false (§57, §58). These are not op
 | Show `override_active_inferred` as a probability with an "inferred" badge; show "unknown" when `discriminable` is false | §20.2 |
 | Present `envelope_violation` as a data-quality warning about our model, never as the car breaking a limit | §28.1 |
 | Use MJ for stored/accumulated energy and kW for power, matching the field names | §11 |
+| Show the applicable power-envelope regime and regulation snapshot (source documents, retrieval date) beside any action constraint | §21, §28 |
+| Label energy-to-unlock, eligibility fragility, and alternate-policy results as modelled or simulated rather than observed race facts | §22, §40, §56 |
 
 ---
 

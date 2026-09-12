@@ -22,15 +22,23 @@ The system is not a generic lap-time predictor.
 
 The objective is race position over a multi-segment and approximately two-lap strategic horizon.
 
+The planner operates on a causal strategic state over track segments:
+
+\[
+s_k = [k, E_k, T_k, g_k, \Delta v_k, \dot g_k, \epsilon_k, b_k, r_k, u_k]
+\]
+
+where (T_k) is the modelled tyre-performance state, (b_k) is the belief over rival tactical state, (r_k) is the applicable regulation/power-limit state, and (u_k) records decision-relevant uncertainty. The action is a feasible deployment, harvest, and lift/coast choice, and transitions must use only information available at the decision point.
+
 The central strategic quantity is the energy shadow price:
 
 \[
-\lambda_E(k,e,g,\epsilon)
+\lambda_E(k,e,T,g,\Delta v,\dot g,\epsilon,b,r)
 =
 \frac{
-V(k,e+\Delta e,g,\epsilon)
+V(k,e+\Delta e,T,g,\Delta v,\dot g,\epsilon,b,r)
 -
-V(k,e,g,\epsilon)
+V(k,e,T,g,\Delta v,\dot g,\epsilon,b,r)
 }{
 \Delta e
 }
@@ -44,6 +52,8 @@ where:
 - \(\epsilon\) is Overtake eligibility state,
 - \(V\) is the value of the state,
 - \(\lambda_E\) estimates how valuable additional electrical energy is at that location.
+
+It is a marginal strategic value, not merely immediate lap-time gain. Equal energy quantities can differ in value because tyre condition, projected gap at a future Detection Line, rival behaviour, and regulation state differ.
 
 The project should demonstrate that the same amount of electrical energy can have very different strategic value depending on where it is deployed.
 
@@ -263,6 +273,8 @@ Additional sources may include:
 - FIA race-control/event documents.
 
 Every externally sourced field must record its provenance.
+
+FIA regulations are first-class model inputs. Each event/session rule configuration must record its regulation section and issue, publication/effective date, source document, retrieval date, and encoded configuration version. Keep the published regulation, applicable competition configuration, and TrackShift rule encoding separately auditable.
 
 Do not silently mix sources.
 
@@ -541,8 +553,10 @@ ers_harvest_power_est_kw
 ers_energy_used_est_mj
 ers_energy_harvested_est_mj
 ers_soc_est_mj
-ers_remaining_est_mj
 ers_soc_uncertainty_mj
+ers_store_capacity_mj
+ers_deploy_budget_remaining_est_mj
+ers_harvest_budget_remaining_est_mj
 
 ers_mode_inferred
 overtake_available
@@ -562,9 +576,11 @@ ers_deploy_power_est_kw        estimated instantaneous electrical power to the w
 ers_harvest_power_est_kw       estimated instantaneous recovery power
 ers_energy_used_est_mj         cumulative deployed electrical energy within the current accounting window
 ers_energy_harvested_est_mj    cumulative recovered electrical energy within the same window
-ers_soc_est_mj                 estimated usable store level
-ers_remaining_est_mj           regulatory allowance still available in the accounting window
-ers_soc_uncertainty_mj         uncertainty band on ers_soc_est_mj
+ers_soc_est_mj                       estimated usable store level
+ers_soc_uncertainty_mj              uncertainty band on ers_soc_est_mj
+ers_store_capacity_mj               the physical bound on ers_soc_est_mj; RULE
+ers_deploy_budget_remaining_est_mj  regulatory deploy allowance still available in the accounting window
+ers_harvest_budget_remaining_est_mj regulatory harvest/recharge allowance still available in the same window
 ers_mode_inferred              latent deployment mode; see §20.1
 overtake_available             whether Overtake may legally be used in this state; RULE, from the rule engine
 override_active_inferred       whether the car appears to be using the override envelope; see §20.2
@@ -572,7 +588,25 @@ override_active_inferred       whether the car appears to be using the override 
 
 `overtake_available` is the one field in this group that is **not** an estimate. It is `RULE` provenance, produced by the rule engine from event configuration and the eligibility state machine (§20, §32). It must never be inferred from a raw telemetry channel.
 
-`ers_remaining_est_mj` is a hybrid: the allowance is `RULE`, the consumption is `SIMULATED`, so the difference is tagged `SIMULATED` and the allowance it was computed against is recorded alongside it.
+`ers_deploy_budget_remaining_est_mj` and `ers_harvest_budget_remaining_est_mj` are each a hybrid: the allowance is `RULE`, the consumption or recovery against it is `SIMULATED`, so the remaining figure is tagged `SIMULATED` and the allowance it was computed against is recorded alongside it. The deploy and harvest budgets are separate regulatory constraints (§28) and must not be collapsed into one number.
+
+The planner-facing strategic-state interface may additionally expose only modelled quantities such as:
+
+```text
+tyre_state_est
+tyre_state_uncertainty
+cap_kw                    # max_electrical_power_kw at the current speed and mode; see §20.1
+applicable_mode            # NORMAL | OVERRIDE; which envelope curve is in force
+relative_speed_to_ahead_mps
+gap_rate_ahead_s_per_s
+projected_gap_at_detection_s
+overtake_activation_state
+state_confidence
+```
+
+`cap_kw` and `applicable_mode` are not independent estimates: they are the output of `max_electrical_power_kw(speed_kmh, mode, event_rules)` (§20.1, §32), read into the planner-facing interface rather than recomputed. `ers_soc_uncertainty_mj` (§11) already covers ERS uncertainty; this interface does not duplicate it under a second name.
+
+These are not raw telemetry fields. Each must retain `DERIVED`, `INFERRED`, `SIMULATED`, or `RULE` provenance and its live-availability contract.
 
 The following suggested channels are source-gated extensions, not part of the current core schema:
 
@@ -666,6 +700,8 @@ gap_trend_behind_s_per_s
 
 These features must be calculated from aligned contemporaneous or strictly trailing observations. Do not use centered windows or future telemetry. Relative speed must not be skipped: it is a core short-horizon signal for both attack and defence, and complements rather than duplicates the later pass-probability model.
 
+Gap representation is explicit: `distance_gap_m`, `time_gap_s`, `relative_speed_mps`, `relative_acceleration_mps2`, and `gap_rate_s_per_s` are related but not interchangeable. The feature registry must identify whether each is distance- or time-based and instantaneous, trailing-window, or segment-based. A projected Detection-Line gap must be generated causally from current and trailing information; the realized future gap is an evaluation target only.
+
 Derive regulated aero and energy context without conflating regulation eras:
 
 ```text
@@ -675,9 +711,9 @@ overtake_eligible
 overtake_state
 fuel_load_kg_est
 fuel_load_uncertainty_kg
-ers_energy_state_est_kj
-ers_deployment_est_kw
-ers_harvest_est_kw
+ers_soc_est_mj
+ers_deploy_power_est_kw
+ers_harvest_power_est_kw
 ```
 
 For 2022 to 2025, DRS values are historical covariates only. For 2026, derive `overtake_eligible` and `overtake_state` exclusively through the rule engine and FIA event configuration, never from a raw DRS channel. Fuel and ERS estimates must be causal, uncertainty-aware, and tagged `INFERRED` or `SIMULATED`.
@@ -940,9 +976,9 @@ defender_tyre_degradation_proxy
 attacker_fuel_load_kg_est
 defender_fuel_load_kg_est
 fuel_load_delta_kg_est
-attacker_ers_energy_state_est_kj
-defender_ers_energy_state_est_kj
-ers_energy_delta_kj_est
+attacker_ers_soc_est_mj
+defender_ers_soc_est_mj
+ers_soc_delta_mj_est
 
 recent_pace_delta
 wind_head_component_mps
@@ -1090,9 +1126,9 @@ defender_tyre_degradation_proxy
 attacker_fuel_load_kg_est
 defender_fuel_load_kg_est
 fuel_load_delta_kg_est
-attacker_ers_energy_state_est_kj
-defender_ers_energy_state_est_kj
-ers_energy_delta_kj_est
+attacker_ers_soc_est_mj
+defender_ers_soc_est_mj
+ers_soc_delta_mj_est
 
 air_temperature
 track_temperature
@@ -1328,10 +1364,24 @@ Every regulatory key should include or reference its source.
 Example structure:
 
 ```yaml
+regulation_snapshot:
+  season: 2026
+  section_issues: ...
+  effective_for_event: ...
+  source_documents: ...
+  retrieved_at: ...
+
+competition:
+  event: ...
+  session_type: ...
+  configuration_version: ...
+
 overtake:
+  enabled: ...
   detection_gap_s: ...
   detection_line_m: ...
   activation_line_m: ...
+  race_control_conditions: ...
   source: ...
 
 power_envelope:
@@ -1356,6 +1406,9 @@ energy_budget:
   verified: false
 
 mgu_k:
+  power_envelope: ...
+  energy_store_limits: ...
+  recharge_limits: ...
   source: ...
 ```
 
@@ -1408,6 +1461,8 @@ P(g_{detection}<g_{threshold})
 when projected gap is uncertain.
 
 Do not reduce eligibility to a deterministic boolean when uncertainty is material.
+
+`energy_required_to_unlock` means the estimated incremental deployable energy required, under a declared feasible short-horizon policy and target probability, to make future Detection-Line eligibility likely enough. It is not the physical energy needed to complete a pass. Store its uncertainty and, where useful, `eligibility_fragility_per_kj`, the local sensitivity of eligibility probability to energy allocation.
 
 ---
 
@@ -1466,8 +1521,8 @@ tyre_degradation_proxy
 
 fuel_load_kg_est
 fuel_load_uncertainty_kg
-ers_energy_state_est_kj
-ers_energy_state_uncertainty_kj
+ers_soc_est_mj
+ers_soc_uncertainty_mj
 
 wind_head_component_mps
 wind_cross_component_mps
@@ -1636,6 +1691,24 @@ SIMULATED
 
 unless measured values are explicitly supplied.
 
+The energy transition must distinguish Energy Store state, segment deployment, and permitted recharge budget. These are three separate quantities and must not be collapsed into one:
+
+\[
+E_{k+1} = E_k + \eta_h P_{harvest,k}\Delta t - \frac{P_{deploy,k}\Delta t}{\eta_d}
+\]
+
+subject to the encoded Energy Store bounds and event/session-specific regulation configuration. A recharge-per-lap limit is not battery capacity, and a deployment action is not battery state. Track the following separately, each with its own uncertainty:
+
+```text
+ers_soc_est_mj                       current stored energy (bounded by ers_store_capacity_mj, RULE)
+ers_deploy_budget_remaining_est_mj   how much more may be deployed in the current accounting window
+ers_harvest_budget_remaining_est_mj  how much more may be recovered in the current accounting window
+```
+
+The deploy budget, the harvest budget, and the store capacity are three distinct regulatory constraints. A car can be short of deploy budget while its store is nearly full, or vice versa; conflating them produces a twin that is right about total energy and wrong about what the car may legally do with it next.
+
+Electrical deployment must also satisfy the speed-, mode-, and competition-dependent power envelope \(0 \leq P_{deploy,k} \leq P_{ERS}^{max}(v_k, mode, competition)\). Do not hard-code one universal 2026 deployment or recharge limit. This is the same requirement as §20.1's `max_electrical_power_kw(speed, mode, event_rules)`; \(P_{ERS}^{max}\) is that function's notation in the value-function formalism, and the two names must resolve to one implementation (§32).
+
 ## 28.1 The envelope constrains the twin
 
 The estimated electrical contribution is not free to take any value. At every sample the regulatory cap for the applicable mode (§20.1) is an upper bound on legitimate deployment.
@@ -1726,6 +1799,8 @@ At minimum, calibration and residual models must control for entry speed, segmen
 
 The winner must remain physically plausible.
 
+Where supported, test a causal transition from energy and tyre state to both segment time and future gap, for example \(\Delta g_D=f(E_{deploy},T_k,\Delta v,track)\), where \(g_D\) is the projected Detection-Line gap. Retain tyre interactions only when they improve held-out decision or transition metrics, not merely because they are plausible.
+
 ---
 
 # 31. Dynamic programming
@@ -1741,7 +1816,7 @@ gap g
 Overtake eligibility epsilon
 ```
 
-Additional state variables may be included where required by legal energy accounting.
+Additional state variables may be included where required by legal energy accounting. The richer state may add tyre state, relative speed, gap rate, power-limit/rule state, rival belief, uncertainty, and remaining horizon. Discretize only variables that demonstrate a decision benefit and whose transitions are sufficiently reliable; the minimum sufficient state is preferred.
 
 Actions may include:
 
@@ -1782,6 +1857,14 @@ Illegal actions must be removed before scoring.
 Do not assign a low reward to illegal actions.
 
 Illegal actions must not enter the candidate action set.
+
+The full value formulation is stochastic when uncertainty materially changes the decision:
+
+\[
+V_k(s)=\max_{a\in A_{legal}(s)} \mathbb{E}[R(s,a,\xi)+V_{k+1}(F(s,a,\xi))]
+\]
+
+A deterministic or discretized DP remains acceptable for the MVP.
 
 ---
 
@@ -2010,6 +2093,8 @@ All rows belonging to one battle stay in the same split.
 
 Final test events must remain untouched until model and feature choices are frozen.
 
+Counterfactual quantities, including projected gaps under extra deployment, policy-specific pass probability, and `energy_required_to_unlock`, must be produced by a live-compatible transition model. Do not calculate them by working backwards from the observed future trajectory. Realized future gap, tyre degradation, deployment, pass outcome, braking point, and lap time are targets or offline analysis only.
+
 ---
 
 # 41. Regulation-era shift
@@ -2025,6 +2110,8 @@ Do not assume:
 ```text
 historical DRS behaviour == 2026 Overtake behaviour
 ```
+
+Regulation-era shift and regulation-version drift are separate. The former is the 2022 to 2025 DRS-era versus 2026 Overtake/energy domain change; the latter is a change between encoded 2026 rule snapshots. A model trained under one configuration must not silently be evaluated as if it used another.
 
 Potential approaches include:
 
@@ -2183,6 +2270,11 @@ decision checkpoint
 live_safe
 provenance
 uncertainty field
+causal status
+counterfactual safe
+regulation version
+regulation source
+interaction group
 consuming models
 ```
 
@@ -2499,6 +2591,8 @@ latency
 
 Always report sample size.
 
+Strategic evaluation must include an ablation ladder that tests the contribution of energy state, tyre representation, relative-speed/gap dynamics, 2026 rule state, rival belief, future eligibility value, counterattack modelling, and uncertainty-aware planning. Report terminal (P(ahead)), decision regret against feasible alternatives, rule violations, latency, and decision stability alongside component metrics. The central hypothesis is that the strategic marginal value of electrical energy is state-dependent rather than constant.
+
 ---
 
 # 56. Simulator
@@ -2515,6 +2609,8 @@ It should:
 - record seeded episodes.
 
 The simulator is not proof of real-world performance.
+
+For counterfactual policy comparisons, freeze one live decision state and change only the feasible future action or policy. Propagate the same environment and compare downstream energy, tyre, gap, eligibility, pass, counterattack, and terminal-position outcomes. Results generated this way must be labelled `SIMULATED`.
 
 Its assumptions must be disclosed.
 
@@ -2536,6 +2632,8 @@ The rival filter was evaluated using synthetic labelled trajectories and real pr
 The energy state is inferred/simulated from public telemetry rather than observed directly.
 
 The electrical power envelope is modelled as speed-dependent, using values recorded in event configuration with their sources and verification status.
+
+Counterfactual recommendations are simulator outputs under stated assumptions, not observed alternate race outcomes.
 ```
 
 ---
@@ -2560,6 +2658,8 @@ we observed a rival's deployment mode, when it was inferred from an envelope com
 electrical power is capped at a single constant value
 
 simulator performance proves real race performance
+
+our counterfactual simulator reproduces the actual alternate race
 
 one global accuracy number validates the entire system
 ```
