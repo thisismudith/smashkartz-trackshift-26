@@ -4,7 +4,7 @@ Companion to `TrackShift AGENTS.md`. That file is the engineering contract and i
 
 Training procedures are deliberately out of scope here. Each model gets its own design note when its phase starts.
 
-The UI-facing surface of every model listed here is specified in `API.md`. `MODELS.md` says who builds what; `API.md` says what the frontend can call. Per-owner build plans live in their own files: `CHECKPOINTS_TANVEER.md` covers Owner B's rules, pass, energy, and foundations; `CHECKPOINTS_RISHABH.md` covers Owner A's rival-state, value/decision, and foundation work.
+The UI-facing surface of every model listed here is specified in `API.md`. `MODELS.md` says who builds what; `API.md` says what the frontend can call. Per-owner build plans live in their own files: `CHECKPOINTS_TANVEER.md` covers Owner B's rules, pass, energy, and foundations; `CHECKPOINTS_RISHABH.md` covers Owner A's rival-state, value/decision, and foundation work; `CHECKPOINTS_INTEGRATION.md` defines the final unified API, artifact, replay, and release process.
 
 Written against `TrackShift AGENTS.md` as of commit `7d2f5fd`. If that file changes, re-run the coverage checkpoint in §9 before building against this plan.
 
@@ -504,7 +504,7 @@ Answers change the plan in the stated way. Until answered, the assumption in the
 | Q5 | ~~Who owns UI / demo?~~ **Resolved:** a third contributor (Owner C), integrating through `API.md` only. | — |
 | Q6 | Hackathon date (§61 mentions one)? | Unknown; milestone table in §6.1 is ordered but undated. |
 | Q7 | ~~Should DP move to Tanveer?~~ **Resolved:** stays with Rishabh. Chain V is self-contained and develops against stubs of C3/C4/C5, so it does not block on Tanveer's chains. | — |
-| Q8 | ~~Who writes the per-owner and integration build plans?~~ **Resolved:** Tanveer's is `CHECKPOINTS_TANVEER.md`; Rishabh's is `CHECKPOINTS_RISHABH.md` for M02, M05, M06, M08, M09, M09b, M13 rival side, and M22–M29. The joint integration plan is written after both, and **integration is owned by Rishabh**. | — |
+| Q8 | ~~Who writes the per-owner and integration build plans?~~ **Resolved:** Tanveer's is `CHECKPOINTS_TANVEER.md`; Rishabh's is `CHECKPOINTS_RISHABH.md` for M02, M05, M06, M08, M09, M09b, M13 rival side, and M22–M29; the joint plan is `CHECKPOINTS_INTEGRATION.md`. **Integration is owned by Rishabh.** | — |
 
 ---
 
