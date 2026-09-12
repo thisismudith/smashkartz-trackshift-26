@@ -43,6 +43,7 @@ __all__ = [
     "available_events",
     "resolve",
     "unsourced_keys",
+    "validate_overtake_zones",
     "validate_event_file",
 ]
 
@@ -186,6 +187,9 @@ def resolve(rules: dict, key: str) -> ResolvedValue:
     """
     node: Any = rules
     for part in key.split("."):
+        if isinstance(node, list) and part.isdigit() and int(part) < len(node):
+            node = node[int(part)]
+            continue
         if not isinstance(node, dict) or part not in node:
             near = [k for k, _ in _walk(rules) if key.split(".")[-1] in k]
             hint = f" Near matches: {', '.join(sorted(near)[:4])}." if near else ""
@@ -232,6 +236,69 @@ def unsourced_keys(rules: dict) -> list[str]:
             if node.get("value_source") not in CLAIMABLE_TIERS]
 
 
+def _numeric_value(node: Any) -> float | None:
+    """Return a configured scalar number, but leave unavailable values alone."""
+    if not isinstance(node, dict):
+        return None
+    value = node.get("value")
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def validate_overtake_zones(zones: Any) -> list[str]:
+    """Check that configured Overtake activation/end intervals are unambiguous.
+
+    Detection lines may honestly remain unavailable, so validation deliberately
+    does not demand them. When Activation and zone-end proxies are supplied,
+    however, they must form sorted, non-overlapping intervals. This prevents a
+    Tier-C artifact split from becoming two mutually incompatible rules.
+    """
+    if zones is None:
+        return []
+    if not isinstance(zones, list):
+        return ["overtake.zones must be a list"]
+
+    problems: list[str] = []
+    previous_activation: float | None = None
+    previous_end: float | None = None
+    for index, zone in enumerate(zones):
+        if not isinstance(zone, dict):
+            problems.append(f"overtake.zones[{index}] must be a mapping")
+            continue
+        activation = _numeric_value(zone.get("activation_line_m"))
+        zone_end = _numeric_value(zone.get("zone_end_m"))
+        if activation is None:
+            continue
+        if zone_end is not None and zone_end <= activation:
+            problems.append(
+                f"overtake.zones[{index}] zone_end_m ({zone_end:g}) must be greater than "
+                f"activation_line_m ({activation:g})"
+            )
+        if previous_activation is not None:
+            if activation == previous_activation:
+                problems.append(
+                    f"overtake.zones[{index}] duplicates activation_line_m ({activation:g})"
+                )
+            elif activation < previous_activation:
+                problems.append(
+                    f"overtake.zones[{index}] is unsorted: activation_line_m ({activation:g}) "
+                    f"is before prior activation_line_m ({previous_activation:g})"
+                )
+            if previous_end is not None and activation < previous_end:
+                problems.append(
+                    f"overtake.zones[{index}] overlaps the prior zone: activation_line_m "
+                    f"({activation:g}) is before prior zone_end_m ({previous_end:g})"
+                )
+        previous_activation = activation
+        if zone_end is not None:
+            previous_end = zone_end
+    return problems
+
+
 def validate_event_file(path: Path) -> list[str]:
     """Structural problems in one event file. Empty means valid."""
     problems: list[str] = []
@@ -246,6 +313,11 @@ def validate_event_file(path: Path) -> list[str]:
 
     if data.get("event") and data["event"] != path.stem:
         problems.append(f"{path.name}: event key '{data['event']}' does not match the file name")
+
+    problems.extend(
+        f"{path.name}: {problem}"
+        for problem in validate_overtake_zones((data.get("overtake") or {}).get("zones"))
+    )
 
     for dotted, node in _walk(data):
         tier = node.get("value_source")

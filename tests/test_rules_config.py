@@ -30,6 +30,7 @@ from trackshift.rules.config import (  # noqa: E402
     resolve,
     unsourced_keys,
     validate_event_file,
+    validate_overtake_zones,
 )
 
 SEASON = "2026"
@@ -140,6 +141,52 @@ def test_proxy_historical_drs_is_never_claimable():
     never a claim."""
     assert "PROXY_HISTORICAL_DRS" in TIERS
     assert "PROXY_HISTORICAL_DRS" not in CLAIMABLE_TIERS
+
+
+def test_strict_mode_rejects_a_configured_tier_c_activation_proxy():
+    rules = load_event_rules("italian_grand_prix", SEASON, strict=True)
+    with pytest.raises(UnsourcedValue, match="PROXY_HISTORICAL_DRS"):
+        resolve(rules, "overtake.zones.1.activation_line_m")
+
+
+def test_tier_c_activation_and_zone_end_are_configured_without_fake_detection():
+    zone = load_event_rules("italian_grand_prix", SEASON)["overtake"]["zones"][1]
+    assert zone["activation_line_m"]["value"] == 3000.0
+    assert zone["activation_line_m"]["value_source"] == "PROXY_HISTORICAL_DRS"
+    assert zone["zone_end_m"]["value"] == 3800.0
+    assert zone["zone_end_m"]["value_source"] == "PROXY_HISTORICAL_DRS"
+    assert zone["detection_line_m"]["value"] is None
+    assert zone["detection_line_m"]["value_source"] == "UNVERIFIED"
+    assert "does not derive Detection Lines" in zone["detection_line_m"]["source"]
+
+
+def test_proxy_zones_must_be_unique_sorted_non_overlapping_and_nonempty():
+    def zone(activation: float, end: float) -> dict:
+        return {
+            "activation_line_m": {"value": activation},
+            "zone_end_m": {"value": end},
+        }
+
+    assert any("duplicates activation_line_m" in problem for problem in validate_overtake_zones([
+        zone(3500.0, 3900.0), zone(3500.0, 4000.0),
+    ]))
+    assert any("overlaps" in problem for problem in validate_overtake_zones([
+        zone(3500.0, 3900.0), zone(3800.0, 4100.0),
+    ]))
+    assert any("must be greater" in problem for problem in validate_overtake_zones([
+        zone(3500.0, 3500.0),
+    ]))
+    assert any("unsorted" in problem for problem in validate_overtake_zones([
+        zone(4000.0, 4200.0), zone(3500.0, 3900.0),
+    ]))
+
+
+def test_consolidated_proxy_configuration_has_one_australian_active_zone_per_interval():
+    zones = load_event_rules("australian_grand_prix", SEASON)["overtake"]["zones"]
+    assert [(zone["activation_line_m"]["value"], zone["zone_end_m"]["value"])
+            for zone in zones] == [
+        (560.0, 940.0), (2520.0, 3180.0), (3520.0, 3960.0), (4840.0, 5240.0),
+    ]
 
 
 def test_unsourced_keys_lists_what_blocks_strict_mode():
@@ -261,4 +308,4 @@ def test_race_control_cannot_supply_line_positions():
     and Activation lines stay UNVERIFIED until an FIA event note is found."""
     zone = load_event_rules("british_grand_prix", SEASON)["overtake"]["zones"][0]
     assert zone["detection_line_m"]["value_source"] == "UNVERIFIED"
-    assert zone["activation_line_m"]["value_source"] == "UNVERIFIED"
+    assert zone["activation_line_m"]["value_source"] == "PROXY_HISTORICAL_DRS"

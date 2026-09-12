@@ -40,7 +40,10 @@ OUT = ROOT / "data" / "processed" / "overtake_state"
 RAW = ROOT / "data" / "raw"
 BRITISH_EVENT = "British Grand Prix"
 KEYS = ["year", "event", "session", "driver", "lap", "distance_m"]
-STATE_COLUMNS = ["overtake_state", "overtake_eligible", "historical_drs_eligible", "historical_drs_open"]
+STATE_COLUMNS = [
+    "overtake_state", "overtake_eligible", "overtake_unavailable_reason",
+    "historical_drs_eligible", "historical_drs_open",
+]
 
 
 def _number(value: Any) -> float | None:
@@ -211,6 +214,11 @@ def apply_2026(frame, rules: Mapping[str, Any], control_messages: list[dict[str,
     result = frame[KEYS].copy()
     for column in STATE_COLUMNS:
         result[column] = None
+    unavailable_reason = (
+        "required Detection Line unavailable: historical DRS active-zone derivation "
+        "supplies Activation/zone-end proxies only; no authoritative historical "
+        "Detection Line is configured"
+    )
     unavailable_line_rows = 0
     disabled_rows = 0
 
@@ -253,6 +261,7 @@ def apply_2026(frame, rules: Mapping[str, Any], control_messages: list[dict[str,
                 # An enabled car without a configured line cannot be assigned a
                 # 2026 state safely.  Do not manufacture a line or consult DRS.
                 unavailable_line_rows += 1
+                result.at[index, "overtake_unavailable_reason"] = unavailable_reason
             previous_disabled = disabled
             previous_position, previous_gap = current_position, current_gap
 
@@ -268,6 +277,7 @@ def apply_historical(frame, control_messages: list[dict[str, Any]]):
     result = frame[KEYS].copy()
     result["overtake_state"] = None
     result["overtake_eligible"] = None
+    result["overtake_unavailable_reason"] = None
     result["historical_drs_eligible"] = None
     result["historical_drs_open"] = None
     for _, group in frame.groupby(["driver"], sort=False):

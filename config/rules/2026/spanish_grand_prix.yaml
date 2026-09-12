@@ -56,11 +56,13 @@ overtake:
       detection_line_m:
         value: null
         value_source: UNVERIFIED
-        source: "TODO: FIA event notes 2026 Spanish Grand Prix"
+        source: "No Detection Line is configured: Spanish GP has incomplete source geometry and no usable historical circuit match; it remains excluded from Tier-C configuration."
+        note: "Retained null: no heuristic Detection-Line fallback is permitted."
       activation_line_m:
         value: null
         value_source: UNVERIFIED
-        source: "TODO: FIA event notes 2026 Spanish Grand Prix"
+        source: "No Activation proxy accepted: Spanish GP source geometry is incomplete and no usable historical circuit match exists; it remains excluded from Tier-C configuration."
+        note: "Retained null pending complete geometry and FIA line documentation."
 
 race_control:
   overtake_windows_source: "artifacts/race_control/2026_spanish_grand_prix.json"
