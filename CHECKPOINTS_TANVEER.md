@@ -52,7 +52,7 @@ Each checkpoint has the same shape:
 |---|---|---|---|
 | 00 | Environment and dependencies | — | ✅ |
 | 01 | Local data audit | §51, §63 | ☐ |
-| 02 | Registries scaffold | M31 | ☐ |
+| 02 | Registries scaffold | M31 | ✅ |
 | 03 | Rule config skeleton + **speed-dependent power envelope**, all tracks | M18 | ☐ |
 | 04 | Build the 20 m lake | Phase 2 | ☐ |
 | 05 | **Track segmentation — freeze `segment_id`** | M03 | ☐ |
@@ -385,6 +385,18 @@ Pre-register all seven §11 source-gated channels with `availability_scope: none
 
 `config/data_registry.yaml`, `config/feature_registry.yaml`, `src/trackshift/data/registry.py`, `tests/test_registry.py`.
 
+### ✅ Completed
+
+30 registry tests pass; `validate_registries()` reports no problems. 55 features and 13 datasets registered (3 built, 10 planned).
+
+Seeded from the **real** 48-column `telemetry_20m` Parquet rather than an aspirational list, since drift between what is registered and what is written is the failure this registry exists to prevent.
+
+`assert_registered` is wired into `build_phase2_dataset.py` as a hard build failure, not a lint. Verified by temporarily unregistering `speed_kmh`: the build stopped and named the column. `--allow-unregistered` remains for local experiments only.
+
+`validate_registries()` also enforces invariants YAML cannot express: `live_safe` may be null only when `availability_scope: none`; an `ACAUSAL` feature can never be `live_safe`; `availability_scope: none` implies `source_gated`; and names differing only by a unit suffix are flagged as near-duplicates.
+
+**Found while seeding:** every lap-metadata column in the lake was silently null. `laptimes.json` is columnar, `load_lap_metadata` expected records, and the type check returned all-`None` with no error. Fixed before the registry could be written against a false schema — see the commit `fix: lap metadata was silently null for every lap`. Parquet went from 41 to 48 columns.
+
 ---
 
 # CP-03 — Rule config skeleton, all 14 tracks (M18)
@@ -570,12 +582,24 @@ None — this is deterministic resampling. Policy already fixed in `resample.py`
 
 ### ✅ Check
 
-- Acceptance rate **>95%** overall; inspect `rejected_laps.csv` if lower
-- Rejection codes are dominated by `NON_MONOTONIC_DISTANCE` and `INSUFFICIENT_VALID_SAMPLES`, not `MISSING_TEL_OBJECT` (which would mean broken files)
-- `run_manifest.json` present per output root with `schema_version: phase2_20m_v1`
-- Row count per lap ≈ `lap_length_m / 20` ± 2
-- `gap_ahead_m` non-null rate >95% in Race sessions; near 0 in Qualifying is expected and fine
-- Two builds of the same session produce identical Parquet content hashes
+Run `python scripts/data/verify_lake.py`, which checks all nine gates and writes
+`verify_report.json`. Two gates from the earlier draft measured the *scope built*
+rather than the data, and failed on a correct lake:
+
+- ~~Acceptance rate >95%~~ — **rejection is structural.** Lap 1 starts from a grid slot and pit in/out laps traverse a different path, so the validator rejects them by design. Measured on 2026 British GP Race (HAM + ANT): 104 laps, 97 accepted = **93.27%**, and all 7 rejections were lap 1 or a pit lap. Judge the **codes**, not the rate.
+- ~~`gap_ahead_m` non-null >95% in Race~~ — **the leader has no car ahead.** The same build scored 90.7%, but every null belonged to ANT while running P1, and non-leader rows were **100.00%** non-null. With two drivers one leads a large share; with 22 cars only ~1/22 of rows are leader rows and identical data scores ~95.5%. The gate was measuring field size. The exact property is checked instead.
+
+The nine gates actually enforced:
+
+- `run_manifest.json` present with `schema_version: phase2_20m_v1`, and zero failed sessions
+- No broken-file rejection codes (`MISSING_TEL_OBJECT`, `MALFORMED_JSON`, `MISSING_REQUIRED_FIELD`, `ARRAY_LENGTH_MISMATCH`) — these would mean damaged files, unlike the structural codes
+- Every rejection code is recognised, so a new failure mode cannot slip through unnoticed
+- Row count per lap = `lap_length_m / spacing` ± 2 for >99% of laps
+- **`gap_ahead_m` present for every non-leader row**, and null only where the driver leads
+- Lap metadata is joined and not silently null — pins the CP-02 regression
+- Every written column is in the feature registry
+- `distance_m` lies on exact multiples of the spacing
+- Two builds of the same session produce identical content hashes — **verified: same 48 columns, same 28,140 rows, identical SHA-256.** MODELS.md §6.3 depends on this, since both owners build locally and compare.
 
 ### ⚠️ If output is bad
 
