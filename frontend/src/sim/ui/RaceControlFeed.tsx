@@ -13,7 +13,12 @@ function fmtTime(s: number): string {
  * scrollable window rather than the plan's full 25-kind classifier -- see the
  * classify() subset in scripts/simdata/rcm.py for exactly which message kinds are
  * recognised versus falling through to "other". */
-export function RaceControlFeed({ events, sessionTime }: { events: RaceEvent[]; sessionTime: number }) {
+/** `showTitle` is off when the feed sits inside a CollapsiblePanel, which already
+ * renders the heading -- otherwise the words appear twice. */
+export function RaceControlFeed(
+  { events, sessionTime, showTitle = true }:
+  { events: RaceEvent[]; sessionTime: number; showTitle?: boolean },
+) {
   // Pre-race administrative chatter (pit lane opening, formation-lap notices) carries
   // a negative session time once normalised to lights-out at t=0 -- genuine data, but
   // not meaningful race-progress commentary, so the feed starts at the green flag.
@@ -23,7 +28,7 @@ export function RaceControlFeed({ events, sessionTime }: { events: RaceEvent[]; 
     .slice(0, 40);
   return (
     <div className={styles.panel}>
-      <div className={styles.panelTitle}>Race control</div>
+      {showTitle ? <div className={styles.panelTitle}>Race control</div> : null}
       <ul className={styles.feed}>
         {visible.map((e, i) => (
           <li key={`${e.sessionTime}-${i}`} data-kind={e.kind}>

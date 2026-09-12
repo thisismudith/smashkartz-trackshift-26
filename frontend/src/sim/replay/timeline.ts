@@ -28,6 +28,7 @@ interface DriverLaps {
 /** Half the lateral separation between the two starting-grid columns, metres. */
 const GRID_LATERAL_M = 1.8;
 
+
 function decodeAll(bin: ArrayBuffer, drivers: RawDriverEntry[]): Map<string, DriverLaps> {
   const out = new Map<string, DriverLaps>();
   for (const d of drivers) {
@@ -104,6 +105,11 @@ export class ReplayTimeline implements RaceTimeline {
   private retiredOrder: string[] = [];
   private finishOrder: string[] = [];
   private parkIndex = new Map<string, number>();
+  /** Grid order actually used for placement. Falls back to lap-1 finishing order
+   * when the track model's own grid detection covered too little of the field. */
+  private gridOrder: string[] = [];
+  /** Drivers whose lap 1 carries a pit-exit time: they really did start from the lane. */
+  private pitStarters = new Set<string>();
 
   constructor(manifest: RawSessionManifest, track: TrackModel, bin: ArrayBuffer) {
     this.runId = `obs:${manifest.trackSlug}/${manifest.session.toLowerCase()}`;
@@ -150,6 +156,30 @@ export class ReplayTimeline implements RaceTimeline {
       const last = dl.laps[dl.laps.length - 1];
       if (last?.sesT !== null && last?.sesT !== undefined) finishes.push({ driver, t: last.sesT });
     }
+    // A driver started from the pit lane iff their LAP 1 has a pit-exit time. That is
+    // a measured field; absence from the track model's grid order is not. Grid
+    // detection needs clean lap-1 positions, and on the sessions the audit flagged as
+    // corrupt it collapses -- it found 2 of 22 cars at Monaco and 0 of 18 in China --
+    // which previously dumped nearly the whole field into the pit lane at the start.
+    for (const [driver, dl] of this.byDriver) {
+      const lap1 = dl.laps.find((l) => l.lap === 1);
+      if (lap1?.pout !== null && lap1?.pout !== undefined) this.pitStarters.add(driver);
+    }
+
+    const detected = track.grid.order.filter((d) => this.byDriver.has(d));
+    if (detected.length >= this.byDriver.size * 0.6) {
+      // trustworthy: keep it, appending anyone it missed
+      this.gridOrder = [...detected,
+        ...[...this.byDriver.keys()].filter((d) => !detected.includes(d))];
+    } else {
+      // too sparse to believe; order by who completed lap 1 first, which needs only
+      // the lap clock and is unaffected by broken position data
+      this.gridOrder = [...this.byDriver.entries()]
+        .map(([driver, d]) => ({ driver, t: d.laps.find((l) => l.lap === 1)?.sesT ?? Infinity }))
+        .sort((a, b) => a.t - b.t)
+        .map((x) => x.driver);
+    }
+
     finishes.sort((a, b) => a.t - b.t);
     this.finishOrder = finishes.map((f) => f.driver);
     this.finishOrder.forEach((d, i) => this.parkIndex.set(d, i));
@@ -193,16 +223,15 @@ export class ReplayTimeline implements RaceTimeline {
    * plus fractional progress through the current lap, 0..1. */
   private progress(dl: DriverLaps, t: number): {
     lapsDone: number; lapProgress: number; stationM: number; lapEntry: RawLapEntry | null;
-    kind: CarState["status"]; lateralOverride?: number;
+    kind: CarState["status"]; lateralOverride?: number; cur?: { lap: RawLapEntry; idx: number } | null;
   } {
     const cur = this.currentLap(dl, t);
     if (!cur) {
       const first = dl.laps[0];
-      const slot = this.track.grid.order.indexOf(dl.entry.driver);
-      if (slot < 0) {
-        // Not on the grid at all: this driver started from the pit lane (measured:
-        // ALO at the 2026 British GP). Putting them at station 0 dropped them on the
-        // start line among the front row; the pit lane is where they actually were.
+      const slot = this.gridOrder.indexOf(dl.entry.driver);
+      if (this.pitStarters.has(dl.entry.driver)) {
+        // Genuinely started from the pit lane (their lap 1 has a pit-exit time --
+        // measured: ALO at the 2026 British GP).
         const pit = this.track.pitLane;
         return {
           lapsDone: 0, lapProgress: 0,
@@ -211,12 +240,13 @@ export class ReplayTimeline implements RaceTimeline {
           lateralOverride: pit.loopLateral ?? 0,
         };
       }
-      const gridStation = (slot + 1) * -this.track.grid.pitchMetres;
+      const safeSlot = slot >= 0 ? slot : this.gridOrder.length;
+      const gridStation = (safeSlot + 1) * -this.track.grid.pitchMetres;
       // A real starting grid is two staggered columns, not a single file on the
       // centreline. The audit found the raw data gives a usable grid ORDER and ~8 m
       // spacing but no lateral at all (every car is snapped to one line), so the
       // left/right stagger is a labelled RULE-style presentation choice.
-      const lateralOverride = (slot % 2 === 0 ? -1 : 1) * GRID_LATERAL_M;
+      const lateralOverride = (safeSlot % 2 === 0 ? -1 : 1) * GRID_LATERAL_M;
       return {
         lapsDone: 0, lapProgress: 0,
         stationM: ((gridStation % this.track.lengthMetres) + this.track.lengthMetres)
@@ -252,17 +282,46 @@ export class ReplayTimeline implements RaceTimeline {
     }
     const rel = t - lap.lST;
     const sample = sampleLap(decoded, rel, this.track.lengthMetres);
-    const inPit = (lap.pin !== null && t >= lap.lST + (lap.pin - lap.lST))
-      || (lap.pout !== null && rel <= 0);
+
+    // Before the car has actually launched, its lap-1 position is not usable: the
+    // audit measured lap-1 xy staying STALE for 16-60 s and every stationary car
+    // snapped to the centreline, so the whole field reads as one heap on the line.
+    // Measured consequence: 70 % of frames in the first minute had cars intersecting,
+    // versus 0 % after 20 minutes. While a car is still stationary on lap 1, keep it
+    // in its own grid slot instead.
+    if (lap.lap === 1 && sample && sample.speedKph < 1 && this.gridOrder.indexOf(dl.entry.driver) >= 0) {
+      const slot = this.gridOrder.indexOf(dl.entry.driver);
+      const safeSlot = slot >= 0 ? slot : this.gridOrder.length;
+      const gridStation = (safeSlot + 1) * -this.track.grid.pitchMetres;
+      return {
+        lapsDone: 0, lapProgress: 0,
+        stationM: ((gridStation % this.track.lengthMetres) + this.track.lengthMetres)
+          % this.track.lengthMetres,
+        lapEntry: lap, kind: "grid",
+        lateralOverride: (slot % 2 === 0 ? -1 : 1) * GRID_LATERAL_M,
+      };
+    }
+    // A lap carrying a pit entry OR exit is a pit lap for its whole length. The
+    // out-lap matters as much as the in-lap: the car spent part of it crawling down
+    // the lane, so the station-derived gap is meaningless there (it was reporting a
+    // P2 car as +90 s behind while P3 showed +4 s, which cannot both be true). The
+    // dashboard shows PIT for these instead of a number it cannot stand behind.
+    const inPit = (lap.pin !== null && t >= lap.pin) || lap.pout !== null;
     return {
       lapsDone: nonFf1gLapsBefore,
       lapProgress: Math.max(0, Math.min(0.9999, rel / (lap.time ?? (decoded.tS[decoded.n - 1] || 1)))),
       stationM: sample ? sample.stationM : this.track.timingLines.sf,
-      lapEntry: lap, kind: inPit ? "pit" : "track",
+      lapEntry: lap, kind: inPit ? "pit" : "track", cur,
     };
   }
 
-  sampleAt(t: number): Map<string, CarState> {
+  /**
+   * @param withGaps compute gap-to-leader and interval, which cost two linear scans
+   * of a ~700-sample lap PER CAR. Those numbers are only ever displayed on the ~10 Hz
+   * dashboard, so the 60 Hz pose path passes false and skips roughly 1.7 M array
+   * steps a second that nothing was going to read.
+   */
+  sampleAt(t: number, withGaps = true): Map<string, CarState> {
     const out = new Map<string, CarState>();
     const progressByDriver = new Map<string, ReturnType<ReplayTimeline["progress"]>>();
     for (const [driver, dl] of this.byDriver) progressByDriver.set(driver, this.progress(dl, t));
@@ -270,7 +329,7 @@ export class ReplayTimeline implements RaceTimeline {
     // order: lapsDone desc, then lapProgress desc, retired appended in retirement order
     const active = [...progressByDriver.entries()].filter(([d]) => !this.retiredOrder.includes(d)
       || progressByDriver.get(d)!.kind !== "retired");
-    const gridOrder = this.track.grid.order;
+    const gridOrder = this.gridOrder;
     const ranked = active.slice().sort((a, b) => {
       const sa = a[1], sb = b[1];
       if (sa.kind === "grid" && sb.kind !== "grid") return 1;
@@ -303,7 +362,8 @@ export class ReplayTimeline implements RaceTimeline {
       const { z, heading } = pt;
 
       let lateralM = p.lateralOverride ?? 0, speedKph = 0, gear = 0, throttlePct = 0, brake = false;
-      const cur = this.currentLap(dl, t);
+      // reuse the lap progress() already located rather than scanning the lap list again
+      const cur = p.cur !== undefined ? p.cur : this.currentLap(dl, t);
       if (cur && cur.lap.lST !== null) {
         const decoded = dl.decoded.get(cur.lap.lap);
         if (decoded) {
@@ -323,7 +383,7 @@ export class ReplayTimeline implements RaceTimeline {
       const lapsDownFromLeader = Math.max(
         0, Math.floor(leaderProgress - (p.lapsDone + p.lapProgress)),
       );
-      if (i > 0 && lapsDownFromLeader === 0) {
+      if (withGaps && i > 0 && lapsDownFromLeader === 0) {
         const leaderDriver = order[0][0];
         const leaderDl = this.byDriver.get(leaderDriver)!;
         const leaderLapEntry = leaderDl.laps.find((l) => l.lap === p.lapEntry?.lap);
@@ -364,6 +424,7 @@ export class ReplayTimeline implements RaceTimeline {
         inPit: p.kind === "pit",
         status: p.kind,
         provenance: "OBSERVED",
+        energy: p.lapEntry?.energy ?? null,
       });
     });
     return out;
@@ -392,6 +453,7 @@ export class ReplayTimeline implements RaceTimeline {
       humidityPct: this.weatherRaw.wH,
       rain: this.weatherRaw.wR,
       windMps: this.weatherRaw.wWS,
+      windFromDeg: this.weatherRaw.wWD ?? [],
       provenance: "OBSERVED" as const,
     };
   }

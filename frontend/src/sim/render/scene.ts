@@ -6,9 +6,9 @@ import { CAR } from "@/components/loader/physics/constants";
 import { HAAS } from "@/lib/palette";
 import { halfWidthAt } from "../data/manifest";
 import { POSE_FLOATS_PER_CAR, POSE_STATUS } from "../worker/protocol";
-import {
-  CAR_RENDER_HEIGHT_M, CAR_RENDER_LENGTH_M, CAR_RENDER_WIDTH_M, PRESENTATION_SCALE,
-} from "./presentation";
+import { CAR_RENDER_HEIGHT_M, PRESENTATION_SCALE } from "./presentation";
+import { buildF1CarGeometry } from "./carGeometry";
+import { buildDriverLabels, type DriverLabels } from "./driverLabels";
 import {
   applyShadowPriceOverlay, buildPitLaneMesh, buildTrackMesh, buildTrackOutline, toRenderFrame,
 } from "./trackMesh";
@@ -29,6 +29,8 @@ export interface PerfStats {
   fps: number;
   frameMs: number;
   qualityTier: 0 | 1 | 2;
+  /** Panel refresh measured from rAF; null until enough frames have been timed. */
+  refreshHz: number | null;
 }
 
 const SOFTWARE_MARKERS = ["swiftshader", "llvmpipe", "software", "microsoft basic render"];
@@ -53,12 +55,29 @@ export function readGpuInfo(gl: WebGLRenderingContext | WebGL2RenderingContext):
   };
 }
 
+interface PoseFrame {
+  floats: Float32Array;
+  sessionTime: number;
+  carCount: number;
+  arrivedMs: number;
+}
+
 interface PoseSource {
-  getLatestPose(): { floats: Float32Array; sessionTime: number; carCount: number } | null;
+  getLatestPose(): PoseFrame | null;
+  getPrevPose(): PoseFrame | null;
 }
 
 const LOW_END = (w: number, h: number) => w * h < 500_000 || (navigator.hardwareConcurrency ?? 4) <= 4;
-const LONG_FRAME_MS = 34;
+/** Fallback "this frame was slow" threshold, used only until the real display
+ * cadence has been measured. A fixed value cannot serve every panel: 34 ms is two
+ * missed frames at 60 Hz but nearly six at 165 Hz, so a 165 Hz display could sit at
+ * 50 fps and never trigger a single quality step. The threshold becomes a multiple of
+ * the MEASURED refresh period instead (see measureRefresh). */
+const LONG_FRAME_FALLBACK_MS = 34;
+/** How many refresh periods a frame may take before it counts as slow. */
+const LONG_FRAME_PERIODS = 2.5;
+/** rAF intervals sampled before trusting the measurement. */
+const REFRESH_SAMPLES = 40;
 
 /**
  * Imperative three.js scene: one instanced mesh for every car (one draw call), the
@@ -71,9 +90,15 @@ export class SimRenderer {
   private scene = new THREE.Scene();
   private camera: THREE.PerspectiveCamera;
   private cars: THREE.InstancedMesh | null = null;
+  /** Black outline drawn around whichever car is focused (a slightly larger
+   * back-faced copy of the car box, so it reads as a border on the car itself). */
+  private focusOutline: THREE.Mesh | null = null;
+  private labels: DriverLabels | null = null;
+  private showLabels = true;
   private trackSurface: THREE.Mesh | null = null;
   private track: TrackModel | null = null;
   private driverCount = 0;
+  private driverNames: string[] = [];
   private cameraMode: CameraMode = "broadcast";
   /** -1 = auto-follow whichever car is currently in position 1 (the default: the
    * camera should always be watching the race, not a fixed driver-list array slot).
@@ -82,6 +107,10 @@ export class SimRenderer {
   private rafId = 0;
   private alive = true;
   private longFrames = 0;
+  /** Measured display refresh, Hz. Null until enough frames have been timed. */
+  private refreshHz: number | null = null;
+  private refreshSamples: number[] = [];
+  private longFrameMs = LONG_FRAME_FALLBACK_MS;
   private qualityTier: 0 | 1 | 2 = 0; // 0 = full, 1 = no AA, 2 = capped DPR too
   private lastNow = 0;
   private cameraTarget = new THREE.Vector3();
@@ -91,13 +120,19 @@ export class SimRenderer {
   private orbitYaw = Math.PI / 4;
   private orbitPitch = 0.6;
   private orbitDist = 400;
-  private pointerDown = false;
+  /** false = the camera is free (user driven); true = it follows the focused car. */
+  private cameraLocked = true;
+  private onLockChange: ((locked: boolean) => void) | null = null;
+  private dragButton: number | null = null;
+  private panOffset = new THREE.Vector3();
   private lastPointer = { x: 0, y: 0 };
   private matrixScratch = new THREE.Matrix4();
   private quatScratch = new THREE.Quaternion();
   private posScratch = new THREE.Vector3();
   private scaleScratch = new THREE.Vector3(1, 1, 1);
   private upVec = new THREE.Vector3(0, 1, 0);
+  private raycaster = new THREE.Raycaster();
+  private groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
   private fpsEma = 60;
   private onPerfSample: ((p: PerfStats) => void) | null = null;
   private perfSampleAcc = 0;
@@ -107,6 +142,9 @@ export class SimRenderer {
   /** Eased lateral actually drawn, so a lane change slides instead of snapping. */
   private smoothedLateral: Float32Array | null = null;
   private smoothedValid = false;
+  /** Pose interpolated between the last two sim frames, so the picture updates at the
+   * display's refresh rate rather than the sim's fixed 60 Hz tick. */
+  private blendScratch: Float32Array | null = null;
 
   constructor(
     private canvas: HTMLCanvasElement,
@@ -132,7 +170,9 @@ export class SimRenderer {
     canvas.addEventListener("pointerdown", this.onPointerDown);
     window.addEventListener("pointermove", this.onPointerMove);
     window.addEventListener("pointerup", this.onPointerUp);
-    canvas.addEventListener("wheel", this.onWheel, { passive: true });
+    canvas.addEventListener("wheel", this.onWheel, { passive: false });
+    canvas.addEventListener("contextmenu", this.onContextMenu);
+    canvas.addEventListener("auxclick", (e) => { if (e.button === 1) e.preventDefault(); });
 
     this.resize();
   }
@@ -163,17 +203,18 @@ export class SimRenderer {
     this.cameraTarget.copy(this.orbitCentre);
   }
 
-  setDrivers(driverCount: number, teamColours: (string | null)[]) {
+  setDrivers(driverCount: number, teamColours: (string | null)[], names: string[] = []) {
     this.driverCount = driverCount;
+    this.driverNames = names;
     if (this.cars) {
       this.scene.remove(this.cars);
       this.cars.geometry.dispose();
       (this.cars.material as THREE.Material).dispose();
     }
-    const geom = new THREE.BoxGeometry(
-      CAR_RENDER_LENGTH_M, CAR_RENDER_HEIGHT_M, CAR_RENDER_WIDTH_M,
-    );
-    const mat = new THREE.MeshStandardMaterial({ vertexColors: false, roughness: 0.5, metalness: 0.3 });
+    const geom = buildF1CarGeometry();
+    // vertexColors ON so the geometry's own dark tyres/wings survive, multiplied by
+    // the per-instance team colour -- still one geometry, one material, one draw call
+    const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55, metalness: 0.25 });
     const mesh = new THREE.InstancedMesh(geom, mat, Math.max(1, driverCount));
     // InstancedMesh computes its frustum-culling bounding sphere from the LOCAL
     // geometry only (a single 5.6x0.9x2 box near the origin) -- it is never expanded
@@ -194,9 +235,48 @@ export class SimRenderer {
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
     this.cars = mesh;
     this.scene.add(mesh);
+
+    this.labels?.dispose();
+    if (this.labels) this.scene.remove(this.labels.group);
+    this.labels = buildDriverLabels(
+      this.driverNames.length === driverCount
+        ? this.driverNames
+        : Array.from({ length: driverCount }, (_, i) => `#${i + 1}`),
+      teamColours,
+      1.5,
+    );
+    this.labels.group.visible = this.showLabels;
+    this.scene.add(this.labels.group);
+
+    if (this.focusOutline) {
+      this.scene.remove(this.focusOutline);
+      this.focusOutline.geometry.dispose();
+      (this.focusOutline.material as THREE.Material).dispose();
+    }
+    {
+      // A soft white ghost of the SAME car shape, a hair larger and drawn without
+      // depth testing. It hugs the real silhouette, so there is no padded box or
+      // wireframe cage around the car, and the team colour underneath still reads.
+      // depthTest stays ON so the car's own bodywork occludes the middle of the
+      // ghost: only the part standing proud of the silhouette survives, which is a
+      // rim around the car rather than a white wash over it.
+      const glowMat = new THREE.MeshBasicMaterial({
+        color: new THREE.Color(HAAS.white), transparent: true, opacity: 0.6,
+        depthTest: true, side: THREE.BackSide,
+      });
+      this.focusOutline = new THREE.Mesh(buildF1CarGeometry(), glowMat);
+      this.focusOutline.frustumCulled = false;
+      this.focusOutline.visible = false;
+      this.focusOutline.renderOrder = 6;
+      this.scene.add(this.focusOutline);
+    }
   }
 
   setCameraMode(mode: CameraMode) { this.cameraMode = mode; }
+  setLabelsVisible(v: boolean) {
+    this.showLabels = v;
+    if (this.labels) this.labels.group.visible = v;
+  }
   setFocusIndex(i: number) { this.focusIndex = i; }
 
   /** E-Delta hook (plan section 12/Phase 4): paints the track surface by an external
@@ -227,23 +307,80 @@ export class SimRenderer {
   onPerf(cb: (p: PerfStats) => void) { this.onPerfSample = cb; }
 
   private onPointerDown = (e: PointerEvent) => {
-    if (this.cameraMode !== "orbit") return;
-    this.pointerDown = true;
+    if (e.button === 1) {
+      // middle click toggles follow/free, the shortcut asked for
+      e.preventDefault();
+      this.setCameraLocked(!this.cameraLocked);
+      return;
+    }
+    if (this.cameraLocked) return; // a followed camera is not draggable
+    this.dragButton = e.button;
     this.lastPointer = { x: e.clientX, y: e.clientY };
   };
+
   private onPointerMove = (e: PointerEvent) => {
-    if (!this.pointerDown) return;
+    if (this.dragButton === null) return;
     const dx = e.clientX - this.lastPointer.x;
     const dy = e.clientY - this.lastPointer.y;
     this.lastPointer = { x: e.clientX, y: e.clientY };
-    this.orbitYaw -= dx * 0.005;
-    this.orbitPitch = Math.max(0.1, Math.min(1.4, this.orbitPitch - dy * 0.005));
+
+    if (this.dragButton === 0 && !e.shiftKey) {
+      this.orbitYaw -= dx * 0.005;
+      this.orbitPitch = Math.max(0.05, Math.min(1.5, this.orbitPitch - dy * 0.005));
+      return;
+    }
+    // right button (or shift+left): pan across the ground, scaled by how far out we are
+    const k = this.orbitDist * 0.0016;
+    const right = new THREE.Vector3(Math.sin(this.orbitYaw), 0, -Math.cos(this.orbitYaw));
+    const fwd = new THREE.Vector3(Math.cos(this.orbitYaw), 0, Math.sin(this.orbitYaw));
+    this.panOffset.addScaledVector(right, -dx * k).addScaledVector(fwd, -dy * k);
   };
-  private onPointerUp = () => { this.pointerDown = false; };
+
+  private onPointerUp = () => { this.dragButton = null; };
+
+  private onContextMenu = (e: Event) => {
+    if (!this.cameraLocked) e.preventDefault(); // right-drag is a pan, not a menu
+  };
+
+  /** Zoom toward wherever the cursor is, rather than the screen centre: the point
+   * under the pointer is projected onto the ground plane and the orbit target eased
+   * toward it as the distance shrinks. */
   private onWheel = (e: WheelEvent) => {
-    if (this.cameraMode !== "orbit") return;
-    this.orbitDist = Math.max(50, Math.min(4000, this.orbitDist * (1 + e.deltaY * 0.001)));
+    if (this.cameraLocked) return;
+    e.preventDefault();
+    const rect = this.canvas.getBoundingClientRect();
+    const ndc = new THREE.Vector2(
+      ((e.clientX - rect.left) / rect.width) * 2 - 1,
+      -((e.clientY - rect.top) / rect.height) * 2 + 1,
+    );
+    const factor = Math.exp(e.deltaY * 0.0012);
+    const before = this.orbitDist;
+    this.orbitDist = Math.max(12, Math.min(8000, this.orbitDist * factor));
+
+    this.raycaster.setFromCamera(ndc, this.camera);
+    const hit = new THREE.Vector3();
+    const target = this.orbitCentre.clone().add(this.panOffset);
+    this.groundPlane.constant = -target.y;
+    if (this.raycaster.ray.intersectPlane(this.groundPlane, hit)) {
+      // move the target a share of the way to the cursor, proportional to the zoom
+      const t = 1 - this.orbitDist / before;
+      this.panOffset.addScaledVector(hit.sub(target), Math.max(-0.6, Math.min(0.6, t)));
+    }
   };
+
+  setCameraLocked(locked: boolean) {
+    this.cameraLocked = locked;
+    if (locked) this.panOffset.set(0, 0, 0);
+    else {
+      // start the free camera where the user is already looking
+      this.orbitCentre.copy(this.cameraTarget);
+      this.orbitDist = Math.max(40, this.camera.position.distanceTo(this.cameraTarget));
+    }
+    this.onLockChange?.(locked);
+  }
+
+  isCameraLocked() { return this.cameraLocked; }
+  onCameraLockChange(cb: (locked: boolean) => void) { this.onLockChange = cb; }
 
   private carWorldPos(pose: Float32Array, i: number, out: THREE.Vector3, headingOut?: { value: number }) {
     if (!this.track) return;
@@ -329,16 +466,19 @@ export class SimRenderer {
         let mean = 0;
         for (let m = clusterStart; m < k; m++) mean += lateral[asArray[m]];
         mean /= size;
-        // A road only holds so many cars abreast: clamp the fan to the real half
-        // width at this point of the circuit, so a big pack bunches up visually
-        // instead of spilling onto the grass.
+        // Spread the pack evenly ACROSS the available width rather than clamping to
+        // it: clamping made every car past the last fitting lane land on the same
+        // edge value, so they stacked exactly on top of each other -- the overlap
+        // this pass exists to prevent. Squeezing the spacing keeps every car
+        // distinct and on the road, which is what a tight pack really looks like.
         const halfW = halfWidthAt(track, station[asArray[clusterStart]]);
         const maxOffset = Math.max(0, halfW - CAR.widthM / 2);
+        const spacing = size > 1
+          ? Math.min(laneStepM, (2 * maxOffset) / (size - 1))
+          : 0;
         for (let m = 0; m < size; m++) {
           const car = asArray[clusterStart + m];
-          const rank = Math.ceil(m / 2) * (m % 2 === 1 ? 1 : -1);
-          const want = mean + rank * laneStepM;
-          lateral[car] = Math.max(-maxOffset, Math.min(maxOffset, want));
+          lateral[car] = mean + (m - (size - 1) / 2) * spacing;
         }
       }
       clusterStart = k;
@@ -407,7 +547,83 @@ export class SimRenderer {
       this.cars.setMatrixAt(i, this.matrixScratch);
     }
     this.cars.instanceMatrix.needsUpdate = true;
+
+    if (this.labels && this.labels.group.visible) {
+      for (let i = 0; i < n && i < this.labels.sprites.length; i++) {
+        this.cars.getMatrixAt(i, this.matrixScratch);
+        this.matrixScratch.decompose(this.posScratch, this.quatScratch, this.scaleScratch);
+        this.labels.sprites[i].position.set(
+          this.posScratch.x, this.posScratch.y + 2.0, this.posScratch.z,
+        );
+      }
+    }
+
+    if (this.focusOutline) {
+      const fi = this.resolveFocusIndex(pose);
+      if (fi >= 0 && fi < n) {
+        // reuse the exact matrix already written for that instance, then grow it
+        // slightly so the rim peeks out evenly on every side
+        this.cars.getMatrixAt(fi, this.matrixScratch);
+        this.matrixScratch.decompose(this.posScratch, this.quatScratch, this.scaleScratch);
+        this.focusOutline.position.copy(this.posScratch);
+        this.focusOutline.quaternion.copy(this.quatScratch);
+        this.focusOutline.scale.set(1.07, 1.07, 1.07); // just proud of the bodywork
+        this.focusOutline.visible = true;
+      } else {
+        this.focusOutline.visible = false;
+      }
+    }
   }
+
+  /**
+   * Linear blend between the previous and latest sim frames, by wall clock.
+   *
+   * The worker ticks at a fixed 60 Hz. Drawing its newest frame directly means a
+   * 165 Hz display shows the same car positions for two or three consecutive frames
+   * and motion judders. Interpolating costs one sim tick of latency (~17 ms) and in
+   * exchange the motion is continuous at any refresh rate. Station is blended the
+   * short way around the lap so a car crossing the line does not sweep backwards.
+   */
+  private blendPose(latest: PoseFrame, prev: PoseFrame | null, nowMs: number): Float32Array {
+    if (!prev || prev.carCount !== latest.carCount || !this.track) return latest.floats;
+    const span = latest.arrivedMs - prev.arrivedMs;
+    if (span <= 0) return latest.floats;
+    // render one tick behind, so the value asked for always lies between the two
+    const alpha = Math.max(0, Math.min(1, (nowMs - latest.arrivedMs) / span));
+    const n = latest.floats.length;
+    if (!this.blendScratch || this.blendScratch.length !== n) this.blendScratch = new Float32Array(n);
+    const out = this.blendScratch;
+    const trackLen = this.track.lengthMetres;
+
+    out.set(latest.floats);
+    for (let i = 0; i < latest.carCount; i++) {
+      const o = i * POSE_FLOATS_PER_CAR;
+      const a = prev.floats[o], b = latest.floats[o];
+      let d = b - a;
+      if (d > trackLen / 2) d -= trackLen;
+      if (d < -trackLen / 2) d += trackLen;
+      out[o] = ((a + d * alpha) % trackLen + trackLen) % trackLen;
+      out[o + 1] = prev.floats[o + 1] + (latest.floats[o + 1] - prev.floats[o + 1]) * alpha;
+      out[o + 4] = prev.floats[o + 4] + (latest.floats[o + 4] - prev.floats[o + 4]) * alpha;
+    }
+    return out;
+  }
+
+  /** Learns the panel's real cadence from rAF itself, then scales the slow-frame
+   * threshold to it, so adaptive quality behaves the same on a 60 Hz laptop screen and
+   * a 165 Hz one. The median is used because the first frames after load are noisy. */
+  private measureRefresh(frameMs: number) {
+    if (this.refreshHz !== null) return;
+    if (frameMs > 0 && frameMs < 100) this.refreshSamples.push(frameMs);
+    if (this.refreshSamples.length < REFRESH_SAMPLES) return;
+    const sorted = [...this.refreshSamples].sort((a, b) => a - b);
+    const median = sorted[sorted.length >> 1];
+    this.refreshHz = Math.round(1000 / median);
+    this.longFrameMs = Math.max(median * LONG_FRAME_PERIODS, 12);
+    this.refreshSamples.length = 0;
+  }
+
+  getRefreshHz() { return this.refreshHz; }
 
   private resolveFocusIndex(pose: Float32Array): number {
     if (this.focusIndex >= 0) return Math.min(this.focusIndex, this.driverCount - 1);
@@ -428,7 +644,22 @@ export class SimRenderer {
 
     const desired = new THREE.Vector3();
     let lookAt = focusPos.clone();
-    const lag = 1 - Math.exp(-dtWall * 4);
+    // Tracking has to hold at 20x playback, where the car covers ~20 m between
+    // frames. At the old rate the camera settled hundreds of metres behind and the
+    // car shrank to a speck on the horizon; this keeps it framed while still easing.
+    const lag = 1 - Math.exp(-dtWall * 14);
+
+    if (!this.cameraLocked) {
+      const target = this.orbitCentre.clone().add(this.panOffset);
+      this.camera.position.set(
+        target.x + this.orbitDist * Math.sin(this.orbitPitch) * Math.cos(this.orbitYaw),
+        target.y + this.orbitDist * Math.cos(this.orbitPitch),
+        target.z + this.orbitDist * Math.sin(this.orbitPitch) * Math.sin(this.orbitYaw),
+      );
+      this.camera.lookAt(target);
+      this.cameraTarget.copy(target);
+      return;
+    }
 
     switch (this.cameraMode) {
       case "orbit": {
@@ -440,11 +671,11 @@ export class SimRenderer {
         break;
       }
       case "helicopter": {
-        desired.set(focusPos.x, focusPos.y + 220, focusPos.z + 0.01);
+        desired.set(focusPos.x, focusPos.y + 45, focusPos.z + 0.01);
         break;
       }
       case "onboard": {
-        const back = new THREE.Vector3(-Math.cos(headingBox.value) * 6, 2.2, -Math.sin(headingBox.value) * 6);
+        const back = new THREE.Vector3(-Math.cos(headingBox.value) * 9, 3.2, -Math.sin(headingBox.value) * 9);
         desired.copy(focusPos).add(back);
         lookAt = focusPos.clone().add(
           new THREE.Vector3(Math.cos(headingBox.value) * 20, 0, Math.sin(headingBox.value) * 20),
@@ -453,7 +684,7 @@ export class SimRenderer {
       }
       case "broadcast":
       default: {
-        const back = new THREE.Vector3(-Math.cos(headingBox.value) * 45, 24, -Math.sin(headingBox.value) * 45);
+        const back = new THREE.Vector3(-Math.cos(headingBox.value) * 15, 6, -Math.sin(headingBox.value) * 15);
         desired.copy(focusPos).add(back);
         break;
       }
@@ -470,7 +701,7 @@ export class SimRenderer {
       // a bounded lerp can ever catch up to -- it was measured to DIVERGE, not
       // converge, at 20x speed under a slow frame rate). Snapping past a distance
       // threshold makes both cases instant instead of a multi-second crawl.
-      const SNAP_DISTANCE_M = 150;
+      const SNAP_DISTANCE_M = 60;
       if (this.cameraPos.distanceTo(desired) > SNAP_DISTANCE_M) {
         this.cameraPos.copy(desired);
       } else {
@@ -500,7 +731,9 @@ export class SimRenderer {
       const instFps = frameMs > 0 ? 1000 / frameMs : 60;
       this.fpsEma += (instFps - this.fpsEma) * 0.1;
 
-      if (frameMs > LONG_FRAME_MS) {
+      this.measureRefresh(frameMs);
+
+      if (frameMs > this.longFrameMs) {
         if (++this.longFrames >= 3 && this.qualityTier < 2) {
           this.qualityTier = (this.qualityTier + 1) as 0 | 1 | 2;
           this.resize();
@@ -511,15 +744,19 @@ export class SimRenderer {
 
       const pose = this.poseSource.getLatestPose();
       if (pose) {
-        this.updateCars(pose.floats, dtWall);
-        this.updateCamera(pose.floats, dtWall);
+        const floats = this.blendPose(pose, this.poseSource.getPrevPose(), now);
+        this.updateCars(floats, dtWall);
+        this.updateCamera(floats, dtWall);
       }
       this.renderer.render(this.scene, this.camera);
 
       this.perfSampleAcc += dtWall;
       if (this.onPerfSample && this.perfSampleAcc >= 0.5) {
         this.perfSampleAcc = 0;
-        this.onPerfSample({ fps: Math.round(this.fpsEma), frameMs, qualityTier: this.qualityTier });
+        this.onPerfSample({
+          fps: Math.round(this.fpsEma), frameMs, qualityTier: this.qualityTier,
+          refreshHz: this.refreshHz,
+        });
       }
     };
     this.rafId = requestAnimationFrame(frame);
@@ -527,11 +764,13 @@ export class SimRenderer {
 
   dispose() {
     this.alive = false;
+    this.labels?.dispose();
     cancelAnimationFrame(this.rafId);
     this.canvas.removeEventListener("pointerdown", this.onPointerDown);
     window.removeEventListener("pointermove", this.onPointerMove);
     window.removeEventListener("pointerup", this.onPointerUp);
     this.canvas.removeEventListener("wheel", this.onWheel);
+    this.canvas.removeEventListener("contextmenu", this.onContextMenu);
     this.scene.traverse((obj) => {
       if (obj instanceof THREE.Mesh || obj instanceof THREE.LineSegments) {
         obj.geometry.dispose();

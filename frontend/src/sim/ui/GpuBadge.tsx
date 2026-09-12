@@ -44,8 +44,9 @@ export function GpuBadge({
       ) : null}
 
       {perf ? (
-        <span className={styles.gpuFps} data-low={perf.fps < 45}>
-          {perf.fps} fps · {perf.frameMs.toFixed(1)} ms
+        <span className={styles.gpuFps} data-low={perf.refreshHz ? perf.fps < perf.refreshHz * 0.85 : perf.fps < 45}>
+          {perf.fps} fps
+          {perf.refreshHz ? ` / ${perf.refreshHz} Hz` : ""} · {perf.frameMs.toFixed(1)} ms
           {perf.qualityTier > 0 ? ` · quality -${perf.qualityTier}` : ""}
         </span>
       ) : null}

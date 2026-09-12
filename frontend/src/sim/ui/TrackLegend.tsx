@@ -21,6 +21,10 @@ export function TrackLegend({ hasPitLane }: { hasPitLane: boolean }) {
         <i className={styles.swatchCar} /> Car (team colour)
       </span>
       <span className={styles.legendNote}>Track width &amp; pit width are RULE values, not measured</span>
+      <span className={styles.legendNote}>
+        Space play/pause · middle-click lock/free camera · when free: drag to orbit,
+        right-drag to pan, scroll to zoom at the cursor
+      </span>
     </div>
   );
 }

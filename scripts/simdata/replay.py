@@ -43,8 +43,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from simdata.build_track import prepare_ring, slugify
 from simdata.rawio import LapTable, load_lap
 from simdata.rcm import build_rcm_feed, neutralisation_intervals
+from simdata.twin import TwinParams, estimate_ers, lap_summary
 
 DATA_ROOT = Path(__file__).resolve().parent.parent.parent / "data" / "2026"
+
+
+def _num(v):
+    """The raw feed writes the string \"None\" for a missing number."""
+    return None if v is None or isinstance(v, str) else float(v)
 SCHEMA_VERSION = 1
 SAMPLE_STRUCT = struct.Struct("<HfhHBB")  # dtMs, stationM, lateralCm, speedKph, gearBrake, throttle
 
@@ -99,12 +105,30 @@ def build_replay_pack(event: str, session: str):
 
     blob = bytearray()
     drivers = {}
+    soc_carry: dict[str, float] = {}   # charge carried lap to lap, per driver
     for r in rows:
         drv, lap_no = r["drv"], r["lap"]
         lap = load_lap(sdir, drv, lap_no)
         if lap is None or lap.n == 0:
             continue
         sample_bytes, frame = encode_lap(ring, lap)
+
+        # Energy twin (MODELS.md M14). Computed HERE, in Python, and shipped as a
+        # per-lap summary: the browser renders these numbers and never derives them.
+        # The same pure functions will back the HTTP API later -- only the transport
+        # differs. Everything produced is INFERRED/SIMULATED and carries its warnings.
+        energy = None
+        try:
+            est = estimate_ers(
+                lap.t, lap.speed, lap.dist, lap.z / 10.0, lap.brake, lap.throttle,
+                TwinParams(),
+                air_temp_c=_num(r.get("wAT")), pressure_hpa=_num(r.get("wP")),
+                initial_soc_mj=soc_carry.get(drv, 2.0),
+            )
+            energy = lap_summary(est)
+            soc_carry[drv] = energy["socEndMj"]
+        except (ValueError, IndexError, ZeroDivisionError):
+            energy = None
         offset = len(blob)
         blob.extend(sample_bytes)
         entry = {
@@ -124,6 +148,7 @@ def build_replay_pack(event: str, session: str):
             "iacc": bool(r["iacc"]),
             "del": bool(r["del"]),
             "ff1G": bool(r["ff1G"]),
+            "energy": energy,
         }
         drivers.setdefault(drv, {"driver": drv, "team": r["team"], "laps": []})
         drivers[drv]["laps"].append(entry)
@@ -135,7 +160,7 @@ def build_replay_pack(event: str, session: str):
     weather = None
     if weather_path.exists():
         w = json.loads(weather_path.read_text(encoding="utf-8"))
-        weather = {k: w[k] for k in ("wT", "wAT", "wTT", "wH", "wR", "wWS") if k in w}
+        weather = {k: w[k] for k in ("wT", "wAT", "wTT", "wH", "wR", "wWS", "wWD") if k in w}
 
     manifest = {
         "schemaVersion": SCHEMA_VERSION,

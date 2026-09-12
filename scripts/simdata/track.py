@@ -153,6 +153,10 @@ MAX_PIT_LAT_M = 60.0     # beyond this it is a projection artefact, not a pit la
 MERGE_RUN = 30           # consecutive on-track samples that end an out-lap head
 CAR_WIDTH_M = 2.0        # HaasCarTop footprint, already in the loader constants
 WIDTH_FLOOR_M = CAR_WIDTH_M / 2 + 0.25
+# A modern F1 circuit must be at least 12 m wide and is typically 12-15 m, with pit
+# straights reaching ~18 m. These bound the RULE-scaled half-width below.
+HALF_WIDTH_MIN_M = 6.0
+HALF_WIDTH_MAX_M = 7.5
 
 
 def pit_lane(session_dir, table: LapTable, ring: Ring, max_laps=80):
@@ -294,10 +298,11 @@ def width_estimate(session_dir, table: LapTable, ring: Ring, laps,
       corner marker, normalised to its own maximum. This says where the track is
       relatively wider or narrower, which is the part the telemetry really does carry.
 
-      SCALE, from the pit lane. The measured racing-line-to-pit-exit offset is the only
-      absolute lateral distance in the whole feed. The widest half-width is set to
-      `pit_offset_fraction` of it, because that offset spans half the track plus verge,
-      wall and lane. The fraction is a documented default, not a measurement.
+      SCALE, a RULE constant (HALF_WIDTH_MIN_M..HALF_WIDTH_MAX_M), because the feed
+      carries no absolute width at all. The pit-lane offset was tried as a proxy and
+      rejected: it under-sized nearly every circuit and blew up completely wherever
+      the position feed is corrupt. The measured pit offset is still reported for
+      reference, but it no longer drives the result.
 
     Both are reported separately in the artifact, and `multiplier` tunes the result.
     """
@@ -323,9 +328,17 @@ def width_estimate(session_dir, table: LapTable, ring: Ring, laps,
     # keep the shape in [0.6, 1.0] so a narrow station never collapses to the floor
     shape_n = 0.6 + 0.4 * (shape / peak)
 
+    # SCALE is a RULE constant, not a proxy. Deriving it from the pit-lane offset was
+    # tried and abandoned: it produced roads 2.9-8.6 m wide on most circuits (a real
+    # one is never under 12 m, so cars visibly hung off the edge) and, on the two
+    # sessions whose position feed the audit flagged as corrupt, a pit offset of
+    # 512-557 m scaled the track to 215-236 m across. The shape below still comes
+    # from the data; only its absolute size is now a stated rule.
     pit_offset = abs((pit or {}).get("exitLateral") or 0.0)
-    scale = pit_offset * pit_offset_fraction if pit_offset else 6.0
-    half = np.maximum(shape_n * scale * multiplier, WIDTH_FLOOR_M)
+    shape_01 = (shape_n - 0.6) / 0.4                      # back to 0..1
+    half = HALF_WIDTH_MIN_M + shape_01 * (HALF_WIDTH_MAX_M - HALF_WIDTH_MIN_M)
+    half = np.maximum(half * multiplier, WIDTH_FLOOR_M)
+    scale = HALF_WIDTH_MAX_M
 
     return {
         "binMetres": bin_m,
@@ -460,20 +473,39 @@ def pit_lane_path(session_dir, table: LapTable, ring: Ring, pit: dict,
         zs = np.median(np.array([r[2] for r in runs]), axis=0)
         return xs, ys, zs
 
-    seg_in, seg_out = median_path(ins), median_path(outs)
-    parts = [p for p in (seg_in, seg_out) if p is not None]
-    x = np.concatenate([p[0] for p in parts])
-    y = np.concatenate([p[1] for p in parts])
-    z = np.concatenate([p[2] for p in parts])
-    length = float(np.sum(np.hypot(np.diff(x), np.diff(y))))
+    def smooth(a, w=9):
+        """Small moving average along the run. The per-point median still carries the
+        feed's own jitter, which showed up as a visibly buckled ribbon once drawn."""
+        if a.size < w:
+            return a
+        k = np.ones(w) / w
+        pad = np.concatenate([np.full(w // 2, a[0]), a, np.full(w // 2, a[-1])])
+        return np.convolve(pad, k, mode="valid")[: a.size]
+
+    segments = []
+    for seg, role in ((median_path(ins), "entry"), (median_path(outs), "exit")):
+        if seg is None:
+            continue
+        x, y, z = smooth(seg[0]), smooth(seg[1]), smooth(seg[2], 15)
+        segments.append({
+            "role": role,
+            "xCm": [int(round(v * 100)) for v in x],
+            "yCm": [int(round(v * 100)) for v in y],
+            "zCm": [int(round(v * 100)) for v in z],
+            "lengthMetres": round(float(np.sum(np.hypot(np.diff(x), np.diff(y)))), 1),
+        })
+    if not segments:
+        return None
 
     return {
-        "xCm": [int(round(v * 100)) for v in x],
-        "yCm": [int(round(v * 100)) for v in y],
-        "zCm": [int(round(v * 100)) for v in z],
-        "lengthMetres": round(length, 1),
-        "entrySegmentPoints": 0 if seg_in is None else n_pts,
+        # TWO separate roads, never stitched into one: the in-lap traces the entry
+        # road and the out-lap traces the exit road. Concatenating them produced a
+        # ribbon that doubled back on itself, which rendered as a folded, creased
+        # surface. Nothing traces the box itself (the car is stopped), so the gap
+        # between them is left as a gap rather than invented.
+        "segments": segments,
+        "lengthMetres": round(sum(s["lengthMetres"] for s in segments), 1),
         "lapsUsed": used,
         "provenance": ("DERIVED: per-point median of real pit in/out telemetry, resampled "
-                        "by arc length; the stationary-in-box join is INFERRED"),
+                        "by arc length and smoothed; the box itself is not traced"),
     }

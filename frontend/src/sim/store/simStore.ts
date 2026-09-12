@@ -10,6 +10,13 @@
 import type { DashboardSnapshot, NeutralisationInterval, RaceEvent, WeatherSeries } from "../contract/types";
 import type { GeneratedRaceRequest, MainToWorker, WorkerToMain } from "../worker/protocol";
 
+export interface PoseFrame {
+  floats: Float32Array;
+  sessionTime: number;
+  carCount: number;
+  arrivedMs: number;
+}
+
 export interface SimStoreState {
   ready: boolean;
   driverList: string[];
@@ -30,7 +37,8 @@ export class SimStore {
   private state: SimStoreState = { ready: false, driverList: [], totalLaps: null, duration: 0, error: null };
   private dashboard: DashboardSnapshot | null = null;
   private meta: SimMeta | null = null;
-  private latestPose: { floats: Float32Array; sessionTime: number; carCount: number } | null = null;
+  private latestPose: PoseFrame | null = null;
+  private prevPose: PoseFrame | null = null;
 
   private ensureWorker() {
     if (this.worker) return;
@@ -87,15 +95,24 @@ export class SimStore {
         };
         this.emit();
         break;
-      case "pose":
+      case "pose": {
         // wrapped ONCE here, on message arrival, rather than once per render frame:
         // the renderer's own rAF loop can run at a different rate than pose messages
         // arrive, so re-wrapping in the render loop would allocate a throwaway
         // Float32Array up to 60 times a second for no reason.
+        // Two frames are kept, not one: the sim ticks at a fixed 60 Hz while the
+        // display may refresh at 165. Holding the previous frame lets the renderer
+        // interpolate between them, so motion is smooth at any refresh rate instead
+        // of stepping 60 times a second on a faster panel.
+        this.prevPose = this.latestPose;
         this.latestPose = {
-          floats: new Float32Array(msg.buffer), sessionTime: msg.sessionTime, carCount: msg.carCount,
+          floats: new Float32Array(msg.buffer),
+          sessionTime: msg.sessionTime,
+          carCount: msg.carCount,
+          arrivedMs: performance.now(),
         };
         break; // deliberately does NOT call emit(): this must never trigger a React render
+      }
       case "dashboard":
         this.dashboard = msg.snapshot as DashboardSnapshot;
         this.emit();
@@ -122,5 +139,6 @@ export class SimStore {
 
   // ---- Renderer-facing (imperative, called from inside a rAF loop) ----
   getLatestPose() { return this.latestPose; }
+  getPrevPose() { return this.prevPose; }
   getDriverList() { return this.state.driverList; }
 }

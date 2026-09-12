@@ -37,6 +37,7 @@ export function buildDashboardSnapshot(
       tyreLife: car.tyreLife,
       status: car.status,
       lastLapS: null,
+      energy: car.energy,
       speedKph: car.speedKph,
       gear: car.gear,
       throttlePct: car.throttlePct,

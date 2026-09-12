@@ -107,7 +107,7 @@ export default function NewRaceCanvas() {
       }
       rendererRef.current.setTrack(track);
       const teamColours = grid.map((d) => (d.team ? teamColourBySlug.get(d.team) ?? null : null));
-      rendererRef.current.setDrivers(grid.length, teamColours);
+      rendererRef.current.setDrivers(grid.length, teamColours, grid.map((d) => d.driver));
       setStarted(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));

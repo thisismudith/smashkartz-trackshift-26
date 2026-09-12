@@ -6,12 +6,14 @@ import {
   SimRenderer, type CameraMode, type GpuInfo, type GpuPreference, type PerfStats,
 } from "../render/scene";
 import { parseTrackModel, type RawTrackModel } from "../data/manifest";
+import { defaultSimSource } from "../data/source";
 import { DriverPanel } from "./DriverPanel";
 import { GpuBadge } from "./GpuBadge";
 import { RaceControlFeed } from "./RaceControlFeed";
 import { type CatalogueTrack, type Selection, SessionSelector } from "./SessionSelector";
 import { TimelineScrubber } from "./TimelineScrubber";
 import { TrackLegend } from "./TrackLegend";
+import { CollapsiblePanel } from "./CollapsiblePanel";
 import { WeatherStrip } from "./WeatherStrip";
 import styles from "./sim.module.css";
 
@@ -29,9 +31,14 @@ interface RawManifestLite {
 interface Catalogue {
   teams: { team: string; colour: string }[];
   tracks: CatalogueTrack[];
+  drivers: { code: string; team: string | null; number: string | null }[];
 }
 
 const CAMERA_MODES: CameraMode[] = ["broadcast", "onboard", "helicopter", "orbit"];
+// 100x was dropped deliberately: telemetry arrives every ~130 ms, so at 100x a
+// sample lasts 1.3 ms of wall time and the renderer skips data it cannot draw.
+// 20x is already the point where one drawn frame ~ one telemetry sample.
+const SPEEDS = [1, 2, 5, 10, 20];
 
 export default function SimCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -47,6 +54,12 @@ export default function SimCanvas() {
   const [perf, setPerf] = useState<PerfStats | null>(null);
   const [gpuPref, setGpuPref] = useState<GpuPreference>("high-performance");
   const [hasPitLane, setHasPitLane] = useState(false);
+  const [showTags, setShowTags] = useState(true);
+  const [playing, setPlaying] = useState(false);
+  const [speed, setSpeed] = useState(1);
+  const [cameraLocked, setCameraLocked] = useState(true);
+  /** driver code -> car number / team colour, for the compact leaderboard */
+  const [driverMeta, setDriverMeta] = useState<Map<string, { num: string | null; colour: string | null }>>(new Map());
 
   const [index, setIndex] = useState<SimIndex | null>(null);
   const [catalogue, setCatalogue] = useState<Catalogue | null>(null);
@@ -71,6 +84,18 @@ export default function SimCanvas() {
     setPerf(null);
   }
 
+  function togglePlay() {
+    setPlaying((was) => {
+      if (was) store.pause(); else store.play();
+      return !was;
+    });
+  }
+
+  function chooseSpeed(x: number) {
+    setSpeed(x);
+    store.setSpeed(x);
+  }
+
   function selectDriver(driver: string) {
     setSelectedDriver(driver);
     const idx = state.driverList.indexOf(driver);
@@ -83,12 +108,17 @@ export default function SimCanvas() {
     let disposed = false;
     async function load() {
       try {
-        const pointer = await fetch("/sim/index.json").then((r) => r.json());
-        const idx: SimIndex = await fetch(`/sim/${pointer.latest}`).then((r) => r.json());
-        const cat: Catalogue = await fetch(`/sim/${idx.catalogue}`).then((r) => r.json());
+        // everything Python-side arrives through the one seam (data/source.ts), so
+        // swapping the static artifacts for the HTTP API later touches only that file
+        const idx = await defaultSimSource.index();
+        const cat = await defaultSimSource.catalogue<Catalogue>();
         if (disposed) return;
         setIndex(idx);
         setCatalogue(cat);
+        const colourByTeam = new Map(cat.teams.map((t) => [t.team, `#${t.colour}`]));
+        setDriverMeta(new Map(cat.drivers.map((d) => [d.code, {
+          num: d.number, colour: d.team ? colourByTeam.get(d.team) ?? null : null,
+        }])));
         const firstSlug = Object.keys(idx.sessions)[0];
         const firstSession = firstSlug ? Object.keys(idx.sessions[firstSlug])[0] : null;
         if (firstSlug && firstSession) changeSelection({ trackSlug: firstSlug, session: firstSession });
@@ -110,13 +140,9 @@ export default function SimCanvas() {
     async function boot() {
       try {
         const sel = selection!;
-        const trackFile = index!.tracks[sel.trackSlug];
-        const sessionFiles = index!.sessions[sel.trackSlug]?.[sel.session];
-        if (!trackFile || !sessionFiles) throw new Error(`no built data for ${sel.trackSlug}/${sel.session}`);
-
-        const trackUrl = `/sim/${trackFile}`;
-        const manifestUrl = `/sim/${sessionFiles.manifest}`;
-        const binUrl = `/sim/${sessionFiles.bin}`;
+        const { trackUrl, manifestUrl, binUrl } = await defaultSimSource.sessionUrls({
+          trackSlug: sel.trackSlug, session: sel.session,
+        });
 
         store.start(trackUrl, manifestUrl, binUrl);
 
@@ -124,7 +150,7 @@ export default function SimCanvas() {
           await Promise.all([
             fetch(trackUrl).then((r) => r.json()),
             fetch(manifestUrl).then((r) => r.json()),
-            fetch(`/sim/${index!.catalogue}`).then((r) => r.json()),
+            defaultSimSource.catalogue<Catalogue>(),
           ]);
         if (disposed || !canvasRef.current) return;
 
@@ -137,8 +163,15 @@ export default function SimCanvas() {
         const teamColours: (string | null)[] = manifestRaw.drivers.map(
           (d) => (d.team ? teamColourBySlug.get(d.team) ?? null : null),
         );
-        renderer.setDrivers(manifestRaw.drivers.length, teamColours);
+        renderer.setDrivers(
+          manifestRaw.drivers.length,
+          teamColours,
+          manifestRaw.drivers.map((d) => d.driver),
+        );
         renderer.setCameraMode(cameraMode);
+        renderer.setLabelsVisible(showTags);
+        renderer.onCameraLockChange(setCameraLocked);
+        renderer.setCameraLocked(cameraLocked);
         renderer.onPerf(setPerf);
         renderer.start();
         rendererRef.current = renderer;
@@ -167,6 +200,20 @@ export default function SimCanvas() {
     rendererRef.current?.setCameraMode(cameraMode);
   }, [cameraMode]);
 
+  // Spacebar is play/pause, unless the user is typing in a control.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code !== "Space") return;
+      const el = e.target as HTMLElement | null;
+      if (el && /^(INPUT|SELECT|TEXTAREA|BUTTON)$/.test(el.tagName)) return;
+      e.preventDefault();
+      togglePlay();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const builtSessions: Record<string, string[]> = index
     ? Object.fromEntries(Object.entries(index.sessions).map(([slug, s]) => [slug, Object.keys(s)]))
     : {};
@@ -174,14 +221,19 @@ export default function SimCanvas() {
   return (
     <div className={styles.stage}>
       <canvas ref={canvasRef} className={styles.canvas} />
-      <div className={styles.hud}>
-        <div className={styles.provenance}>
+      {/* top left: what you are watching, and how you are watching it */}
+      <div className={styles.topLeft}>
+        <div className={styles.titleRow}>
           {state.error || loadError ? (
             <span className={styles.error}>{state.error ?? loadError}</span>
           ) : (
-            <span>Official result — replay</span>
+            <>
+              <span className={styles.provTag}>Replay</span>
+              <span className={styles.provText}>Official result</span>
+            </>
           )}
         </div>
+
         {catalogue && selection ? (
           <SessionSelector
             tracks={catalogue.tracks}
@@ -190,19 +242,31 @@ export default function SimCanvas() {
             onChange={changeSelection}
           />
         ) : null}
-        <TrackLegend hasPitLane={hasPitLane} />
-        <GpuBadge
-          gpu={gpuInfo}
-          perf={perf}
-          preference={gpuPref}
-          onPreferenceChange={setGpuPref}
-        />
-        <div className={styles.controls}>
-          <button type="button" onClick={() => store.play()}>Play</button>
-          <button type="button" onClick={() => store.pause()}>Pause</button>
-          <button type="button" onClick={() => store.setSpeed(1)}>1x</button>
-          <button type="button" onClick={() => store.setSpeed(4)}>4x</button>
-          <button type="button" onClick={() => store.setSpeed(20)}>20x</button>
+
+        <div className={styles.segmented} role="group" aria-label="Camera">
+          <button
+            type="button"
+            data-active={!cameraLocked}
+            onClick={() => {
+              const next = !cameraLocked;
+              setCameraLocked(next);
+              rendererRef.current?.setCameraLocked(next);
+            }}
+            title="Lock / unlock the camera (middle mouse). Unlocked: drag to orbit, right-drag to pan, scroll to zoom at the cursor"
+          >
+            {cameraLocked ? "locked" : "free"}
+          </button>
+          <button
+            type="button"
+            data-active={showTags}
+            onClick={() => {
+              const next = !showTags;
+              setShowTags(next);
+              rendererRef.current?.setLabelsVisible(next);
+            }}
+          >
+            tags
+          </button>
           {CAMERA_MODES.map((m) => (
             <button
               key={m}
@@ -214,6 +278,44 @@ export default function SimCanvas() {
             </button>
           ))}
         </div>
+
+        <details className={styles.infoFold}>
+          <summary>Display &amp; hardware</summary>
+          <TrackLegend hasPitLane={hasPitLane} />
+          <GpuBadge
+            gpu={gpuInfo}
+            perf={perf}
+            preference={gpuPref}
+            onPreferenceChange={setGpuPref}
+          />
+        </details>
+      </div>
+
+      {/* bottom centre: transport, the way a player behaves */}
+      <div className={styles.transport}>
+        <div className={styles.transportRow}>
+          <button
+            type="button"
+            className={styles.playBtn}
+            onClick={togglePlay}
+            title="Play / pause (space)"
+          >
+            {playing ? "Pause" : "Play"}
+          </button>
+          <span className={styles.speedGroup}>
+            {SPEEDS.map((x) => (
+              <button
+                key={x}
+                type="button"
+                data-active={speed === x}
+                onClick={() => chooseSpeed(x)}
+              >
+                {x}x
+              </button>
+            ))}
+          </span>
+          <WeatherStrip weather={meta?.weather ?? null} sessionTime={dashboard?.sessionTime ?? 0} />
+        </div>
         {dashboard ? (
           <TimelineScrubber
             sessionTime={dashboard.sessionTime}
@@ -222,31 +324,49 @@ export default function SimCanvas() {
             onSeek={(t) => store.seek(t)}
           />
         ) : null}
-        <WeatherStrip weather={meta?.weather ?? null} sessionTime={dashboard?.sessionTime ?? 0} />
-        <div className={styles.row}>
-          <table className={styles.leaderboard}>
-            <tbody>
-              {dashboard?.leaderboard.map((row) => (
+      </div>
+
+      <CollapsiblePanel
+        title="Leaderboard"
+        corner="topRight"
+        badge={dashboard ? `${dashboard.leaderboard.length} cars` : undefined}
+      >
+        <table className={styles.board}>
+          <tbody>
+            {dashboard?.leaderboard.map((row) => {
+              const meta = driverMeta.get(row.driver);
+              return (
                 <tr
                   key={row.driver}
                   data-selected={row.driver === selectedDriver}
                   onClick={() => selectDriver(row.driver)}
                 >
-                  <td>{row.position}</td>
-                  <td>{row.driver}</td>
-                  <td>{row.gapToLeader}</td>
-                  <td>{row.compound ?? "—"}</td>
-                  <td>{row.status}</td>
+                  <td className={styles.colPos}>{row.position}</td>
+                  <td className={styles.colTeam}>
+                    <span
+                      className={styles.teamBar}
+                      style={{ background: meta?.colour ?? "var(--haas-grey)" }}
+                    />
+                  </td>
+                  <td className={styles.colNum}>{meta?.num ?? ""}</td>
+                  <td className={styles.colDrv}>{row.driver}</td>
+                  <td className={styles.colGap}>{row.gapToLeader}</td>
+                  <td className={styles.colTyre}>{row.compound ? row.compound[0] : "—"}</td>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-          <div className={styles.side}>
-            <DriverPanel row={selectedRow} />
-            <RaceControlFeed events={meta?.events ?? []} sessionTime={dashboard?.sessionTime ?? 0} />
-          </div>
-        </div>
-      </div>
+              );
+            })}
+          </tbody>
+        </table>
+        <DriverPanel row={selectedRow} />
+      </CollapsiblePanel>
+
+      <CollapsiblePanel title="Race control" corner="bottomRight" defaultOpen={false}>
+        <RaceControlFeed
+          events={meta?.events ?? []}
+          sessionTime={dashboard?.sessionTime ?? 0}
+          showTitle={false}
+        />
+      </CollapsiblePanel>
     </div>
   );
 }

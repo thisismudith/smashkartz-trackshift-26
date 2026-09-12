@@ -141,9 +141,11 @@ export function buildTrackOutline(track: TrackModel): THREE.LineSegments {
   return new THREE.LineSegments(geom, mat);
 }
 
-/** Real pit-lane width is not in the telemetry any more than track width is, so this
- * is a documented RULE constant (F1 pit lanes are ~12 m wide including the box side). */
-export const PIT_LANE_WIDTH_M = 12;
+/** RULE constant, like track width: the telemetry gives the lane's CENTRE but not
+ * its width. Sized to fit the measured geometry -- the lane centre runs 3.6-15.4 m
+ * from the racing line, whose own edge is ~4 m out, so a ribbon much wider than this
+ * climbs onto the track instead of sitting beside it. */
+export const PIT_LANE_WIDTH_M = 9;
 
 /**
  * The pit lane as its own ribbon, built from the explicit XY polyline the track model
@@ -151,43 +153,59 @@ export const PIT_LANE_WIDTH_M = 12;
  * corner it bypasses, so no station-offset description of it is possible). Drawn in a
  * lighter grey than the racing surface so it reads as a separate piece of road.
  */
-export function buildPitLaneMesh(track: TrackModel): THREE.Mesh | null {
-  const path = track.pitLanePath;
-  if (!path || path.x.length < 2) return null;
-  const n = path.x.length;
-  const half = (PIT_LANE_WIDTH_M / 2) * PRESENTATION_SCALE;
-  const positions = new Float32Array(n * 2 * 3);
-  const indices: number[] = [];
+export function buildPitLaneMesh(track: TrackModel): THREE.Group | null {
+  const segments = track.pitLanePath;
+  if (!segments || segments.length === 0) return null;
+  const group = new THREE.Group();
+  group.name = "pit-lane";
 
-  for (let i = 0; i < n; i++) {
-    // forward difference, clamped at the ends (the lane is open, not a loop)
-    const i0 = i === n - 1 ? i - 1 : i;
-    const i1 = i === n - 1 ? i : i + 1;
-    const dx = path.x[i1] - path.x[i0];
-    const dy = path.y[i1] - path.y[i0];
-    const len = Math.hypot(dx, dy) || 1;
-    const nx = -dy / len, ny = dx / len;
-    const [lx, ly, lz] = toRenderFrame(path.x[i] + nx * half, path.y[i] + ny * half, path.z[i]);
-    const [rx, ry, rz] = toRenderFrame(path.x[i] - nx * half, path.y[i] - ny * half, path.z[i]);
-    positions.set([lx, ly, lz], i * 6);
-    positions.set([rx, ry, rz], i * 6 + 3);
-    if (i < n - 1) {
-      const a = i * 2, b = i * 2 + 1, c = (i + 1) * 2, d = (i + 1) * 2 + 1;
-      indices.push(a, b, c, b, d, c);
+  for (const path of segments) {
+    const n = path.x.length;
+    if (n < 2) continue;
+    const positions = new Float32Array(n * 2 * 3);
+    const indices: number[] = [];
+    const full = (PIT_LANE_WIDTH_M / 2) * PRESENTATION_SCALE;
+
+    for (let i = 0; i < n; i++) {
+      const i0 = i === n - 1 ? i - 1 : i;
+      const i1 = i === n - 1 ? i : i + 1;
+      const dx = path.x[i1] - path.x[i0];
+      const dy = path.y[i1] - path.y[i0];
+      const len = Math.hypot(dx, dy) || 1;
+      const nx = -dy / len, ny = dx / len;
+      // Taper to nothing at both ends. A constant-width ribbon stops in a hard
+      // rectangular cap, which punched a visible notch through the racing surface
+      // where the lane meets it; fading the width lets it slip under the track.
+      const t = i / (n - 1);
+      const ramp = Math.min(1, Math.min(t, 1 - t) / 0.12);
+      const half = full * ramp;
+      const [lx, ly, lz] = toRenderFrame(path.x[i] + nx * half, path.y[i] + ny * half, path.z[i]);
+      const [rx, ry, rz] = toRenderFrame(path.x[i] - nx * half, path.y[i] - ny * half, path.z[i]);
+      positions.set([lx, ly, lz], i * 6);
+      positions.set([rx, ry, rz], i * 6 + 3);
+      if (i < n - 1) {
+        const a = i * 2, b = i * 2 + 1, c = (i + 1) * 2, d = (i + 1) * 2 + 1;
+        indices.push(a, b, c, b, d, c);
+      }
     }
+
+    const geom = new THREE.BufferGeometry();
+    geom.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    geom.setIndex(indices);
+    geom.computeVertexNormals();
+    const mat = new THREE.MeshStandardMaterial({
+      color: new THREE.Color(HAAS.grey).multiplyScalar(0.45),
+      roughness: 0.95, metalness: 0, side: THREE.DoubleSide,
+      polygonOffset: true, polygonOffsetFactor: 2, polygonOffsetUnits: 2,
+    });
+    const mesh = new THREE.Mesh(geom, mat);
+    mesh.name = `pit-lane-${path.role}`;
+    group.add(mesh);
   }
 
-  const geom = new THREE.BufferGeometry();
-  geom.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-  geom.setIndex(indices);
-  geom.computeVertexNormals();
-  const mat = new THREE.MeshStandardMaterial({
-    color: new THREE.Color(HAAS.grey).multiplyScalar(0.45),
-    roughness: 0.95, metalness: 0, side: THREE.DoubleSide,
-  });
-  const mesh = new THREE.Mesh(geom, mat);
-  mesh.name = "pit-lane";
-  // nudged just above the ground plane so it never z-fights the racing ribbon
-  mesh.position.y = 0.02;
-  return mesh;
+  // The lane runs alongside and merges INTO the racing surface. Where they overlap
+  // the racing surface must win, so the whole group sits below it and draws first.
+  group.position.y = -0.15;
+  group.renderOrder = -1;
+  return group.children.length ? group : null;
 }

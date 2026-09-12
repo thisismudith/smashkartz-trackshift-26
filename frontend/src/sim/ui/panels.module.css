@@ -102,3 +102,51 @@
   background: var(--haas-red);
   padding: 0 0.3rem;
 }
+
+.wind { display: inline-flex; align-items: center; gap: 0.3rem; }
+
+.windArrow {
+  display: inline-block;
+  color: var(--haas-white);
+  line-height: 1;
+  font-size: 0.9rem;
+}
+
+.windDeg { color: var(--haas-grey); font-variant-numeric: tabular-nums; }
+
+.provRow {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.62rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--haas-grey);
+  margin: 0.5rem 0 0.3rem;
+}
+
+.provPill {
+  border: 1px solid var(--haas-grey);
+  padding: 0.05rem 0.3rem;
+  color: var(--haas-white);
+}
+
+.provPill[data-kind="observed"] { border-color: var(--haas-white); }
+.provPill[data-kind="missing"] { border-color: var(--haas-red); color: var(--haas-red); }
+
+.provNote {
+  margin: 0;
+  font-size: 0.66rem;
+  line-height: 1.45;
+  color: var(--haas-grey);
+}
+
+.provPill[data-kind="inferred"] { border-color: var(--haas-red); }
+
+.warnList {
+  margin: 0.3rem 0;
+  padding-left: 0.9rem;
+  font-size: 0.62rem;
+  line-height: 1.4;
+  color: var(--haas-red);
+}

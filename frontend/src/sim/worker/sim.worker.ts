@@ -20,7 +20,7 @@ const ctx = self as unknown as DedicatedWorkerGlobalScope;
 const TICK_HZ = 60;
 const TICK_S = 1 / TICK_HZ;
 const DASHBOARD_HZ = 10;
-const MAX_TIME_SCALE = 20;
+const MAX_TIME_SCALE = 100;
 
 let timeline: RaceTimeline | null = null;
 let driverOrder: string[] = [];
@@ -108,7 +108,10 @@ function tick() {
     sessionTime = Math.max(0, Math.min(timeline.duration, sessionTime + dtWall * speedMultiplier));
   }
 
-  const states = timeline.sampleAt(sessionTime);
+  // Decide up front whether this tick feeds the dashboard; the expensive gap search
+  // is then done once every sixth tick instead of every one.
+  const buildsDashboard = dashboardAcc + dtWall >= 1 / DASHBOARD_HZ;
+  const states = timeline.sampleAt(sessionTime, buildsDashboard);
   poseScratch = packPose(states, driverOrder, poseScratch ?? undefined);
   // a fresh copy is transferred each tick (the scratch buffer is rebuilt next tick);
   // this keeps the worker's own reference stable without an explicit ping-pong pair,
@@ -121,7 +124,9 @@ function tick() {
   );
 
   dashboardAcc += dtWall;
-  if (dashboardAcc >= 1 / DASHBOARD_HZ) {
+  // same flag the sampling decision used, so the two can never disagree and emit a
+  // dashboard built from a states map that had its gap search skipped
+  if (buildsDashboard) {
     dashboardAcc = 0;
     const snapshot = buildDashboardSnapshot(
       states, sessionTime, timeline.events(), timeline.neutralisations(),

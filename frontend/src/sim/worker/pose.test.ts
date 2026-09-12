@@ -9,7 +9,7 @@ function makeState(overrides: Partial<CarState> = {}): CarState {
     headingRad: 0.7, speedKph: 280, gear: 7, throttlePct: 95, brake: false,
     tyreCompound: "MEDIUM", tyreLife: 10, lapsDone: 3, lapProgress: 0.42, position: 1,
     gapToLeaderS: null, lapsDownFromLeader: 0, intervalS: null, inPit: false,
-    status: "track", provenance: "OBSERVED", ...overrides,
+    status: "track", provenance: "OBSERVED", energy: null, ...overrides,
   };
 }
 

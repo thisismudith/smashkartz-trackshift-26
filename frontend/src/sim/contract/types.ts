@@ -4,6 +4,8 @@
  * know which source produced it.
  */
 
+import type { LapEnergy } from "../data/source";
+
 export type Provenance = "OBSERVED" | "DERIVED" | "INFERRED" | "SIMULATED" | "RULE" | "DEFAULT";
 
 /** Per-car state at one instant, in TRACK-FRAME coordinates (never raw x/y): a
@@ -31,6 +33,8 @@ export interface CarState {
   inPit: boolean;
   status: "grid" | "track" | "pit" | "finished" | "retired" | "gap";
   provenance: Provenance;
+  /** Energy twin summary for the lap this car is on (INFERRED/SIMULATED). */
+  energy: LapEnergy | null;
 }
 
 export interface RaceEvent {
@@ -65,9 +69,10 @@ export interface TrackModel {
     mergeStation: number | null;
     loopLateral: number | null;
   };
-  /** Explicit XY(Z) polyline of the pit lane, metres, in the ring's own frame.
-   * Null when a session has too few pit laps to trace one. */
-  pitLanePath: { x: Float32Array; y: Float32Array; z: Float32Array } | null;
+  /** The pit lane as SEPARATE roads (entry, exit) in the ring's own frame, metres.
+   * Never one stitched path: the two are different pieces of tarmac and joining
+   * them folds the ribbon back on itself. Null when too few pit laps to trace. */
+  pitLanePath: { role: string; x: Float32Array; y: Float32Array; z: Float32Array }[] | null;
   grid: { order: string[]; pitchMetres: number };
   referenceProfile: { binMetres: number; speedKph: Float32Array; gear: Uint8Array };
 }
@@ -82,6 +87,8 @@ export interface WeatherSeries {
   humidityPct: number[];
   rain: boolean[];
   windMps: number[];
+  /** Compass bearing the wind blows FROM, degrees. */
+  windFromDeg: number[];
   provenance: Provenance;
 }
 
@@ -95,7 +102,7 @@ export interface RaceTimeline {
   totalLaps: number | null;
   /** The session-time domain this timeline covers, seconds. */
   duration: number;
-  sampleAt(sessionTime: number): Map<string, CarState>;
+  sampleAt(sessionTime: number, withGaps?: boolean): Map<string, CarState>;
   events(): RaceEvent[];
   neutralisations(): NeutralisationInterval[];
   weather(): WeatherSeries | null;
@@ -111,6 +118,7 @@ export interface DashboardRow {
   tyreLife: number | null;
   status: CarState["status"];
   lastLapS: number | null;
+  energy: LapEnergy | null;
   speedKph: number;
   gear: number;
   throttlePct: number;

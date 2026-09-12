@@ -8,7 +8,7 @@ function makeCar(overrides: Partial<CarState> = {}): CarState {
     headingRad: 0, speedKph: 0, gear: 1, throttlePct: 0, brake: false,
     tyreCompound: "MEDIUM", tyreLife: 1, lapsDone: 0, lapProgress: 0, position: 1,
     gapToLeaderS: null, lapsDownFromLeader: 0, intervalS: null, inPit: false,
-    status: "track", provenance: "OBSERVED", ...overrides,
+    status: "track", provenance: "OBSERVED", energy: null, ...overrides,
   };
 }
 
