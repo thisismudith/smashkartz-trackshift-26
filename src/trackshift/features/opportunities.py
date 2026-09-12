@@ -130,7 +130,8 @@ def assert_checkpoint_scope(
     skip = set(ignore) | set(AUDIT_ONLY_COLUMNS) | {
         "opportunity_id", "decision_checkpoint", "feature_cutoff_distance_m",
         "outcome_horizon", "label_definition", "schema_version",
-        "passed_by_outcome_horizon",
+        "passed_by_outcome_horizon", "feature_cutoff_offset_m",
+        "crosses_lap_boundary",
     }
     entries = registry if registry is not None else load_feature_registry()
     offenders = []
@@ -196,6 +197,7 @@ def build_opportunity_rows(
     label: Any = None,
     pass_attempted: Any = None,
     outcome_distance_m: Any = None,
+    lap_length_m: Any = None,
     registry: Mapping[str, Mapping[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     """Emit exactly three rows for one opportunity, one per checkpoint.
@@ -222,15 +224,37 @@ def build_opportunity_rows(
             )
         resolved[name] = float(value)
 
+    # Ordering is causal, and lap distance is a wrapping coordinate. The 2026
+    # Detection Line sits at Safety Car Line 1, near the end of the lap, so an
+    # activation zone is usually early on the *following* lap and its lap
+    # distance is numerically smaller. Order by distance travelled since
+    # detection instead, and keep the true lap distances in the row -- the
+    # checkpoints are still strictly ordered in the only sense that matters.
     ordered = [resolved[name] for name in CHECKPOINTS]
-    if not all(earlier < later for earlier, later in zip(ordered, ordered[1:])):
+    length = None
+    if lap_length_m is not None:
+        try:
+            length = float(lap_length_m)
+        except (TypeError, ValueError):
+            length = None
+        if length is not None and length <= 0:
+            raise OpportunityError(f"lap_length_m must be positive, got {lap_length_m!r}")
+
+    detection = resolved[CHECKPOINTS[0]]
+    if length:
+        offsets = [(value - detection) % length for value in ordered]
+    else:
+        offsets = list(ordered)
+
+    if not all(earlier < later for earlier, later in zip(offsets, offsets[1:])):
         raise OpportunityError(
-            "feature_cutoff_distance_m must strictly increase across DETECTION, "
-            f"ACTIVATION, BRAKING; got {ordered}"
+            "checkpoints must be strictly ordered by distance travelled since the "
+            f"Detection Line; got cutoffs {ordered} (offsets {offsets})"
+            + ("" if length else ". Pass lap_length_m if this opportunity wraps the lap.")
         )
 
     rows: list[dict[str, Any]] = []
-    for name in CHECKPOINTS:
+    for index, name in enumerate(CHECKPOINTS):
         cutoff = resolved[name]
         features = dict(feature_builder(name, cutoff))
         assert_checkpoint_scope(features, name, registry=registry)
@@ -240,6 +264,11 @@ def build_opportunity_rows(
         row.update({
             "decision_checkpoint": name,
             "feature_cutoff_distance_m": cutoff,
+            # Distance travelled since the Detection Line. Strictly increasing
+            # even when the opportunity crosses the start line, which the lap
+            # distance above is not.
+            "feature_cutoff_offset_m": offsets[index],
+            "crosses_lap_boundary": bool(length and offsets[index] > 0 and cutoff < detection),
             "outcome_horizon": LABEL_DEFINITION,
             "label_definition": LABEL_DEFINITION,
             "schema_version": OPPORTUNITY_SCHEMA_VERSION,

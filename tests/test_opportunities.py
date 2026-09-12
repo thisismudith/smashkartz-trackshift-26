@@ -77,7 +77,7 @@ def test_feature_cutoff_strictly_increases():
 
 def test_non_increasing_cutoffs_are_refused():
     bad = {"DETECTION": 400.0, "ACTIVATION": 320.0, "BRAKING": 900.0}
-    with pytest.raises(OpportunityError, match="strictly increase"):
+    with pytest.raises(OpportunityError, match="strictly ordered"):
         build_opportunity_rows(context(), bad, honest_builder, registry=REGISTRY)
 
 
@@ -205,3 +205,49 @@ def test_real_registry_scopes_the_checkpoint_columns():
     assert "speed_at_braking_kmh" in braking
     assert "gap_at_activation_s" not in detection
     assert "p_eligible" in detection
+
+
+# ------------------------------------------------------- wrapping the lap
+
+WRAP_CUTOFFS = {"DETECTION": 5520.0, "ACTIVATION": 1300.0, "BRAKING": 1650.0}
+LAP = 5811.0
+
+
+def test_an_opportunity_may_cross_the_start_line():
+    """The 2026 Detection Line is at Safety Car Line 1, near the lap end, so the
+    activation zone is usually early on the following lap. Ordering by raw lap
+    distance would reject every real Silverstone opportunity."""
+    rows = build_opportunity_rows(
+        context(), WRAP_CUTOFFS, honest_builder, lap_length_m=LAP, registry=REGISTRY
+    )
+    assert len(rows) == 3
+    offsets = [r["feature_cutoff_offset_m"] for r in rows]
+    assert all(a < b for a, b in zip(offsets, offsets[1:])), offsets
+    assert offsets[0] == 0.0
+    # The stored lap distances are the real ones, not the unwrapped offsets.
+    assert [r["feature_cutoff_distance_m"] for r in rows] == [5520.0, 1300.0, 1650.0]
+    assert [r["crosses_lap_boundary"] for r in rows] == [False, True, True]
+
+
+def test_wrapping_cutoffs_are_refused_without_a_lap_length():
+    """Silently accepting them would order the checkpoints backwards."""
+    with pytest.raises(OpportunityError, match="lap_length_m"):
+        build_opportunity_rows(context(), WRAP_CUTOFFS, honest_builder, registry=REGISTRY)
+
+
+def test_out_of_order_cutoffs_still_refused_when_wrapping():
+    bad = {"DETECTION": 5520.0, "ACTIVATION": 1650.0, "BRAKING": 1300.0}
+    with pytest.raises(OpportunityError, match="strictly ordered"):
+        build_opportunity_rows(context(), bad, honest_builder, lap_length_m=LAP, registry=REGISTRY)
+
+
+def test_non_wrapping_opportunity_is_unchanged_by_a_lap_length():
+    rows = build_opportunity_rows(context(), CUTOFFS, honest_builder, lap_length_m=LAP, registry=REGISTRY)
+    assert [r["crosses_lap_boundary"] for r in rows] == [False, False, False]
+    assert [r["feature_cutoff_offset_m"] for r in rows] == [0.0, 220.0, 800.0]
+
+
+def test_bad_lap_length_is_refused():
+    with pytest.raises(OpportunityError, match="positive"):
+        build_opportunity_rows(context(), CUTOFFS, honest_builder, lap_length_m=0, registry=REGISTRY)
+

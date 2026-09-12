@@ -75,6 +75,12 @@ def _at_distance(frame, target: float):
     return None if eligible.empty else eligible.iloc[-1]
 
 
+def _at_offset(journey, target: float):
+    """The row at or immediately before ``target`` metres since the Detection Line."""
+    eligible = journey[journey["offset_m"] <= target]
+    return None if eligible.empty else eligible.iloc[-1]
+
+
 def _checkpoint_features(view, zone: dict, checkpoint: str, cutoff: float,
                          threshold_s: float, trailing: list[float]) -> dict[str, Any]:
     """Features knowable at ``checkpoint``, from a view already truncated at the cutoff.
@@ -93,14 +99,16 @@ def _checkpoint_features(view, zone: dict, checkpoint: str, cutoff: float,
     features: dict[str, Any] = {
         "gap_at_checkpoint": gap_s,
         "closing_rate_s_per_s": trailing[-1] if trailing else None,
-        "distance_detection_to_activation": zone["activation_line_m"] - zone["detection_line_m"],
+        "distance_detection_to_activation": zone["activation_offset_m"],
     }
-    if zone.get("zone_end_m") is not None:
-        features["distance_remaining_in_zone"] = float(zone["zone_end_m"]) - cutoff
+    if zone.get("zone_end_offset_m") is not None:
+        features["distance_remaining_in_zone"] = float(zone["zone_end_offset_m"]) - cutoff
 
     if gap_s is not None:
         speed_mps = (_number_or_none(last.get("speed_kmh")) or 0.0) / 3.6
-        remaining = max(0.0, zone["detection_line_m"] - cutoff)
+        # Distance still to run to the Detection Line. Zero at and after it,
+        # which is the causally honest horizon for a projection made there.
+        remaining = max(0.0, -float(last.get("offset_m", 0.0)))
         horizon = remaining / speed_mps if speed_mps > 0 else 0.0
         projection = project_gap_at_line(
             gap_s, trailing[-1] if trailing else 0.0, horizon, trailing, threshold_s=threshold_s
@@ -113,12 +121,12 @@ def _checkpoint_features(view, zone: dict, checkpoint: str, cutoff: float,
         })
 
     if checkpoint in ("ACTIVATION", "BRAKING"):
-        row = _at_distance(view, zone["activation_line_m"])
+        row = _at_offset(view, zone["activation_offset_m"])
         if row is not None:
             features["gap_at_activation_s"] = _gap_s(row.get("gap_ahead_m"), row.get("speed_kmh"))
             features["speed_at_activation_kmh"] = _number_or_none(row.get("speed_kmh"))
-        if zone.get("brake_onset_m") is not None:
-            features["distance_activation_to_brake"] = float(zone["brake_onset_m"]) - zone["activation_line_m"]
+        if zone.get("brake_offset_m") is not None:
+            features["distance_activation_to_brake"] = float(zone["brake_offset_m"]) - zone["activation_offset_m"]
     if checkpoint == "BRAKING":
         features["speed_at_braking_kmh"] = _number_or_none(last.get("speed_kmh"))
 
@@ -216,7 +224,11 @@ def build_event(event: str, year: str, output_root: Path) -> dict[str, Any]:
     for zone in resolved_zones(rules):
         detection = _value(zone.get("detection_line_m"))
         activation = _value(zone.get("activation_line_m"))
-        if detection is None or activation is None or not detection < activation:
+        # No in-lap ordering requirement: the Detection Line sits near the lap
+        # end, so an activation zone earlier in lap distance is on the following
+        # lap, not out of order. Ordering is checked per opportunity in distance
+        # travelled since detection.
+        if detection is None or activation is None or detection == activation:
             continue
         zones.append({
             "zone": zone.get("zone"),
@@ -250,70 +262,103 @@ def build_event(event: str, year: str, output_root: Path) -> dict[str, Any]:
     rows_out: list[dict[str, Any]] = []
     opportunities = 0
 
-    for (session, driver, lap), block in frame.groupby(["session", "driver", "lap"], sort=True):
-        block = block.reset_index(drop=True)
-        # Green flag only. Section 12 makes race-control transitions hard
-        # boundaries, and an approach under Safety Car is not an opportunity.
-        status = str(block.iloc[0].get("track_status") or "")
-        if status and set(status) != {"1"}:
-            continue
+    for (session, driver), stint in frame.groupby(["session", "driver"], sort=True):
+        # A continuous distance axis for this driver's whole session. The
+        # Detection Line sits near the lap end, so an opportunity usually runs
+        # into the following lap; a per-lap frame cannot express that at all.
+        stint = stint.sort_values(["lap", "distance_m"], kind="stable").reset_index(drop=True)
+        lap_end = stint.groupby("lap")["distance_m"].max()
+        lap_start = lap_end.cumsum().shift(fill_value=0.0)
+        stint["cum_m"] = stint["distance_m"] + stint["lap"].map(lap_start).astype(float)
 
-        for zone in zones:
-            detection = zone["detection_line_m"]
-            activation = zone["activation_line_m"]
-            entry = _at_distance(block, detection)
-            if entry is None:
+        for lap, block in stint.groupby("lap", sort=True):
+            status = str(block.iloc[0].get("track_status") or "")
+            # Green flag only. Section 12 makes race-control transitions hard
+            # boundaries, and an approach under Safety Car is not an opportunity.
+            if status and set(status) != {"1"}:
                 continue
-            gap_s = _gap_s(entry.get("gap_ahead_m"), entry.get("speed_kmh"))
-            if gap_s is None or gap_s >= threshold * 2:
-                continue
-            defender = _number_or_none(entry.get("driver_ahead_number"))
-            if defender is None:
+            lap_length = float(lap_end.get(lap, 0.0) or 0.0)
+            if lap_length <= 0:
                 continue
 
-            lap_end = float(block["distance_m"].max())
-            zone_end = float(zone["zone_end_m"]) if zone["zone_end_m"] is not None else lap_end
-            zone_end = min(zone_end, lap_end)
+            for zone in zones:
+                detection, activation = zone["detection_line_m"], zone["activation_line_m"]
+                entry = _at_distance(block, detection)
+                if entry is None:
+                    continue
+                gap_s = _gap_s(entry.get("gap_ahead_m"), entry.get("speed_kmh"))
+                if gap_s is None or gap_s >= threshold * 2:
+                    continue
+                defender = _number_or_none(entry.get("driver_ahead_number"))
+                if defender is None:
+                    continue
 
-            in_zone = block[(block["distance_m"] > activation) & (block["distance_m"] <= zone_end)]
-            braking = in_zone[in_zone["brake_on"].fillna(False).astype(bool)]
-            brake_m = float(braking.iloc[0]["distance_m"]) if len(braking) else zone_end
-            if not detection < activation < brake_m:
-                continue
+                zone_end = float(zone["zone_end_m"]) if zone["zone_end_m"] is not None else activation
+                activation_offset = (activation - detection) % lap_length
+                zone_end_offset = (zone_end - detection) % lap_length
+                if activation_offset <= 0 or zone_end_offset <= activation_offset:
+                    continue
 
-            before = block[block["distance_m"] <= detection].tail(6)
-            gaps = [_gap_s(row.gap_ahead_m, row.speed_kmh) for row in before.itertuples()]
-            gaps = [g for g in gaps if g is not None]
-            trailing = [a - b for a, b in zip(gaps, gaps[1:])] or [0.0]
+                origin = float(entry["cum_m"])
+                journey = stint[(stint["cum_m"] >= origin - 300.0)
+                                & (stint["cum_m"] <= origin + zone_end_offset + 20.0)].copy()
+                journey["offset_m"] = journey["cum_m"] - origin
+                # Samples sit on a 20 m grid, so a row exactly at the zone end
+                # is the exception, not the rule. Require coverage to within one
+                # sample of it: anything less means the session or the car's data
+                # stopped inside the zone and there is no outcome to label.
+                if journey["offset_m"].max() < zone_end_offset - 20.0:
+                    continue
 
-            exit_row = _at_distance(block, zone_end)
-            attacker_exit = _number_or_none(exit_row.get("race_position")) if exit_row is not None else None
-            defender_block = by_number.get((session, lap, str(int(defender))))
-            defender_exit = None
-            if defender_block is not None:
-                defender_row = _at_distance(defender_block.sort_values("distance_m"), zone_end)
-                if defender_row is not None:
-                    defender_exit = _number_or_none(defender_row.get("race_position"))
+                in_zone = journey[(journey["offset_m"] > activation_offset)
+                                  & (journey["offset_m"] <= zone_end_offset)]
+                braking = in_zone[in_zone["brake_on"].fillna(False).astype(bool)]
+                brake_offset = (float(braking.iloc[0]["offset_m"]) if len(braking) else zone_end_offset)
+                if not 0 < activation_offset < brake_offset:
+                    continue
+                brake_m = float((detection + brake_offset) % lap_length)
 
-            geometry = {**zone, "brake_onset_m": brake_m}
-            context = OpportunityContext(
-                opportunity_id=opportunity_id(year, event, session, lap, zone["zone"], driver, int(defender)),
-                year=year, event=event, session=session, lap=int(lap), zone=zone["zone"],
-                attacker=driver, defender=str(int(defender)),
-                attacker_team=entry.get("team"), regulation_era="2026",
-            )
-            rows_out.extend(build_opportunity_rows(
-                context,
-                {"DETECTION": detection, "ACTIVATION": activation, "BRAKING": brake_m},
-                lambda checkpoint, cutoff, _block=block, _zone=geometry, _trailing=trailing:
-                    _checkpoint_features(
-                        _block[_block["distance_m"] <= cutoff], _zone, checkpoint, cutoff,
-                        threshold, _trailing,
-                    ),
-                label=label_zone_exit_v1(attacker_exit, defender_exit),
-                outcome_distance_m=zone_end,
-            ))
-            opportunities += 1
+                before = journey[journey["offset_m"] <= 0].tail(6)
+                gaps = [_gap_s(row.gap_ahead_m, row.speed_kmh) for row in before.itertuples()]
+                gaps = [g for g in gaps if g is not None]
+                trailing = [a - b for a, b in zip(gaps, gaps[1:])] or [0.0]
+
+                exit_row = _at_offset(journey, zone_end_offset)
+                attacker_exit = _number_or_none(exit_row.get("race_position")) if exit_row is not None else None
+                defender_exit = None
+                exit_lap = int(exit_row["lap"]) if exit_row is not None else int(lap)
+                defender_block = by_number.get((session, exit_lap, str(int(defender))))
+                if defender_block is not None:
+                    defender_row = _at_distance(
+                        defender_block.sort_values("distance_m"), float(exit_row["distance_m"])
+                    )
+                    if defender_row is not None:
+                        defender_exit = _number_or_none(defender_row.get("race_position"))
+
+                geometry = {**zone, "brake_onset_m": brake_m,
+                            "activation_offset_m": activation_offset,
+                            "brake_offset_m": brake_offset,
+                            "zone_end_offset_m": zone_end_offset}
+                context = OpportunityContext(
+                    opportunity_id=opportunity_id(year, event, session, lap, zone["zone"], driver, int(defender)),
+                    year=year, event=event, session=session, lap=int(lap), zone=zone["zone"],
+                    attacker=driver, defender=str(int(defender)),
+                    attacker_team=entry.get("team"), regulation_era="2026",
+                )
+                offsets = {"DETECTION": 0.0, "ACTIVATION": activation_offset, "BRAKING": brake_offset}
+                rows_out.extend(build_opportunity_rows(
+                    context,
+                    {"DETECTION": detection, "ACTIVATION": activation, "BRAKING": brake_m},
+                    lambda checkpoint, cutoff, _j=journey, _z=geometry, _t=trailing, _o=offsets:
+                        _checkpoint_features(
+                            _j[_j["offset_m"] <= _o[checkpoint]], _z, checkpoint,
+                            _o[checkpoint], threshold, _t,
+                        ),
+                    label=label_zone_exit_v1(attacker_exit, defender_exit),
+                    outcome_distance_m=zone_end,
+                    lap_length_m=lap_length,
+                ))
+                opportunities += 1
 
     written = None
     if rows_out:

@@ -62,8 +62,8 @@ Each checkpoint has the same shape:
 | 09 | Segment baselines | M04 | ✅ |
 | 10 | Overtake state machine | M20 | ✅ |
 | 11 | Rule engine (owns the envelope evaluator) | M19 | ✅ |
-| 12 | Eligibility probability | M21 | ☐ |
-| 13 | Overtake-opportunity dataset | M07 | ☐ |
+| 12 | Eligibility probability | M21 | ✅ |
+| 13 | Overtake-opportunity dataset | M07 | ✅ |
 | 14 | Pass-model benchmark | M10 | ☐ |
 | 15 | Probability calibration | M11 | ☐ |
 | 16 | Ensemble spread | M12 | ☐ |
@@ -1358,6 +1358,44 @@ Rough estimate: a race has 20–60 close approaches to a Detection Line. Across 
 ### Deliverables
 
 `src/trackshift/features/opportunities.py`, `scripts/features/build_opportunities.py`, `data/processed/overtake_opportunities/`, `tests/test_opportunities.py`, registry entries with `decision_checkpoint` on every feature.
+
+### ✅ Completed
+
+**4,970 opportunities, 14,910 rows** across 8 events, every gate measured on the
+produced data rather than on fixtures:
+
+| Gate | Measured |
+|---|---|
+| Exactly 3 rows per `opportunity_id` | **PASS**, 14,910 = 4,970 x 3 |
+| Checkpoints strictly ordered | **PASS** on distance since detection |
+| **Leakage** | **PASS** -- no activation or braking column populated in any DETECTION row |
+| Label base rate 10-35% | **15.4%** |
+
+The base rate is the gate that carries information. A definition that counted
+hopeless approaches would sit near 2%, and one that only counted completed
+passes near 70%. Landing mid-band is what says the opportunity is being defined
+at the Detection Line, before the outcome is known.
+
+**An opportunity usually crosses the start line, and this was the hard part.**
+The Detection Line is at Safety Car Line 1, near the lap end, so the activation
+zone is normally early on the *following* lap -- **90% of opportunities** wrap,
+100% at every circuit except Canada and Monaco. Three things followed:
+
+- Ordering by raw lap distance rejects every wrapping opportunity, because the
+  activation distance is numerically smaller than the detection distance. Rows
+  now carry `feature_cutoff_offset_m`, the distance travelled since detection,
+  which is strictly increasing; `feature_cutoff_distance_m` still holds the true
+  lap distance. `lap_length_m` must be supplied when an opportunity wraps, and
+  is refused rather than assumed.
+- The builder works on a continuous per-driver distance axis spanning laps. A
+  per-lap frame cannot express the opportunity at all.
+- CP-10's lap-boundary reset was right for `ACTIVE` and wrong for `ARMED`: a car
+  detected at the end of a lap must stay armed into the next one, which is the
+  whole point of a detection line placed there.
+
+Before this, 9 of 11 configured circuits produced nothing and Canada produced
+436 from its one non-wrapping zone -- a result that looked like a threshold
+problem and was really a coordinate-system problem.
 
 ---
 
