@@ -150,3 +150,53 @@
   line-height: 1.4;
   color: var(--haas-red);
 }
+
+.flagActive { color: var(--haas-red); font-weight: 600; }
+
+.barRow { display: flex; align-items: center; gap: 0.4rem; margin: 0.15rem 0; }
+.barLabel { width: 3.6rem; color: var(--haas-grey); font-size: 0.66rem; text-transform: uppercase; }
+.barTrack { flex: 1; height: 0.42rem; background: rgba(174,174,174,0.18); }
+.barFill { height: 100%; background: var(--haas-white); display: block; }
+.barFill[data-kind="brake"] { background: var(--haas-red); }
+.barValue { width: 2.6rem; text-align: right; font-variant-numeric: tabular-nums; font-size: 0.7rem; }
+
+.speedBig {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  font-size: 1.6rem;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  margin: 0.15rem 0 0.35rem;
+}
+
+.speedUnit { font-size: 0.65rem; color: var(--haas-grey); text-transform: uppercase; }
+
+.gearBadge {
+  margin-left: auto;
+  font-size: 0.8rem;
+  padding: 0.05rem 0.4rem;
+  border: 1px solid var(--haas-grey);
+  color: var(--haas-white);
+}
+
+/* the windArrow above is inline inside a <dd>; keep it from collapsing */
+.windArrow { display: inline-block; }
+
+.noteFold { margin-top: 0.3rem; }
+
+.noteFold summary {
+  cursor: pointer;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--haas-grey);
+  list-style: none;
+}
+
+.noteFold summary::-webkit-details-marker { display: none; }
+.noteFold summary::before { content: "+ "; }
+.noteFold[open] summary::before { content: "− "; }
+.noteFold summary:hover { color: var(--haas-white); }
+.noteFold .provNote { margin-top: 0.25rem; }

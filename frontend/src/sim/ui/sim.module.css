@@ -365,12 +365,21 @@
   position: absolute;
   top: 1rem;
   left: 1rem;
+  /* Bounded at the bottom so the dock below can flex into exactly the space that is
+     left, instead of running off the viewport. The container itself is click-through;
+     only its children take pointer events, so the empty area never eats a canvas drag. */
+  bottom: 7.5rem;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   gap: 0.5rem;
-  pointer-events: auto;
+  pointer-events: none;
   max-width: min(34rem, 46vw);
+}
+
+.topLeft > * {
+  pointer-events: auto;
+  flex: none;
 }
 
 .titleRow {
@@ -485,4 +494,28 @@
 .speedGroup button[data-active="true"] {
   background: var(--haas-red);
   border-color: var(--haas-red);
+}
+
+/* Focused car + environment, always on screen. Flows inside .topLeft rather than
+   being absolutely positioned at a guessed offset, because the controls above it
+   wrap to a different number of rows depending on viewport width. The max-height
+   keeps a long panel from running down over the transport bar. */
+/* Takes whatever vertical space the controls above it leave. min-height:0 is what
+   actually lets a flex child shrink below its content height and scroll. */
+.leftDock {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  width: min(19rem, 26vw);
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  pointer-events: none;
+  scrollbar-width: thin;
+}
+
+.leftDock > * {
+  flex: none;
+  pointer-events: auto;
 }

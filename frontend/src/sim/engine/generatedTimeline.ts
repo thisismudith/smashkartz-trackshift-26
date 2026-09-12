@@ -88,6 +88,7 @@ export class GeneratedTimeline implements RaceTimeline {
         inPit: lapRow.pin !== null && t >= lapRow.pin,
         status: finished ? "finished" : (lapRow.pin !== null && t >= lapRow.pin ? "pit" : "track"),
         provenance: "SIMULATED",
+        positionProvenance: "SIMULATED",
         energy: null,
       });
     });
@@ -99,7 +100,7 @@ export class GeneratedTimeline implements RaceTimeline {
       driver, team, stationM: 0, lateralM: 0, elevationM: 0, headingRad: 0,
       speedKph: 0, gear: 0, throttlePct: 0, brake: false, tyreCompound: null, tyreLife: null,
       lapsDone: 0, lapProgress: 0, position, gapToLeaderS: null, lapsDownFromLeader: 0,
-      intervalS: null, inPit: false, status: "grid", provenance: "SIMULATED", energy: null,
+      intervalS: null, inPit: false, status: "grid", provenance: "SIMULATED", positionProvenance: "SIMULATED", energy: null,
     };
   }
 

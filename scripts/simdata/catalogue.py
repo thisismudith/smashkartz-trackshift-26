@@ -67,15 +67,18 @@ def driver_registry(events: list[str]) -> dict:
                 if team not in (None, "None"):
                     last_team[code] = team
                 key = (code, team)
+                first = a.get("fn") if a else None
+                last = a.get("ln") if a else None
                 if key not in entries:
                     entries[key] = {"code": code, "team": team, "colour": colour,
-                                     "number": number, "sessions": 0}
+                                     "number": number, "firstName": first,
+                                     "lastName": last, "sessions": 0}
                     order.append(key)
                 entries[key]["sessions"] += 1
-                if entries[key]["colour"] in (None, "None") and colour not in (None, "None"):
-                    entries[key]["colour"] = colour
-                if entries[key]["number"] in (None, "None") and number not in (None, "None"):
-                    entries[key]["number"] = number
+                for field, value in (("colour", colour), ("number", number),
+                                      ("firstName", first), ("lastName", last)):
+                    if entries[key][field] in (None, "None") and value not in (None, "None"):
+                        entries[key][field] = value
     # Fold any (code, None) entry into the driver's real (code, team) entry: it only
     # exists because that code's team was unresolved on its first sighting (e.g. a
     # Practice-1 session whose drivers.json row lacked a team), and the real team is
@@ -95,10 +98,9 @@ def driver_registry(events: list[str]) -> dict:
             merged[target] = {**seed, "sessions": 0}
             merged_order.append(target)
         merged[target]["sessions"] += entries[key]["sessions"]
-        if merged[target]["colour"] in (None, "None") and entries[key]["colour"] not in (None, "None"):
-            merged[target]["colour"] = entries[key]["colour"]
-        if merged[target]["number"] in (None, "None") and entries[key]["number"] not in (None, "None"):
-            merged[target]["number"] = entries[key]["number"]
+        for field in ("colour", "number", "firstName", "lastName"):
+            if merged[target][field] in (None, "None") and entries[key][field] not in (None, "None"):
+                merged[target][field] = entries[key][field]
     return {"drivers": [merged[k] for k in merged_order]}
 
 
@@ -108,6 +110,65 @@ def team_registry(driver_reg: dict) -> dict:
         if d["team"] and d["colour"] not in (None, "None"):
             colours.setdefault(d["team"], d["colour"])
     return {"teams": [{"team": t, "colour": c} for t, c in sorted(colours.items())]}
+
+
+def _clean(v):
+    """drivers.json writes a literal "None" string where a field is absent."""
+    return None if v in (None, "None", "") else v
+
+
+def race_entries(event: str, registry: dict) -> list[dict]:
+    """The cars that actually started this Grand Prix, in car-number order.
+
+    The New Race configurator may only offer these: the global driver registry is the
+    union over EVERY session, so it also carries reserve and rookie drivers who only
+    ran a Friday practice (measured: 35 registry entries against a 22-car grid), and
+    those cars were never on the grid on Sunday.
+
+    An entrant is a code seen in the Race session, taken as the union of two sources
+    because neither is complete on its own: drivers.json (full name, car number, team
+    colour) drops entrants in several events (measured: Chinese Race lists 18 rows
+    against 22 telemetry directories), and a telemetry directory carries no attributes
+    at all. Attributes come from the event's own drivers.json first, then from the
+    registry, so a code present only as a directory still arrives fully described.
+    """
+    race_dir = DATA_ROOT / event / "Race"
+    if not race_dir.exists():
+        return []
+
+    rows: dict[str, dict] = {}
+    drv_file = race_dir / "drivers.json"
+    if drv_file.exists():
+        try:
+            for row in json.loads(drv_file.read_text(encoding="utf-8")).get("drivers", []):
+                code = row.get("driver")
+                if code:
+                    rows[code] = row
+        except (json.JSONDecodeError, AttributeError):
+            pass
+
+    codes = set(rows)
+    for d in race_dir.iterdir():
+        if d.is_dir() and len(d.name) == 3 and d.name.isalpha():
+            codes.add(d.name)
+
+    by_code = {d["code"]: d for d in registry["drivers"]}
+    out = []
+    for code in codes:
+        row = rows.get(code, {})
+        fallback = by_code.get(code, {})
+        out.append({
+            "code": code,
+            "number": _clean(row.get("dn")) or _clean(fallback.get("number")),
+            "team": _clean(row.get("team")) or _clean(fallback.get("team")),
+            "colour": _clean(row.get("tc")) or _clean(fallback.get("colour")),
+            "firstName": _clean(row.get("fn")) or _clean(fallback.get("firstName")),
+            "lastName": _clean(row.get("ln")) or _clean(fallback.get("lastName")),
+        })
+    # Car number is the official entry-list order, and the configurator hands the list
+    # to the engine as the starting grid, so the order has to be stable and meaningful.
+    out.sort(key=lambda e: (int(e["number"]) if (e["number"] or "").isdigit() else 999, e["code"]))
+    return out
 
 
 def weather_envelope(event: str) -> dict:
@@ -209,6 +270,7 @@ def build_catalogue() -> dict:
             "year": year,
             "sessions": event_sessions(event),
             **rl,
+            "entries": race_entries(event, driver_reg),
             "weather": weather_envelope(event),
             "tyres": tyre_allocation(event),
         })
@@ -235,7 +297,8 @@ def main():
     path = out_dir / f"catalogue.{digest}.json"
     path.write_bytes(payload)
     print(f"catalogue: {path.name}  {len(payload)/1024:.1f} KB  "
-          f"{len(cat['drivers'])} drivers  {len(cat['teams'])} teams  {len(cat['tracks'])} tracks")
+          f"{len(cat['drivers'])} drivers  {len(cat['teams'])} teams  {len(cat['tracks'])} tracks  "
+          f"(fields: {', '.join(str(len(t['entries'])) for t in cat['tracks'])})")
 
 
 if __name__ == "__main__":

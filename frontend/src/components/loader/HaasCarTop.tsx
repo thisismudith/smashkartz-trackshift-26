@@ -217,24 +217,24 @@ export default function HaasCarTop({ className }: { className?: string }) {
           the rear-wing logotype, and both now turn with the car instead of facing the viewer.
         */}
         <text
-          x="450"
+          x="421"
           y="100"
           textAnchor="middle"
           dominantBaseline="central"
           fontSize="22"
           fill={red}
           style={LOGO_FONT}
-          transform="rotate(-90 450 100)"
+          transform="rotate(-90 421 100)"
         >
           7
         </text>
         {/*
           Fixed textLength instead of letterSpacing: the nose narrows quickly here (body half-width
-          ~17 at x=421), so a font-metric-dependent width could crowd the edges. Pinning it to 19
+          ~15 at x=450), so a font-metric-dependent width could crowd the edges. Pinning it to 19
           guarantees clear padding on both sides regardless of how the font renders.
         */}
         <text
-          x="421"
+          x="450"
           y="100"
           textAnchor="middle"
           dominantBaseline="central"
@@ -243,7 +243,7 @@ export default function HaasCarTop({ className }: { className?: string }) {
           lengthAdjust="spacingAndGlyphs"
           fill={black}
           style={LOGO_FONT}
-          transform="rotate(-90 421 100)"
+          transform="rotate(-90 450 100)"
         >
           HAAS
         </text>

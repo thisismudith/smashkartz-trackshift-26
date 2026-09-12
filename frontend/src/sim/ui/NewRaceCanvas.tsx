@@ -16,9 +16,26 @@ interface SimIndex {
   tracks: Record<string, string>;
 }
 
-interface CatalogueDriver { code: string; team: string | null; colour: string | null; number: string | null }
+interface CatalogueDriver {
+  code: string; team: string | null; colour: string | null; number: string | null;
+  firstName?: string | null; lastName?: string | null;
+}
 interface CatalogueTeam { team: string; colour: string }
-interface CatalogueTrack { event: string; slug: string; raceLaps: number | null }
+interface WeatherBand { min: number; median: number; max: number }
+interface CatalogueEntry {
+  code: string; number: string | null; team: string | null; colour: string | null;
+  firstName: string | null; lastName: string | null;
+}
+interface CatalogueTrack {
+  event: string;
+  slug: string;
+  year: number | null;
+  raceLaps: number | null;
+  /** The cars that actually started this Grand Prix; absent in pre-entries artifacts. */
+  entries?: CatalogueEntry[];
+  weather?: { airTempC: WeatherBand | null; trackTempC: WeatherBand | null } | null;
+  tyres?: { compounds: string[] } | null;
+}
 interface Catalogue { drivers: CatalogueDriver[]; teams: CatalogueTeam[]; tracks: CatalogueTrack[] }
 
 const CAMERA_MODES: CameraMode[] = ["broadcast", "onboard", "helicopter", "orbit"];
@@ -33,13 +50,24 @@ export default function NewRaceCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [store] = useState(() => new SimStore());
   const rendererRef = useRef<SimRenderer | null>(null);
+  const resizeObserverRef = useRef<ResizeObserver | null>(null);
+  // the armed run: set by startRace, handed to the renderer once the stage has mounted
+  const [race, setRace] = useState<{
+    track: ReturnType<typeof parseTrackModel>;
+    drivers: string[];
+    colours: (string | null)[];
+  } | null>(null);
   const [cameraMode, setCameraMode] = useState<CameraMode>("broadcast");
   const [selectedDriver, setSelectedDriver] = useState<string | null>(null);
   const [catalogue, setCatalogue] = useState<Catalogue | null>(null);
   const [indexData, setIndexData] = useState<SimIndex | null>(null);
   const [trackSlug, setTrackSlug] = useState<string>("");
   const [laps, setLaps] = useState<number>(20);
-  const [selectedDrivers, setSelectedDrivers] = useState<Set<string>>(new Set());
+  // Held as the cars taken OUT of the race rather than the ones left in: the default is
+  // always "the whole entry list", so a freshly loaded catalogue or a switch to another
+  // Grand Prix needs no effect to re-seat the selection -- an empty exclusion set
+  // already means every car that started that race.
+  const [excluded, setExcluded] = useState<Set<string>>(new Set());
   const [seed, setSeed] = useState<number>(1);
   const [started, setStarted] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -66,9 +94,6 @@ export default function NewRaceCanvas() {
         setTrackSlug(first);
         const trackMeta = cat.tracks.find((t) => t.slug === first);
         if (trackMeta?.raceLaps) setLaps(trackMeta.raceLaps);
-        // default grid: every driver the catalogue knows, so a first-time visitor can
-        // hit Start immediately; they can then thin the field out or start fresh.
-        setSelectedDrivers(new Set(cat.drivers.map((d) => d.code)));
       } catch (err) {
         if (!disposed) setError(err instanceof Error ? err.message : String(err));
       }
@@ -80,6 +105,32 @@ export default function NewRaceCanvas() {
   useEffect(() => () => { rendererRef.current?.dispose(); store.dispose(); }, [store]);
   useEffect(() => { rendererRef.current?.setCameraMode(cameraMode); }, [cameraMode]);
 
+  /**
+   * The renderer is attached here rather than inside startRace because the <canvas>
+   * only exists once the configurator has been swapped out for the stage: reading
+   * canvasRef during the click handler always found null, so the run was armed in the
+   * store and then never shown. Attaching in an effect runs after that swap, and is
+   * what an effect is for -- handing React state to an external system (WebGL).
+   */
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!race || !canvas) return;
+    if (!rendererRef.current) {
+      rendererRef.current = new SimRenderer(canvas, store);
+      rendererRef.current.start();
+      rendererRef.current.setCameraMode(cameraMode);
+      const ro = new ResizeObserver(() => rendererRef.current?.resize());
+      ro.observe(canvas);
+      resizeObserverRef.current = ro;
+    }
+    rendererRef.current.setTrack(race.track);
+    rendererRef.current.setDrivers(race.drivers.length, race.colours, race.drivers);
+    // cameraMode is read once, on creation; its own effect keeps it in step after that
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [race, store]);
+
+  useEffect(() => () => { resizeObserverRef.current?.disconnect(); }, []);
+
   async function startRace() {
     if (!indexData || !catalogue) return;
     setError(null);
@@ -88,26 +139,20 @@ export default function NewRaceCanvas() {
       const trackUrl = `/sim/${trackFile}`;
       const paramsUrl = `/sim/${indexData.params}`;
       const teamColourBySlug = new Map(catalogue.teams.map((t) => [t.team, `#${t.colour}`]));
-      const grid = catalogue.drivers
-        .filter((d) => selectedDrivers.has(d.code))
-        .map((d) => ({ driver: d.code, team: d.team }));
+      const grid = entries
+        .filter((d) => !excluded.has(d.code))
+        .map((d) => ({ driver: d.code, team: d.team, colour: d.colour }));
       if (grid.length < 2) throw new Error("select at least 2 drivers");
 
       store.startGenerated({ trackUrl, paramsUrl, entries: grid, totalLaps: laps, seed });
 
       const trackRaw: RawTrackModel = await fetch(trackUrl).then((r) => r.json());
-      if (!canvasRef.current) return;
-      const track = parseTrackModel(trackRaw);
-
-      if (!rendererRef.current) {
-        rendererRef.current = new SimRenderer(canvasRef.current, store);
-        rendererRef.current.start();
-        const ro = new ResizeObserver(() => rendererRef.current?.resize());
-        ro.observe(canvasRef.current);
-      }
-      rendererRef.current.setTrack(track);
-      const teamColours = grid.map((d) => (d.team ? teamColourBySlug.get(d.team) ?? null : null));
-      rendererRef.current.setDrivers(grid.length, teamColours, grid.map((d) => d.driver));
+      setRace({
+        track: parseTrackModel(trackRaw),
+        drivers: grid.map((d) => d.driver),
+        colours: grid.map((d) =>
+          (d.colour ? `#${d.colour}` : null) ?? (d.team ? teamColourBySlug.get(d.team) ?? null : null)),
+      });
       setStarted(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -119,12 +164,35 @@ export default function NewRaceCanvas() {
     [catalogue, indexData],
   );
 
+  const track = useMemo(
+    () => builtTracks.find((t) => t.slug === trackSlug) ?? null,
+    [builtTracks, trackSlug],
+  );
+
+  /**
+   * The field on offer is the Grand Prix's own entry list, not the season-wide driver
+   * registry: that registry is the union over every session, so it carries reserve and
+   * rookie drivers who only ran a Friday practice. Artifacts built before the catalogue
+   * carried `entries` fall back to the registry so an old build still runs.
+   */
+  const entries: CatalogueEntry[] = track?.entries?.length
+    ? track.entries
+    : (catalogue?.drivers ?? []).map((d) => ({
+        code: d.code, number: d.number, team: d.team, colour: d.colour,
+        firstName: d.firstName ?? null, lastName: d.lastName ?? null,
+      }));
+
+  const selectedDrivers = new Set(
+    entries.filter((e) => !excluded.has(e.code)).map((e) => e.code),
+  );
+
   if (!started) {
     return catalogue ? (
       <GridBuilder
-        drivers={catalogue.drivers}
+        entries={entries}
         teams={catalogue.teams}
         tracks={builtTracks}
+        track={track}
         trackSlug={trackSlug}
         laps={laps}
         seed={seed}
@@ -133,16 +201,23 @@ export default function NewRaceCanvas() {
           setTrackSlug(slug);
           const meta = catalogue.tracks.find((t) => t.slug === slug);
           if (meta?.raceLaps) setLaps(meta.raceLaps);
+          // a different race is a different entry list: start it as the full field
+          setExcluded(new Set());
         }}
         onLapsChange={setLaps}
         onSeedChange={setSeed}
-        onToggleDriver={(code) => setSelectedDrivers((prev) => {
+        onToggleDriver={(code) => setExcluded((prev) => {
           const next = new Set(prev);
           if (next.has(code)) next.delete(code); else next.add(code);
           return next;
         })}
-        onSelectAll={() => setSelectedDrivers(new Set(catalogue.drivers.map((d) => d.code)))}
-        onClear={() => setSelectedDrivers(new Set())}
+        onToggleTeam={(codes, on) => setExcluded((prev) => {
+          const next = new Set(prev);
+          for (const code of codes) { if (on) next.delete(code); else next.add(code); }
+          return next;
+        })}
+        onSelectAll={() => setExcluded(new Set())}
+        onClear={() => setExcluded(new Set(entries.map((e) => e.code)))}
         onStart={() => void startRace()}
         error={error}
       />
@@ -168,7 +243,9 @@ export default function NewRaceCanvas() {
         </div>
 
         <div className={styles.controls}>
-          <button type="button" onClick={() => store.play()}>Play</button>
+          <button type="button" onClick={() => (state.playing ? store.pause() : store.play())}>
+            {state.playing ? "Pause" : state.atEnd ? "Replay" : "Play"}
+          </button>
           <button type="button" onClick={() => store.pause()}>Pause</button>
           <button type="button" onClick={() => store.setSpeed(1)}>1x</button>
           <button type="button" onClick={() => store.setSpeed(4)}>4x</button>

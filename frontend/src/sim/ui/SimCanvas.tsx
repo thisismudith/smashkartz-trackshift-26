@@ -8,6 +8,7 @@ import {
 import { parseTrackModel, type RawTrackModel } from "../data/manifest";
 import { defaultSimSource } from "../data/source";
 import { DriverPanel } from "./DriverPanel";
+import { EnvironmentPanel } from "./EnvironmentPanel";
 import { GpuBadge } from "./GpuBadge";
 import { RaceControlFeed } from "./RaceControlFeed";
 import { type CatalogueTrack, type Selection, SessionSelector } from "./SessionSelector";
@@ -55,7 +56,6 @@ export default function SimCanvas() {
   const [gpuPref, setGpuPref] = useState<GpuPreference>("high-performance");
   const [hasPitLane, setHasPitLane] = useState(false);
   const [showTags, setShowTags] = useState(true);
-  const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(1);
   const [cameraLocked, setCameraLocked] = useState(true);
   /** driver code -> car number / team colour, for the compact leaderboard */
@@ -84,11 +84,12 @@ export default function SimCanvas() {
     setPerf(null);
   }
 
+  // `state.playing` comes from the worker, which owns the clock. Mirroring it in a
+  // local useState let the two drift: switching session resets the worker to paused
+  // while the UI still read "playing", and the next click sent a pause that did
+  // nothing, which looked like the controls had died.
   function togglePlay() {
-    setPlaying((was) => {
-      if (was) store.pause(); else store.play();
-      return !was;
-    });
+    if (store.getState().playing) store.pause(); else store.play();
   }
 
   function chooseSpeed(x: number) {
@@ -289,6 +290,20 @@ export default function SimCanvas() {
             onPreferenceChange={setGpuPref}
           />
         </details>
+
+        {/* The focused car and the session's environment variables. These sit in the
+            top-left flow rather than nested under the leaderboard, where a 20-row table
+            pushed them below the fold and they were, in practice, invisible. */}
+        <div className={styles.leftDock}>
+          <DriverPanel row={selectedRow} />
+          <EnvironmentPanel
+            weather={meta?.weather ?? null}
+            sessionTime={dashboard?.sessionTime ?? 0}
+            duration={state.duration}
+            totalLaps={state.totalLaps}
+            neutralisation={dashboard?.activeNeutralisation ?? null}
+          />
+        </div>
       </div>
 
       {/* bottom centre: transport, the way a player behaves */}
@@ -300,7 +315,7 @@ export default function SimCanvas() {
             onClick={togglePlay}
             title="Play / pause (space)"
           >
-            {playing ? "Pause" : "Play"}
+            {state.playing ? "Pause" : state.atEnd ? "Replay" : "Play"}
           </button>
           <span className={styles.speedGroup}>
             {SPEEDS.map((x) => (
@@ -357,7 +372,6 @@ export default function SimCanvas() {
             })}
           </tbody>
         </table>
-        <DriverPanel row={selectedRow} />
       </CollapsiblePanel>
 
       <CollapsiblePanel title="Race control" corner="bottomRight" defaultOpen={false}>

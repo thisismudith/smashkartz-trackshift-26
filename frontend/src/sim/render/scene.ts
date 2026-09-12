@@ -74,6 +74,8 @@ const LOW_END = (w: number, h: number) => w * h < 500_000 || (navigator.hardware
  * 50 fps and never trigger a single quality step. The threshold becomes a multiple of
  * the MEASURED refresh period instead (see measureRefresh). */
 const LONG_FRAME_FALLBACK_MS = 34;
+/** How far into lap 1 the field still counts as "starting" for lane fanning. */
+const START_FAN_LAP_FRACTION = 0.15;
 /** How many refresh periods a frame may take before it counts as slow. */
 const LONG_FRAME_PERIODS = 2.5;
 /** rAF intervals sampled before trusting the measurement. */
@@ -472,7 +474,17 @@ export class SimRenderer {
         // this pass exists to prevent. Squeezing the spacing keeps every car
         // distinct and on the road, which is what a tight pack really looks like.
         const halfW = halfWidthAt(track, station[asArray[clusterStart]]);
-        const maxOffset = Math.max(0, halfW - CAR.widthM / 2);
+        // Normally a car's whole body stays on the road, so its centre can reach at
+        // most half a width from the edge. In the opening moments of a race that is
+        // too strict: the field starts two-wide and fans across the FULL road (and
+        // over the painted edge) into the first corner, which is the one situation
+        // where a pack legitimately needs every centimetre. Allowing the centre out
+        // to the edge there buys ~1 m a side and is what actually happens.
+        const opening = asArray.slice(clusterStart, k).every((c) => {
+          const o = c * POSE_FLOATS_PER_CAR;
+          return pose[o + 8] === 0 && pose[o + 9] < START_FAN_LAP_FRACTION;
+        });
+        const maxOffset = Math.max(0, opening ? halfW : halfW - CAR.widthM / 2);
         const spacing = size > 1
           ? Math.min(laneStepM, (2 * maxOffset) / (size - 1))
           : 0;

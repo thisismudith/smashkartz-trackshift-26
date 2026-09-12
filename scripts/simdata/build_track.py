@@ -123,7 +123,9 @@ def build_track_model(event: str) -> dict:
 
 def write_artifact(model: dict, out_dir: Path) -> Path:
     out_dir.mkdir(parents=True, exist_ok=True)
-    payload = json.dumps(model, separators=(",", ":")).encode("utf-8")
+    from build_sim_data import _json_safe  # one definition of the rule
+    payload = json.dumps(_json_safe(model), separators=(",", ":"),
+                          allow_nan=False).encode("utf-8")
     digest = hashlib.sha256(payload).hexdigest()[:10]
     path = out_dir / f"{model['slug']}.{digest}.json"
     path.write_bytes(payload)

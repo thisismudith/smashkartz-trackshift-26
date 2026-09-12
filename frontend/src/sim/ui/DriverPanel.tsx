@@ -3,19 +3,42 @@
 import type { DashboardRow } from "../contract/types";
 import styles from "./panels.module.css";
 
+function Bar({ label, pct, kind }: { label: string; pct: number; kind?: "brake" }) {
+  const clamped = Math.max(0, Math.min(100, pct));
+  return (
+    <div className={styles.barRow}>
+      <span className={styles.barLabel}>{label}</span>
+      <span className={styles.barTrack}>
+        <span className={styles.barFill} data-kind={kind} style={{ width: `${clamped}%` }} />
+      </span>
+      <span className={styles.barValue}>{Math.round(clamped)}%</span>
+    </div>
+  );
+}
+
 /**
- * Everything here is OBSERVED telemetry for the focused car.
+ * The focused car: measured telemetry on top, the Python energy twin's estimate below.
  *
- * Deliberately absent: battery state of charge, MGU-K deployment, harvest and the
- * rest of the ERS picture. The 2026 public feed does not contain them (the project
- * contract in AGENTS.md is explicit that they must never be fabricated), and the
- * DRS channel it does carry reads zero in all 11.57 M samples of the season, so
- * showing it as an energy cue would be misleading too. Those values are the E-Delta
- * planner's job: it infers them in Python with an uncertainty band, and when that is
- * wired in they belong here tagged INFERRED, never mixed in with the measured rows.
+ * The split is the point. Speed, gear, throttle and brake are in the feed. Battery
+ * charge, MGU-K power, harvest and deployment are NOT -- the 2026 public feed carries
+ * none of them, and the DRS channel it does carry reads zero in all 11.57 M samples of
+ * the season. Everything under the Inferred heading is reconstructed from a
+ * longitudinal power balance in scripts/simdata/twin.py with a stated uncertainty, and
+ * is never allowed to sit in the same block as a measurement.
  */
 export function DriverPanel({ row }: { row: DashboardRow | null }) {
-  if (!row) return null;
+  if (!row) {
+    return (
+      <div className={styles.panel}>
+        <div className={styles.panelTitle}>Focused car</div>
+        <p className={styles.provNote}>
+          Click a car in the scene, or a row in the leaderboard, to read its telemetry and
+          energy estimate here.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className={styles.panel}>
       <div className={styles.panelTitle}>{row.driver} · {row.team ?? "—"}</div>
@@ -24,13 +47,18 @@ export function DriverPanel({ row }: { row: DashboardRow | null }) {
         <span className={styles.provPill} data-kind="observed">Observed</span>
         <span>measured telemetry</span>
       </div>
+
+      <div className={styles.speedBig}>
+        {Math.round(row.speedKph)}<span className={styles.speedUnit}>km/h</span>
+        <span className={styles.gearBadge}>{row.gear ? `G${row.gear}` : "N"}</span>
+      </div>
+      <Bar label="Throttle" pct={row.throttlePct} />
+      <Bar label="Brake" pct={row.brake ? 100 : 0} kind="brake" />
+
       <dl className={styles.grid}>
-        <dt>Speed</dt><dd>{Math.round(row.speedKph)} km/h</dd>
-        <dt>Gear</dt><dd>{row.gear || "N"}</dd>
-        <dt>Throttle</dt><dd>{Math.round(row.throttlePct)}%</dd>
-        <dt>Brake</dt><dd>{row.brake ? "ON" : "off"}</dd>
         <dt>Tyre</dt><dd>{row.compound ?? "—"} ({row.tyreLife ?? "—"} laps)</dd>
         <dt>Lap</dt><dd>{Math.round(row.lapProgress * 100)}%</dd>
+        <dt>Last lap</dt><dd>{row.lastLapS !== null ? `${row.lastLapS.toFixed(3)} s` : "—"}</dd>
         <dt>Gap</dt><dd>{row.gapToLeader}</dd>
         <dt>Interval</dt><dd>{row.interval}</dd>
         <dt>Status</dt><dd>{row.status}</dd>
@@ -45,20 +73,36 @@ export function DriverPanel({ row }: { row: DashboardRow | null }) {
           <dl className={styles.grid}>
             <dt>Peak power</dt><dd>{row.energy.peakWheelPowerKw.toFixed(0)} kW</dd>
             <dt>Peak braking</dt><dd>{row.energy.peakBrakingKw.toFixed(0)} kW</dd>
-            <dt>ERS used</dt><dd>{row.energy.ersEnergyUsedMj.toFixed(2)} MJ</dd>
+            <dt>ERS deployed</dt><dd>{row.energy.ersEnergyUsedMj.toFixed(2)} MJ</dd>
             <dt>ERS harvested</dt><dd>{row.energy.ersEnergyHarvestedMj.toFixed(2)} MJ</dd>
+            <dt>Net this lap</dt><dd>{row.energy.energyBalanceMj >= 0 ? "+" : ""}{row.energy.energyBalanceMj.toFixed(2)} MJ</dd>
             <dt>Store</dt>
             <dd>{row.energy.socEndMj.toFixed(2)} ± {row.energy.socUncertaintyMj.toFixed(2)} MJ</dd>
           </dl>
+          {row.energy.envelopeCapViolations > 0 ? (
+            <p className={styles.provNote}>
+              {row.energy.envelopeCapViolations} sample(s) this lap needed more electrical
+              power than the 2026 envelope allows — the reconstruction, the envelope, or
+              both are wrong there. Shown rather than clipped away.
+            </p>
+          ) : null}
           {row.energy.warnings.length > 0 ? (
             <ul className={styles.warnList}>
               {row.energy.warnings.map((w) => <li key={w}>{w}</li>)}
             </ul>
           ) : null}
-          <p className={styles.provNote}>
-            Battery charge and MGU-K power are not in the public feed. These are estimates
-            from a longitudinal power balance with documented assumptions, never measurements.
-          </p>
+          {/* The provenance pill above is the always-visible tag the contract requires;
+              this is the elaboration, folded so the numbers stay on screen. */}
+          <details className={styles.noteFold}>
+            <summary>Where these come from</summary>
+            <p className={styles.provNote}>
+              Battery charge, MGU-K power, harvest and deployment are not in the 2026
+              public feed. They are reconstructed in Python from a longitudinal power
+              balance (mass·a·v plus drag, rolling and gradient terms) against the
+              measured speed trace, with a stated uncertainty. They are estimates, never
+              measurements.
+            </p>
+          </details>
         </>
       ) : (
         <p className={styles.provNote}>No energy estimate for this lap.</p>

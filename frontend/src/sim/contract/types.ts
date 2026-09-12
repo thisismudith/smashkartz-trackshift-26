@@ -33,6 +33,10 @@ export interface CarState {
   inPit: boolean;
   status: "grid" | "track" | "pit" | "finished" | "retired" | "gap";
   provenance: Provenance;
+  /** Where this car's POSITION came from. OBSERVED = projected from real telemetry.
+   * RULE = a documented placement the feed does not contain (grid slot, parked queue,
+   * pit-lane start). Gaps are never computed from a RULE position. */
+  positionProvenance: Provenance;
   /** Energy twin summary for the lap this car is on (INFERRED/SIMULATED). */
   energy: LapEnergy | null;
 }

@@ -6,6 +6,8 @@ position feed provably does not contain.
 """
 from __future__ import annotations
 
+import math
+
 import numpy as np
 
 from .geom import Ring, close_ring, resample_by_arclength, smooth_circular
@@ -147,6 +149,12 @@ def corner_stations(session_dir, ring: Ring):
     }
 
 
+def _finite_or_none(v):
+    """NaN/inf are not valid JSON; an unmeasurable statistic is null, not a number."""
+    v = float(v)
+    return None if (math.isnan(v) or math.isinf(v)) else v
+
+
 ON_TRACK_LAT_M = 3.0     # inside this the car is on the racing line, not in the lane
 MAX_PIT_LAT_M = 60.0     # beyond this it is a projection artefact, not a pit lane
                           # (measured lane offsets: -35 Silverstone, -12 Spa/Zandvoort)
@@ -276,7 +284,8 @@ def grid(session_dir, table: LapTable, ring: Ring, sf_station: float, pitch_m=8.
         "order": order, "slots": slots, "pitStarters": pit_starters,
         "pitchMetres": pitch_m,
         "observedSpacingMedian": float(np.median(np.abs(spacing))) if spacing.size else None,
-        "observedLateralStd": float(np.std([o["rawLateral"] for o in obs
+        # np.std of an empty slice is NaN, which is not representable in JSON
+        "observedLateralStd": _finite_or_none(np.std([o["rawLateral"] for o in obs
                                             if abs(o["rawLateral"]) <= 5.0])),
         "provenance": "order DERIVED; anchor and stagger RULE (absent from the feed)",
     }

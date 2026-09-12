@@ -23,9 +23,29 @@ from simdata.replay import build_replay_pack
 OUT_DIR = Path(__file__).resolve().parent.parent / "frontend" / "public" / "sim"
 
 
+def _json_safe(o):
+    """Replace every non-finite float with null.
+
+    Python's json.dumps happily writes bare NaN / Infinity, which are NOT valid JSON:
+    the browser's JSON.parse rejects the whole document. A single NaN in one statistic
+    (measured: "observedLateralStd":NaN in the Chinese GP track model) therefore broke
+    the entire artifact for that circuit. null is honest -- the statistic genuinely has
+    no value when its sample is empty -- and every consumer already handles null.
+    """
+    import math
+    if isinstance(o, float):
+        return None if (math.isnan(o) or math.isinf(o)) else o
+    if isinstance(o, dict):
+        return {k: _json_safe(v) for k, v in o.items()}
+    if isinstance(o, (list, tuple)):
+        return [_json_safe(v) for v in o]
+    return o
+
+
 def write_json(obj: dict, out_dir: Path, name_prefix: str) -> str:
     import hashlib
-    payload = json.dumps(obj, separators=(",", ":")).encode("utf-8")
+    payload = json.dumps(_json_safe(obj), separators=(",", ":"),
+                          allow_nan=False).encode("utf-8")
     digest = hashlib.sha256(payload).hexdigest()[:10]
     fname = f"{name_prefix}.{digest}.json"
     (out_dir / fname).write_bytes(payload)
@@ -36,10 +56,25 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--events", nargs="*", default=["British Grand Prix"])
     ap.add_argument("--sessions", nargs="*", default=["Race", "Sprint"])
+    ap.add_argument("--catalogue-only", action="store_true",
+                    help="rebuild only the catalogue and re-point the existing index at it; "
+                          "track models and replay packs are left alone (minutes -> a second)")
     args = ap.parse_args()
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     manifest = {"tracks": {}, "sessions": {}}
+
+    if args.catalogue_only:
+        pointer = json.loads((OUT_DIR / "index.json").read_text(encoding="utf-8"))
+        manifest = json.loads((OUT_DIR / pointer["latest"]).read_text(encoding="utf-8"))
+        print("== catalogue (only) ==")
+        manifest["catalogue"] = write_json(build_catalogue(), OUT_DIR, "catalogue")
+        print(f"  {manifest['catalogue']}")
+        index_name = write_json(manifest, OUT_DIR, "index")
+        (OUT_DIR / "index.json").write_bytes(
+            json.dumps({"latest": index_name}, separators=(",", ":")).encode("utf-8"))
+        print(f"\nindex: {index_name} (pointer: index.json)")
+        return
 
     print("== catalogue ==")
     cat = build_catalogue()

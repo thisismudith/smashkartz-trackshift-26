@@ -45,4 +45,7 @@ export type WorkerToMain =
   | { type: "meta"; events: unknown[]; neutralisations: unknown[]; weather: unknown }
   | { type: "pose"; sessionTime: number; buffer: ArrayBuffer; carCount: number }
   | { type: "dashboard"; snapshot: unknown }
+  /** Authoritative playback state. The worker owns it; the UI mirrors it, so the
+   * two can never disagree about whether the race is running. */
+  | { type: "playback"; playing: boolean; atEnd: boolean }
   | { type: "error"; message: string };

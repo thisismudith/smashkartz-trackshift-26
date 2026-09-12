@@ -8,7 +8,7 @@ function makeCar(overrides: Partial<CarState> = {}): CarState {
     headingRad: 0, speedKph: 0, gear: 1, throttlePct: 0, brake: false,
     tyreCompound: "MEDIUM", tyreLife: 1, lapsDone: 0, lapProgress: 0, position: 1,
     gapToLeaderS: null, lapsDownFromLeader: 0, intervalS: null, inPit: false,
-    status: "track", provenance: "OBSERVED", energy: null, ...overrides,
+    status: "track", provenance: "OBSERVED", positionProvenance: "OBSERVED", energy: null, ...overrides,
   };
 }
 
@@ -49,6 +49,27 @@ describe("buildDashboardSnapshot", () => {
     expect(snap.activeNeutralisation).toEqual({ kind: "VSC", start: 50, end: 80 });
     const before = buildDashboardSnapshot(states, 40, [], [{ kind: "VSC", start: 50, end: 80 }]);
     expect(before.activeNeutralisation).toBeNull();
+  });
+
+  it("carries the order source through so the UI can label a provisional row", () => {
+    const states = new Map([
+      ["AAA", { ...makeCar({ position: 1 }), orderSource: "OFFICIAL" as const }],
+      ["BBB", { ...makeCar({ driver: "BBB", position: 2 }), orderSource: "MEASURED" as const }],
+    ]);
+    const snap = buildDashboardSnapshot(states, 100, [], []);
+    expect(snap.leaderboard.map((r) => r.orderSource)).toEqual(["OFFICIAL", "MEASURED"]);
+  });
+
+  it("labels rows honestly when the source does not report an order source", () => {
+    // The generated New Race timeline emits a plain CarState. A measured position means
+    // the row was placed by measurement; a placed one by rule. Neither is claimed to be
+    // an official classification the feed never supplied.
+    const states = new Map([
+      ["AAA", makeCar({ position: 1 })],
+      ["BBB", makeCar({ driver: "BBB", position: 2, positionProvenance: "RULE", status: "grid" })],
+    ]);
+    const snap = buildDashboardSnapshot(states, 100, [], []);
+    expect(snap.leaderboard.map((r) => r.orderSource)).toEqual(["MEASURED", "RULE"]);
   });
 
   it("returns only recent events, newest first", () => {

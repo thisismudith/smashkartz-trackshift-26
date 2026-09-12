@@ -1,3 +1,12 @@
+/*
+  New Race configurator. Two columns on a desktop: the entry list reads down the left,
+  the circuit / grid / launch rail stays put on the right so "Start race" is never
+  scrolled away. Surfaces are flat alpha blends of the Haas palette (no blur, no drop
+  shadows) -- cheap to composite on an integrated GPU, and the only saturated colour
+  on the page is the team stripe, which is the one thing that has to be identifiable
+  at a glance.
+*/
+
 .wrap {
   position: absolute;
   inset: 0;
@@ -8,208 +17,571 @@
   background: var(--haas-black);
   color: var(--haas-white);
   overflow-y: auto;
-  padding: clamp(1.2rem, 4vw, 3rem);
-  gap: 1.4rem;
+  padding: clamp(1.2rem, 3.2vw, 2.6rem);
+  gap: clamp(1.2rem, 2.4vw, 2rem);
 }
+
+/* ---------- header ---------- */
 
 .header {
   display: flex;
-  flex-direction: column;
-  gap: 1rem;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1.4rem 2rem;
   flex: none;
+  border-bottom: 1px solid rgba(174, 174, 174, 0.25);
+  padding-bottom: clamp(1rem, 2vw, 1.6rem);
 }
 
 .titleBlock {
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
+  gap: 0.45rem;
+  min-width: 18rem;
 }
 
 .kicker {
-  font-size: 0.75rem;
-  letter-spacing: 0.3em;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.7rem;
+  letter-spacing: 0.28em;
   text-transform: uppercase;
   color: var(--haas-grey);
   margin: 0;
 }
 
+.kickerBar {
+  width: 1.6rem;
+  height: 0.14rem;
+  background: var(--haas-red);
+  flex: none;
+}
+
 .title {
   font-family: var(--font-display), Impact, "Arial Narrow", sans-serif;
-  font-size: clamp(2rem, 5vw, 3.2rem);
-  letter-spacing: 0.02em;
+  font-size: clamp(2.1rem, 5vw, 3.4rem);
+  font-weight: 900;
+  font-stretch: 112%;
+  line-height: 0.95;
+  letter-spacing: 0.01em;
   text-transform: uppercase;
   margin: 0;
+}
+
+.lede {
+  max-width: 46ch;
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--haas-grey);
 }
 
 .setupRow {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 1.2rem;
+  align-items: flex-start;
+  gap: 0.9rem;
 }
 
 .field {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
-  font-size: 0.7rem;
-  letter-spacing: 0.08em;
+  gap: 0.3rem;
+  font-size: 0.65rem;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
   color: var(--haas-grey);
 }
 
 .field select,
 .field input {
-  background: rgba(174, 174, 174, 0.08);
-  border: 1px solid var(--haas-grey);
+  font-family: inherit;
+  background: rgba(174, 174, 174, 0.07);
+  border: 1px solid rgba(174, 174, 174, 0.45);
+  border-radius: 0;
   color: var(--haas-white);
-  padding: 0.5rem 0.7rem;
+  padding: 0.55rem 0.7rem;
   font-size: 0.95rem;
-  min-width: 9rem;
+  letter-spacing: 0.01em;
+  text-transform: none;
+  min-width: 12rem;
+  transition: border-color 0.14s ease, background-color 0.14s ease;
 }
 
 .field input[type="number"] {
-  min-width: 6rem;
+  min-width: 6.5rem;
 }
 
-.countBadge {
-  margin-left: auto;
-  font-size: 0.85rem;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: var(--haas-white);
-  border: 1px solid var(--haas-red);
-  padding: 0.5rem 0.9rem;
-  align-self: center;
+.field select:hover,
+.field input:hover {
+  background: rgba(174, 174, 174, 0.12);
 }
 
-.toolbar {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  flex: none;
-}
-
-.toolbar button {
-  background: transparent;
-  border: 1px solid var(--haas-grey);
-  color: var(--haas-white);
-  padding: 0.45rem 0.9rem;
-  font-size: 0.75rem;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  cursor: pointer;
-}
-
-.toolbar button:hover {
+.field select:focus-visible,
+.field input:focus-visible {
+  outline: none;
   border-color: var(--haas-red);
 }
 
-.error {
-  color: var(--haas-red);
-  font-size: 0.8rem;
+.field small {
+  font-size: 0.6rem;
+  letter-spacing: 0.1em;
+  color: rgba(174, 174, 174, 0.7);
 }
 
-.startButton {
-  margin-left: auto;
-  background: var(--haas-red) !important;
-  border-color: var(--haas-red) !important;
-  color: var(--haas-white) !important;
-  font-weight: 600;
-  padding: 0.6rem 1.4rem !important;
-}
+/* ---------- body layout ---------- */
 
-.startButton:disabled {
-  opacity: 0.35;
-  cursor: not-allowed;
-}
-
-.grid {
+.body {
   flex: 1;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
-  gap: 1rem;
+  grid-template-columns: minmax(0, 1fr) 19rem;
+  gap: clamp(1rem, 2.2vw, 2rem);
+  align-items: start;
+}
+
+/* ---------- entry list ---------- */
+
+.entryList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  min-width: 0;
+}
+
+.sectionBar {
+  display: flex;
+  align-items: baseline;
+  gap: 0.9rem;
+}
+
+.sectionTitle {
+  font-size: 0.75rem;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--haas-grey);
+  margin: 0;
+}
+
+.count {
+  margin: 0;
+  font-size: 0.8rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--haas-grey);
+}
+
+.count strong {
+  font-size: 1.15rem;
+  font-weight: 900;
+  color: var(--haas-white);
+}
+
+.countSlash {
+  margin: 0 0.25rem;
+  color: rgba(174, 174, 174, 0.5);
+}
+
+.sectionActions {
+  margin-left: auto;
+  display: flex;
+  gap: 0.4rem;
+}
+
+.sectionActions button {
+  font-family: inherit;
+  background: transparent;
+  border: 1px solid rgba(174, 174, 174, 0.45);
+  color: var(--haas-grey);
+  padding: 0.32rem 0.75rem;
+  font-size: 0.65rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: color 0.14s ease, border-color 0.14s ease;
+}
+
+.sectionActions button:hover {
+  color: var(--haas-white);
+  border-color: var(--haas-white);
+}
+
+.teams {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr));
+  gap: 0.9rem;
   align-content: start;
 }
 
 .teamGroup {
+  align-self: start;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  border: 1px solid rgba(174, 174, 174, 0.22);
+  background: rgba(174, 174, 174, 0.04);
+  transition: border-color 0.14s ease;
+}
+
+.teamGroup[data-muted="true"] {
+  border-color: rgba(174, 174, 174, 0.12);
+}
+
+.teamHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  width: 100%;
+  font-family: inherit;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid rgba(174, 174, 174, 0.18);
+  color: var(--haas-white);
+  padding: 0.55rem 0.7rem;
+  cursor: pointer;
+  text-align: left;
+}
+
+.teamHeader:hover .teamName {
+  color: var(--haas-white);
+}
+
+.teamStripe {
+  width: 0.22rem;
+  height: 0.95rem;
+  flex: none;
 }
 
 .teamName {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.85rem;
-  letter-spacing: 0.06em;
+  font-size: 0.72rem;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
-  margin: 0;
-  padding-bottom: 0.35rem;
-  border-bottom: 2px solid var(--haas-grey);
+  color: rgba(239, 239, 239, 0.85);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.swatch {
-  width: 0.7rem;
-  height: 0.7rem;
-  border-radius: 50%;
-  flex: none;
+.teamCount {
+  margin-left: auto;
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  color: var(--haas-grey);
+  font-variant-numeric: tabular-nums;
 }
 
 .cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(6.5rem, 1fr));
-  gap: 0.5rem;
+  display: flex;
+  flex-direction: column;
 }
 
+/* ---------- driver card ---------- */
+
 .card {
-  display: flex;
+  position: relative;
+  display: grid;
+  grid-template-columns: 0.22rem 2.6rem minmax(0, 1fr) auto;
   align-items: center;
-  gap: 0.4rem;
-  background: rgba(174, 174, 174, 0.06);
-  border: 1px solid var(--haas-grey);
+  gap: 0.6rem;
+  width: 100%;
+  font-family: inherit;
+  background: transparent;
+  border: none;
+  border-top: 1px solid rgba(174, 174, 174, 0.12);
   color: var(--haas-white);
-  padding: 0.5rem 0.6rem;
-  font-size: 0.85rem;
+  padding: 0.5rem 0.7rem;
   cursor: pointer;
   text-align: left;
-  transition: background-color 0.12s ease, border-color 0.12s ease;
+  transition: background-color 0.14s ease, opacity 0.14s ease;
+}
+
+.cards > .card:first-child {
+  border-top: none;
 }
 
 .card:hover {
-  background: rgba(174, 174, 174, 0.14);
+  background: rgba(174, 174, 174, 0.09);
 }
 
-.card[data-selected="true"] {
-  background: rgba(218, 41, 28, 0.14);
+.card:focus-visible {
+  outline: 1px solid var(--haas-red);
+  outline-offset: -1px;
 }
 
-.cardCheck {
-  width: 0.85rem;
-  height: 0.85rem;
-  border: 1px solid var(--haas-grey);
-  flex: none;
-}
-
-.cardCheck[data-selected="true"] {
-  background: var(--haas-red);
-  border-color: var(--haas-red);
-}
-
-.cardCode {
-  font-weight: 600;
-  letter-spacing: 0.03em;
+.cardStripe {
+  align-self: stretch;
+  background: var(--team, var(--haas-grey));
+  transition: opacity 0.14s ease;
 }
 
 .cardNumber {
-  margin-left: auto;
+  font-size: 1.45rem;
+  font-weight: 900;
+  font-style: italic;
+  font-stretch: 112%;
+  line-height: 1;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: rgba(239, 239, 239, 0.9);
+}
+
+.cardIdent {
+  display: flex;
+  flex-direction: column;
+  gap: 0.05rem;
+  min-width: 0;
+}
+
+.cardCode {
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+}
+
+.cardName {
+  font-size: 0.68rem;
+  letter-spacing: 0.02em;
   color: var(--haas-grey);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cardCheck {
+  width: 0.95rem;
+  height: 0.95rem;
+  border: 1px solid rgba(174, 174, 174, 0.55);
+  flex: none;
+  transition: background-color 0.14s ease, border-color 0.14s ease;
+}
+
+.cardCheck[data-selected="true"] {
+  background-color: var(--haas-red);
+  border-color: var(--haas-red);
+  /* the tick as inline SVG: one stroked path, so it stays crisp at any zoom */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.6 6.2 4.9 8.6 9.5 3.6' fill='none' stroke='%23efefef' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+}
+
+/* unselected reads as "not on the grid": greyed out, but still legible and clickable */
+.card[data-selected="false"] .cardNumber,
+.card[data-selected="false"] .cardCode {
+  color: rgba(239, 239, 239, 0.38);
+}
+
+.card[data-selected="false"] .cardName {
+  color: rgba(174, 174, 174, 0.4);
+}
+
+.card[data-selected="false"] .cardStripe {
+  opacity: 0.25;
+}
+
+/* ---------- right rail ---------- */
+
+.rail {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  min-width: 0;
+}
+
+.panel {
+  border: 1px solid rgba(174, 174, 174, 0.22);
+  background: rgba(174, 174, 174, 0.04);
+  padding: 0.75rem 0.85rem;
+}
+
+.panelTitle {
+  font-size: 0.72rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--haas-white);
+  margin: 0 0 0.55rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid rgba(174, 174, 174, 0.2);
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.25rem 0.8rem;
+  margin: 0;
+  font-size: 0.8rem;
+}
+
+.facts dt {
+  font-size: 0.65rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--haas-grey);
+  align-self: center;
+}
+
+.facts dd {
+  margin: 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.provenance {
+  margin: 0.6rem 0 0;
+  font-size: 0.58rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(174, 174, 174, 0.55);
+}
+
+/* staggered starting grid, P1 on the left of the racing line */
+
+.slots {
+  list-style: none;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.3rem 0.5rem;
+  margin: 0;
+  padding: 0;
+  max-height: 42vh;
+  overflow-y: auto;
+}
+
+.slot {
+  display: grid;
+  grid-template-columns: 1.2rem 0.16rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.7rem;
+  padding: 0.18rem 0.25rem;
+  background: rgba(174, 174, 174, 0.06);
+}
+
+.slot[data-side="left"] {
+  grid-column: 1;
+}
+
+.slot[data-side="right"] {
+  grid-column: 2;
+  margin-top: 0.55rem;
+}
+
+.slotPos {
+  font-size: 0.62rem;
+  color: var(--haas-grey);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.slotStripe {
+  align-self: stretch;
+  min-height: 0.9rem;
+}
+
+.slotCode {
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.slotNum {
+  font-size: 0.62rem;
+  color: var(--haas-grey);
+  font-variant-numeric: tabular-nums;
+}
+
+.empty {
+  margin: 0;
   font-size: 0.75rem;
+  color: var(--haas-grey);
+}
+
+/* ---------- launch ---------- */
+
+.launch {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.startButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  width: 100%;
+  font-family: inherit;
+  background: var(--haas-red);
+  border: 1px solid var(--haas-red);
+  color: var(--haas-white);
+  padding: 0.85rem 1.2rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: filter 0.14s ease, opacity 0.14s ease;
+}
+
+.startButton:hover:not(:disabled) {
+  filter: brightness(1.12);
+}
+
+.startButton:disabled {
+  background: transparent;
+  border-color: rgba(174, 174, 174, 0.35);
+  color: rgba(174, 174, 174, 0.5);
+  cursor: not-allowed;
+}
+
+.hint,
+.error {
+  margin: 0;
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+}
+
+.hint {
+  color: rgba(174, 174, 174, 0.7);
+}
+
+.error {
+  color: var(--haas-red);
+}
+
+/* ---------- responsive ---------- */
+
+@media (max-width: 900px) {
+  .body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .rail {
+    position: static;
+  }
+
+  .slots {
+    max-height: none;
+  }
 }
 
 @media (max-width: 640px) {
-  .setupRow { flex-direction: column; align-items: stretch; }
-  .countBadge { margin-left: 0; }
-  .startButton { margin-left: 0; }
+  .setupRow {
+    width: 100%;
+  }
+
+  .field,
+  .field select,
+  .field input {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .field {
+    flex: 1 1 8rem;
+  }
+
+  .teams {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }

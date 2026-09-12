@@ -2,6 +2,7 @@
 # many GB once the 20 m lake is built (AGENTS.md sections 10, 48). Never commit it.
 data/
 frontend/public/sim/
+env_sim/
 artifacts/schema_audit/*.csv
 artifacts/schema_audit/*.json
 __pycache__/

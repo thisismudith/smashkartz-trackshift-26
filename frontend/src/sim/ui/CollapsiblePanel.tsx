@@ -9,7 +9,7 @@ export function CollapsiblePanel({
   title, corner, children, defaultOpen = true, badge,
 }: {
   title: string;
-  corner: "topRight" | "bottomRight";
+  corner: "topRight" | "bottomRight" | "left";
   children: ReactNode;
   defaultOpen?: boolean;
   badge?: string;

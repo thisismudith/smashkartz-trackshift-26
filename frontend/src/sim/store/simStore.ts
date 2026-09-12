@@ -23,6 +23,8 @@ export interface SimStoreState {
   totalLaps: number | null;
   duration: number;
   error: string | null;
+  playing: boolean;
+  atEnd: boolean;
 }
 
 export interface SimMeta {
@@ -34,7 +36,10 @@ export interface SimMeta {
 export class SimStore {
   private worker: Worker | null = null;
   private listeners = new Set<() => void>();
-  private state: SimStoreState = { ready: false, driverList: [], totalLaps: null, duration: 0, error: null };
+  private state: SimStoreState = {
+    ready: false, driverList: [], totalLaps: null, duration: 0, error: null,
+    playing: false, atEnd: false,
+  };
   private dashboard: DashboardSnapshot | null = null;
   private meta: SimMeta | null = null;
   private latestPose: PoseFrame | null = null;
@@ -56,7 +61,10 @@ export class SimStore {
    * store to "re-roll" a new seed without tearing down the renderer. */
   startGenerated(request: GeneratedRaceRequest) {
     this.ensureWorker();
-    this.state = { ready: false, driverList: [], totalLaps: null, duration: 0, error: null };
+    this.state = {
+      ready: false, driverList: [], totalLaps: null, duration: 0, error: null,
+      playing: false, atEnd: false,
+    };
     this.dashboard = null;
     this.meta = null;
     this.emit();
@@ -82,6 +90,7 @@ export class SimStore {
     switch (msg.type) {
       case "ready":
         this.state = {
+          ...this.state,
           ready: true, driverList: msg.driverList, totalLaps: msg.totalLaps,
           duration: msg.duration, error: null,
         };
@@ -115,6 +124,10 @@ export class SimStore {
       }
       case "dashboard":
         this.dashboard = msg.snapshot as DashboardSnapshot;
+        this.emit();
+        break;
+      case "playback":
+        this.state = { ...this.state, playing: msg.playing, atEnd: msg.atEnd };
         this.emit();
         break;
       case "error":

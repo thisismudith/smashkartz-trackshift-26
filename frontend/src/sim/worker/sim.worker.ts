@@ -26,6 +26,12 @@ let timeline: RaceTimeline | null = null;
 let driverOrder: string[] = [];
 let sessionTime = 0;
 let playing = false;
+
+/** Every playback change goes through here so the main thread is always told. */
+function setPlaying(next: boolean, atEnd = false) {
+  playing = next;
+  post({ type: "playback", playing, atEnd });
+}
 let speedMultiplier = 1;
 let lastTickAt = 0;
 let intervalId: ReturnType<typeof setInterval> | null = null;
@@ -41,8 +47,10 @@ function afterTimelineReady() {
   if (!timeline) return;
   driverOrder = timeline.driverList;
   poseScratch = new Float32Array(driverOrder.length * 12);
-  playing = false;
   sessionTime = 0;
+  // a fresh timeline always starts paused; announce it, or the UI keeps showing
+  // "Pause" from the previous session and its next click looks like a dead button
+  setPlaying(false);
   post({ type: "ready", driverList: driverOrder, totalLaps: timeline.totalLaps, duration: timeline.duration });
   post({
     type: "meta",
@@ -105,7 +113,15 @@ function tick() {
   lastTickAt = now;
 
   if (playing) {
-    sessionTime = Math.max(0, Math.min(timeline.duration, sessionTime + dtWall * speedMultiplier));
+    const next = sessionTime + dtWall * speedMultiplier;
+    if (next >= timeline.duration) {
+      // Reaching the flag used to clamp the clock while still calling itself "playing",
+      // so the race silently froze with a Pause button that did nothing.
+      sessionTime = timeline.duration;
+      setPlaying(false, true);
+    } else {
+      sessionTime = Math.max(0, next);
+    }
   }
 
   // Decide up front whether this tick feeds the dashboard; the expensive gap search
@@ -145,10 +161,12 @@ ctx.onmessage = (ev: MessageEvent<MainToWorker>) => {
       void initGenerated(msg.request);
       break;
     case "play":
-      playing = true;
+      // replaying from the flag restarts rather than sitting stuck at the end
+      if (timeline && sessionTime >= timeline.duration) sessionTime = 0;
+      setPlaying(true);
       break;
     case "pause":
-      playing = false;
+      setPlaying(false);
       break;
     case "seek":
       if (timeline) sessionTime = Math.max(0, Math.min(timeline.duration, msg.sessionTime));
