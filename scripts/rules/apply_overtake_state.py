@@ -400,7 +400,13 @@ def main() -> int:
         session_overlays = []
         session_control: dict[str, Any] = {}
         info = {"line_available": _usable_lines(rules) if str(args.year) == "2026" else None,
-                "unavailable_line_rows": 0, "disabled_rows": 0}
+                "unavailable_line_rows": 0, "disabled_rows": 0,
+                # Carried per event so an undetermined session is visible in the
+                # manifest rather than only in the absence of DISABLED rows.
+                "race_control_undetermined_rows": 0,
+                "race_control_messages": 0,
+                "race_control_messages_aligned": 0,
+                "sessions_with_undetermined_race_control": []}
         for session, session_frame in frame.groupby("session", sort=True):
             records = _session_records(source, str(session))
             messages = _control_messages(records, args.year)
@@ -409,6 +415,11 @@ def main() -> int:
                 session_overlay, session_info = apply_2026(session_frame, rules, aligned)
                 info["unavailable_line_rows"] += session_info["unavailable_line_rows"]
                 info["disabled_rows"] += session_info["disabled_rows"]
+                info["race_control_undetermined_rows"] += session_info["race_control_undetermined_rows"]
+                info["race_control_messages"] += session_info["race_control_messages"]
+                info["race_control_messages_aligned"] += session_info["race_control_messages_aligned"]
+                if not session_info["race_control_known"] and session_info["race_control_messages"]:
+                    info["sessions_with_undetermined_race_control"].append(str(session))
             else:
                 session_overlay = apply_historical(session_frame, aligned)
             session_overlays.append(session_overlay)
