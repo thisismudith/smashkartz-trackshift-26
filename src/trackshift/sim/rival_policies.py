@@ -23,8 +23,8 @@ def policy_registry() -> dict[str, Any]:
 
 
 def _level(action: Mapping[str, Any]) -> float:
-    try: return float(action.get("deploy_level", 0.0))
-    except (TypeError, ValueError): return 0.0
+    try: return float(action["deploy_level"])
+    except (KeyError, TypeError, ValueError): raise ValueError("C3 action has no finite deploy_level")
 
 
 def choose_policy_action(
@@ -38,6 +38,8 @@ def choose_policy_action(
     """Select from C3's returned legal set; never construct an action directly."""
     if name not in POLICIES:
         raise UnknownPolicyError(f"unsupported rival policy {name!r}; expected {tuple(POLICIES)}")
+    if not isinstance(event_rules, Mapping) or not event_rules:
+        return {"status": "UNAVAILABLE", "provenance": "RULE", "reason": "C3 event rules unavailable", "action": None, "legal_action_count": 0, "excluded_action_count": 0}
     action_fn = legal_actions_fn or c3.legal_actions
     action_set = action_fn(state, event_rules)
     actions = c3_candidate_actions(action_set)
@@ -49,7 +51,9 @@ def choose_policy_action(
         candidates = [action for action in actions if _level(action) <= 0.25 + 1e-12] or list(actions)
         selected = min(candidates, key=_level)
     else:  # DEFEND_MIRROR
-        target = _level(opponent_action or {"deploy_level": 0.25})
+        if opponent_action is None:
+            return {"status": "UNAVAILABLE", "provenance": "SIMULATED", "reason": "DEFEND_MIRROR requires the current opponent action", "action": None, "legal_action_count": len(actions), "excluded_action_count": len(c3_excluded_actions(action_set))}
+        target = _level(opponent_action)
         selected = min(actions, key=lambda action: abs(_level(action) - target))
     return {"action": dict(selected), "policy": name, "provenance": "SIMULATED", "legal_action_count": len(actions), "excluded_action_count": len(c3_excluded_actions(action_set))}
 
