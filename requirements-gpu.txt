@@ -1,0 +1,6 @@
+# A6000 only. Install on top of requirements.txt, never instead of it.
+# Needed only for the optional MLP (M10) and the neural segment-time
+# regressor (M16). Every resulting artifact must still load and run
+# inference on CPU (MODELS.md section 1.1).
+--extra-index-url https://download.pytorch.org/whl/cu124
+torch>=2.3

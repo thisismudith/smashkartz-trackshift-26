@@ -1,0 +1,30 @@
+# TrackShift — CPU dependency set.
+# Every checkpoint runs in a venv built from this file. See CHECKPOINTS_TANVEER.md CP-00.
+# Verified to resolve with wheels on Python 3.13.14 (no source builds needed).
+# torch is deliberately absent — see requirements-gpu.txt.
+
+# Core data
+pandas>=2.2,<4
+numpy>=1.26,<3
+pyarrow>=16
+duckdb>=1.0
+
+# Physics and stats
+scipy>=1.13
+scikit-learn>=1.5
+statsmodels>=0.14
+
+# Tree models (Chain P)
+lightgbm>=4.3
+xgboost>=2.1
+catboost>=1.2
+
+# Config, service, testing
+PyYAML>=6
+pydantic>=2.7
+fastapi>=0.110
+uvicorn>=0.29
+pytest>=8
+
+# Plots for validation reports
+matplotlib>=3.8

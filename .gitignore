@@ -7,3 +7,7 @@ __pycache__/
 
 # Download manifests record absolute machine-specific destinations (AGENTS.md section 5)
 artifacts/download_manifests/
+
+# Python virtual environment (CP-00); rebuilt from requirements.txt
+.venv/
+venv/
