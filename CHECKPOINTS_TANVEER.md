@@ -40,7 +40,7 @@ Each checkpoint has the same shape:
 | 00 | Environment and dependencies | — | ☐ |
 | 01 | Local data audit | §51, §63 | ☐ |
 | 02 | Registries scaffold | M31 | ☐ |
-| 03 | Rule config skeleton, 14 tracks | M18 | ☐ |
+| 03 | Rule config skeleton + **speed-dependent power envelope**, all tracks | M18 | ☐ |
 | 04 | Build the 20 m lake | Phase 2 | ☐ |
 | 05 | **Track segmentation — freeze `segment_id`** | M03 | ☐ |
 | 06 | Track-relative weather | M33 | ☐ |
@@ -48,7 +48,7 @@ Each checkpoint has the same shape:
 | 08 | Tyre degradation and normalised pace | M30 | ☐ |
 | 09 | Segment baselines | M04 | ☐ |
 | 10 | Overtake state machine | M20 | ☐ |
-| 11 | Rule engine | M19 | ☐ |
+| 11 | Rule engine (owns the envelope evaluator) | M19 | ☐ |
 | 12 | Eligibility probability | M21 | ☐ |
 | 13 | Overtake-opportunity dataset | M07 | ☐ |
 | 14 | Pass-model benchmark | M10 | ☐ |
@@ -56,6 +56,7 @@ Each checkpoint has the same shape:
 | 16 | Ensemble spread | M12 | ☐ |
 | 17 | Regulation-era handling | M13 | ☐ |
 | 18 | Energy twin | M14 | ☐ |
+| 18b | **Override / ERS-mode discriminator** | M35 | ☐ |
 | 19 | Fuel-load estimator | M34 | ☐ |
 | 20 | Physics calibration hierarchy | M15 | ☐ |
 | 21 | Segment-time model (ΔE→Δt) | M16 | ☐ |
@@ -379,22 +380,38 @@ overtake:
     value_source: RULE_FIA          # replace with UNVERIFIED until cited
     source: "TODO: FIA 2026 Sporting Regulations, Overtake article"
     note: "Gap threshold at the Detection Line for Overtake to arm."
-power:
-  normal_envelope_kw:
-    value: null
+# Maximum electrical deployment is a FUNCTION OF SPEED, not a constant (§20.1).
+# Piecewise linear between breakpoints; clamped outside the range.
+power_envelope:
+  normal:
+    breakpoints_kmh: [0, 290, 340]
+    max_power_kw:    [350, 350, 0]
     value_source: UNVERIFIED
-    source: "TODO: FIA 2026 Technical Regulations, MGU-K"
-  overtake_envelope_kw:
-    value: null
+    source: "TODO: FIA 2026 Technical Regulations, MGU-K deployment vs speed"
+    note: "Reported shape: full power to ~290 km/h, tapering to zero by ~340 km/h."
+  override:
+    breakpoints_kmh: [0, 337, 355]
+    max_power_kw:    [350, 350, 0]
     value_source: UNVERIFIED
-    source: "TODO: FIA 2026 Technical Regulations, Overtake mode"
+    source: "TODO: FIA 2026 Sporting/Technical Regulations, Overtake override"
+    note: "Reported shape: ~350 kW to ~337 km/h, available to ~355 km/h."
+  separation_speed_kmh: 290          # below this the curves coincide; mode is unobservable (§20.2)
 energy:
-  deploy_limit_per_lap_kj:
+  deploy_limit_per_lap_mj:
     value: null
     value_source: UNVERIFIED
     source: "TODO: FIA 2026 Technical Regulations, energy flow limits"
+  harvest_limit_per_lap_mj:
+    value: null
+    value_source: UNVERIFIED
+    source: "TODO: FIA 2026 Technical Regulations, recovery limits"
+  accounting_window: lap
 strict_mode: false                   # set true before any demo claim
 ```
+
+**Units:** stored and per-lap energy in **MJ** (matching how the regulations state it); power in **kW**; per-segment deltas elsewhere stay in kJ. The unit is always in the field name (§11).
+
+**The envelope numbers above are the reported shape, not verified regulation.** They are usable for modelling immediately — that is the point of encoding them — but `value_source: UNVERIFIED` must propagate to every consumer, and no demo may claim legality by construction until each is traced to an FIA article (§20.1, §57). Getting these three curves right matters more than almost any other config value, because the DP's entire action space is built on them.
 
 **2. One file per event** — 14 of them, named from the directory (`british_grand_prix.yaml`, `monaco_grand_prix.yaml`, …):
 
@@ -852,17 +869,36 @@ DISABLED ──(race control OVERTAKE ENABLED)───────────�
 
 ### Steps
 
-**1. Action space** (§31): `deploy_level ∈ {0, 0.25, 0.5, 0.75, 1.0}` × `lift_amount ∈ {0, 0.25, 0.5}` = 15 candidates before filtering.
+**1. The envelope evaluator — build this first.** This is the single most reused function you will write, and §32 makes you its sole owner:
 
-**2. Filters, each with its own rule key and test:**
+```python
+def max_electrical_power_kw(speed_kmh: float, mode: str, event_rules: dict) -> float:
+    """Regulatory cap at this speed. The ONLY implementation in the system."""
+    curve = event_rules["power_envelope"][mode.lower()]   # "normal" | "override"
+    return float(np.interp(speed_kmh, curve["breakpoints_kmh"], curve["max_power_kw"]))
+```
+
+`np.interp` clamps at both ends, which is exactly the required behaviour. Everything that needs a cap — the DP, the simulator, the twin's diagnostics (CP-18), the override discriminator (CP-18b) — imports this one function. **No envelope number may appear anywhere else in the codebase.** Grep for it in CI if you like; a stray `350` in a physics module is the failure this rule exists to prevent.
+
+**2. Action space** (§31): `deploy_level ∈ {0, 0.25, 0.5, 0.75, 1.0}` × `lift_amount ∈ {0, 0.25, 0.5}` = 15 candidates before filtering.
+
+**`deploy_level` is a fraction of the cap at the current speed, not of a fixed power:**
+
+```text
+requested_kw = deploy_level * max_electrical_power_kw(speed_kmh, applicable_mode, rules)
+```
+
+So `legal_actions` now **requires `speed_kmh` in the state**, and returns `cap_kw`, `applicable_mode`, and `delivered_power_kw` per action so the DP can account energy against what is actually deliverable rather than against the request (§31). Tell Rishabh the moment you change this signature — it changes his DP state.
+
+**3. Filters, each with its own rule key and test:**
 
 | Filter | Removes |
 |---|---|
-| Power envelope | `deploy_level` above `normal_envelope_kw` when not `ACTIVE`, above `overtake_envelope_kw` when `ACTIVE` |
-| Per-lap energy | Any action whose `delta_e_kj` would exceed `deploy_limit_per_lap_kj` for the lap so far |
-| Energy state | Any deployment exceeding the current estimated `energy_kj` |
+| Power envelope | Any action whose `delivered_power_kw` would exceed `max_electrical_power_kw(speed, applicable_mode)`. The cap moves with speed, so this filter's effect differs along a single straight. |
+| Per-lap energy | Any action whose `delta_e_mj` would exceed `deploy_limit_per_lap_mj` for the lap so far |
+| Energy state | Any deployment exceeding the current estimated `ers_soc_est_mj` |
 | Race control | All deployment above baseline when `overtake_disabled` |
-| Eligibility | Overtake-envelope actions when state is not `ACTIVE` |
+| Eligibility | Override-envelope actions when state is not `ACTIVE` — the mode selects which curve applies |
 
 **3. Return `excluded`** alongside `actions` — each entry naming the rule and its source, so the UI can explain the exclusion on hover (API.md §5.6).
 
@@ -872,10 +908,14 @@ DISABLED ──(race control OVERTAKE ENABLED)───────────�
 
 ### ✅ Check
 
-- **Zero illegal actions** in any returned set, asserted over a sweep of 10,000 random states
-- `actions` is never empty — coasting (`deploy_level: 0, lift_amount: 0`) must always be legal
+- **Zero illegal actions** in any returned set, asserted over a sweep of 10,000 random states **spanning 0–360 km/h** — the speed sweep is the point, since the cap is a function of it
+- `actions` is never empty — coasting (`deploy_level: 0, lift_amount: 0`) must always be legal, at every speed
 - Every excluded action names a rule key that exists in the config
 - Threshold triples tested for every numeric limit
+- **Envelope evaluator tested immediately below, exactly at, and immediately above every breakpoint** of both curves, plus both clamped regions, plus the separation speed (§20.1, §32)
+- Envelope is monotone non-increasing above the taper start, and never negative at any speed
+- At a speed above the taper, `deploy_level: 1.0` yields **less** power than at a speed below it — assert this directly; it is the behaviour the whole change exists to produce
+- `grep -rn` finds no numeric power constant outside `config/`
 - Strict mode raises on the current `UNVERIFIED` config, and passes once values are `RULE_FIA`
 - Unknown event raises `UNKNOWN_EVENT`; missing rule key raises `RULE_KEY_MISSING` and **never defaults to enabled** (C3)
 
@@ -886,6 +926,8 @@ DISABLED ──(race control OVERTAKE ENABLED)───────────�
 | Empty action set | Energy filter too aggressive at low SOC | Coasting must never be filtered. Add an explicit assertion, not a fallback. |
 | DP produces illegal plans | DP scoring illegal actions low instead of the engine removing them | §31 is explicit: they must not enter the candidate set. Fix in the engine, tell Rishabh. |
 | Engine is slow inside DP | Rebuilding config per call | Load config once, cache per event; the function must stay pure but the config can be a bound argument |
+| Envelope evaluator is the DP hot loop | `np.interp` per call inside a nested loop | Precompute a lookup table over a 1 km/h speed grid per mode at config load; the curve is piecewise linear so a table is exact at breakpoints and negligibly off between them. Verify the table against the function before using it. |
+| Cap looks constant in the output | `speed_kmh` not plumbed into the state, so a default is being used | The signature change is the fix. A constant cap silently reverts the entire §20.1 behaviour and will not otherwise announce itself — assert cap varies across a straight in a test. |
 
 ### Deliverables
 
@@ -1254,7 +1296,7 @@ Evaluate all five on 2026-excluding-BGP with the same splits and metrics.
 
 # CP-18 — Energy twin (M14)
 
-**Goal:** the longitudinal power balance producing `ers_energy_state_est_kj`, `ers_deployment_est_kw`, `ers_harvest_est_kw` — all tagged `SIMULATED`, never `OBSERVED` (§28, §58).
+**Goal:** the longitudinal power balance producing `ers_deploy_power_est_kw`, `ers_harvest_power_est_kw`, `ers_energy_used_est_mj`, `ers_energy_harvested_est_mj`, `ers_soc_est_mj`, `ers_remaining_est_mj`, `ers_soc_uncertainty_mj` — all tagged `SIMULATED`, never `OBSERVED` (§28, §58). The `_est` suffix is part of the name and never stripped.
 
 **Depends on:** CP-05, CP-06, CP-07.
 
@@ -1296,11 +1338,26 @@ Store all in `config/physics/priors.yaml` with a `source` per key.
 
 **4. Causality**: the estimate at distance *d* uses only telemetry at or before *d* (§12). This is what `causal_cutoff_distance_m` in API.md C5 records.
 
+**5. Envelope diagnostic — do not clamp** (§28.1). At every sample, compare the estimate against the cap from CP-11:
+
+```python
+cap = max_electrical_power_kw(speed_kmh, "override", rules)   # the loosest legal cap
+violation = ers_deploy_power_est_kw > cap
+```
+
+Record `envelope_violation` and `violation_margin_kw` alongside the **raw, unmodified** estimate. An estimate above the override cap is not a discovery about the car — it is proof your `CdA`, mass, `Crr`, `eta`, or ICE map is wrong.
+
+Truncating to the cap would hide exactly the error you need to see, and would manufacture a series that looks plausible while being wrong. Keep the raw number.
+
+The violation **rate** then becomes a first-class calibration metric in CP-20: a calibration that lowers RMSE while raising the violation rate has not improved (§29, §55).
+
 ### ✅ Check
 
 - On a **2026 Practice 1 `PUSH` lap in clean air**, estimated `P_wheel` peaks in a plausible range (roughly 700–1,000 kW at full deployment on a long straight)
 - Harvest is negative deployment under braking, and its magnitude is bounded
 - Integrated deployment per lap does not exceed the regulatory per-lap limit by more than the model's stated uncertainty — if it does by a wide margin, a parameter is wrong
+- **Envelope violation rate is low and concentrated at high speed.** A few percent near the taper is tolerable pre-calibration; violations at 150 km/h mean the balance itself is wrong, not the taper
+- Estimated power at the end of a long straight is **not** flat at 350 kW — if it is, you are reading a constant somewhere instead of calling the CP-11 evaluator
 - Energy state does not drift monotonically to absurd values over a race — plot it for a full stint
 - Sign conventions: positive `acc_x` under acceleration; positive gradient uphill
 - **Causality test**: truncating the lap at distance *d* gives the identical estimate at *d*
@@ -1314,10 +1371,63 @@ Store all in `config/physics/priors.yaml` with a `source` per key.
 | Huge noise segment-to-segment | `acc_x` is noisy at 20 m resolution | Smooth `acc_x` over 3 segments with a **trailing** window (never centred), or derive acceleration from the speed trace instead and compare |
 | Gradient term dominates | `z` is noisy or in the wrong units | Silverstone is nearly flat — the gradient term should be small there. Test on a flat circuit first, then Spa. |
 | Estimates differ between drivers implausibly | Team-level aero differences | Expected. That is why CP-20 has a team calibration rung. |
+| Violation rate above ~10% | `CdA` too low, so drag is under-counted and the balance attributes the shortfall to electrical power | Raise `CdA` first — it is the parameter the drag term is most sensitive to at high speed, which is precisely where violations appear |
+| Violations cluster on one circuit | Gradient or `CdA` wrong for that track's aero configuration | Per-event calibration rung in CP-20; do not fix by clamping |
+| Tempted to clip the estimate to the cap | It makes the plot look right | Don't. §28.1 forbids it. The plot looking wrong is the signal. Clipping converts a visible calibration bug into an invisible one. |
 
 ### Deliverables
 
-`src/trackshift/twin/power_balance.py`, `config/physics/priors.yaml`, `tests/test_twin.py` (units, signs, causality, `SIMULATED` tagging).
+`src/trackshift/twin/power_balance.py`, `config/physics/priors.yaml`, `tests/test_twin.py` (units, signs, causality, `SIMULATED` tagging, envelope-violation accounting without clamping).
+
+---
+
+# CP-18b — Override / ERS-mode discriminator (M35)
+
+**Goal:** `override_active_inferred` (a probability) and `ers_mode_inferred` — turning part of a rival's latent energy decision into a partially observed one (§20.2).
+
+**Depends on:** CP-11 (envelope evaluator), CP-18 (power estimate), and realistically **CP-20** before you trust the output.
+
+### Why this exists
+
+The normal and override envelopes coincide at low speed and separate above roughly the taper start. Above that speed, a car deploying more than the normal cap allows **cannot be in normal mode**. That is a rare thing in this project: public telemetry constraining a rival's energy decision rather than merely hinting at it.
+
+```text
+excess = ers_deploy_power_est_kw - max_electrical_power_kw(v, "NORMAL", rules)
+if v <= separation_speed_kmh:  mode = UNKNOWN         # no information here
+elif excess > k * sigma:       mode = OVERRIDE        # evidence
+else:                          mode = NORMAL          # weak evidence
+```
+
+### Steps
+
+**1. Gate on discriminability first.** Below `separation_speed_kmh` the test has no power. Return `discriminable: false` and `UNKNOWN`. Returning `NORMAL` there would be a fabricated claim — it is the single most likely way to make this component dishonest.
+
+**2. Scale the margin by the twin's own uncertainty**, not by a fixed kW figure. `sigma` comes from CP-22. A tight threshold on a poorly calibrated twin produces confident nonsense.
+
+**3. Return a probability, not a label.** Use the twin's uncertainty to convert `excess` into `P(override)`; keep `ers_mode_inferred` as a convenience label derived from it, clearly `INFERRED`.
+
+**4. Do not use it as a training label** (§24). It is a feature and a prior for Rishabh's rival-state model (M09), never ground truth. Tell him that explicitly when you hand it over — the temptation to treat it as a label is strong precisely because it feels observational.
+
+### ✅ Check
+
+- **False-positive rate measured before use**: run the discriminator on 2022–2025 races, where no override mechanism exists. Every detection there is a false positive by construction. This is the cleanest validation available to you and costs nothing — use it.
+- Detections concentrate where they should: after Activation Lines, on cars that were within the detection gap at the Detection Line
+- `discriminable: false` for every sample below the separation speed, with `UNKNOWN` mode and `null` probability
+- Detection rate does **not** rise when the twin is deliberately mis-calibrated in a harmless-looking way (raise mass 3%) — if it does, the margin is too tight
+- Never emits `OBSERVED` provenance
+
+### ⚠️ If output is bad
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| Override detected constantly | Twin over-estimates power; `CdA` too low | Fix the twin (CP-20), not the threshold. Chasing this with a wider margin hides a calibration bug. |
+| False positives on 2022–2025 | Same — the pre-2026 seasons are your control group | Tune until the historical false-positive rate is acceptable, then apply the same settings to 2026 |
+| Never detects anything | Margin too wide, or the estimate never reaches the normal cap | Check that the cap is actually varying with speed; a constant cap makes the excess meaningless |
+| Detections below 290 km/h | Discriminability gate missing | The gate is the first check in the function, not the last |
+
+### Deliverables
+
+`src/trackshift/twin/override.py`, `override_state()` in C5, `tests/test_override.py` (gate, uncertainty scaling, historical false-positive bound, provenance).
 
 ---
 
