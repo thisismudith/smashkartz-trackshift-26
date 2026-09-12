@@ -66,6 +66,12 @@ from .segment_time import (
     extrapolation_sanity,
     segment_time_s,
 )
+from .store import (
+    circuit_of,
+    circuits_available,
+    partition_files,
+    read_partition,
+)
 from .uncertainty import (
     DRAWS,
     ParameterUncertainty,
@@ -96,4 +102,5 @@ __all__ = [
     "energy_sensitivity", "extrapolation_sanity", "segment_time_s",
     "DRAWS", "ParameterUncertainty", "UncertaintyError", "coverage",
     "draw_parameters", "interval", "parameter_covariance", "propagate",
+    "circuit_of", "circuits_available", "partition_files", "read_partition",
 ]

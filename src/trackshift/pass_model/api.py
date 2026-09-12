@@ -82,6 +82,7 @@ from .features import (
     FeatureSelection,
     FeatureSelectionError,
     build_matrix,
+    audit_feature_matrix,
     select_features,
 )
 from .folds import (
@@ -147,6 +148,7 @@ __all__ = [
     "aggregate_variants",
     "assert_calibration_disjoint",
     "assert_disjoint",
+    "audit_feature_matrix",
     "available_families",
     "bin_diagnostics",
     "bootstrap_index",

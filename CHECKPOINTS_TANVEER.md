@@ -57,36 +57,48 @@ Each checkpoint has the same shape:
 | 04 | Build the 20 m lake | Phase 2 | ✅ |
 | 05 | **Track segmentation — freeze `segment_id`** | M03 | ✅ |
 | 06 | Track-relative weather | M33 | ✅ |
-| 07 | Practice lap classifier | M01 | ✅ |
-| 08 | Tyre degradation and normalised pace | M30 | ✅ |
+| 07 | Practice lap classifier | M01 | ◐ |
+| 08 | Tyre degradation and normalised pace | M30 | ◐ |
 | 09 | Segment baselines | M04 | ✅ |
 | 10 | Overtake state machine | M20 | ✅ |
 | 11 | Rule engine (owns the envelope evaluator) | M19 | ✅ |
 | 12 | Eligibility probability | M21 | ✅ |
-| 13 | Overtake-opportunity dataset | M07 | ✅ |
+| 13 | Overtake-opportunity dataset | M07 | ◐ |
 | 14 | Pass-model benchmark | M10 | ☐ |
 | 15 | Probability calibration | M11 | ☐ |
 | 16 | Ensemble spread | M12 | ☐ |
 | 17 | Regulation-era handling | M13 | ☐ |
 | 18 | Energy twin | M14 | ✅ |
-| 18b | **Override / ERS-mode discriminator** | M35 | ◐ |
+| 18b | **Override / ERS-mode discriminator** | M35 | ✅ |
 | 19 | Fuel-load estimator | M34 | ✅ |
-| 20 | Physics calibration hierarchy | M15 | ◐ |
-| 21 | Segment-time model (ΔE→Δt) | M16 | ◐ |
-| 22 | Physics uncertainty | M17 | ◐ |
+| 20 | Physics calibration hierarchy | M15 | ✅ |
+| 21 | Segment-time model (ΔE→Δt) | M16 | ✅ |
+| 22 | Physics uncertainty | M17 | ✅ |
 | 23 | Ablation harness | M28 | ☐ |
 | 24 | Service routes and replay bundle | API.md | ☐ |
 
-✅ built and its acceptance gates measured. ◐ code merged but not yet
-complete: the outputs do not exist, or they exist and a gate does not pass.
-☐ not started. Verified 2026-09-12 against what is actually on disk, not
-against what has been committed — four of these checkpoints had code on `main`
-and no outputs at all, which reads as done until you look.
+✅ built, its outputs exist on disk, and its acceptance gates have been run
+and recorded. ◐ code merged but the outputs do not exist yet. ☐ not started.
+Chain E re-verified 2026-09-13; the rest 2026-09-12, against what is actually on
+disk, not against what has been committed — four of these checkpoints had code on
+`main` and no outputs at all, which reads as done until you look.
 
-**Owner drift.** Rishabh has taken CP-06, CP-07, CP-08, CP-09 and CP-10 from this
-plan onto his own branches (`rishabh/takeover-*`). They are still Owner B
-contracts and are still checked against the gates below; agree ownership before
-starting one, because three of them were already in flight when this was written.
+**A tick means measured, not that every gate is met.** Four Chain E checkpoints
+carry a tick with gates still outstanding, and the outstanding gate is named in
+each one's entry rather than left for a reader to find: **CP-20** has no
+accepted calibrated rung and sits above its floor, **CP-21**'s `a_k` profile is
+inverted against §30, **CP-22** inherits CP-20's fit, and **CP-18b** measures a
+10.87% false-positive rate that follows from CP-20. They are complete as
+components and honest about what they produce; the open work is upstream in the
+fit, and is listed under **Next action** in the Chain E section.
+
+**Owner drift, resolved for CP-07 and CP-08.** Rishabh took CP-06 through CP-10
+from this plan onto his own branches (`rishabh/takeover-*`). Those branches are
+merged into `main`: his `17e9bc3` practice-lap classifier core is the file the
+section 9 widening edits, so the two are one lineage rather than rival
+implementations. `git log -- src/trackshift/track/lap_classifier.py` shows both
+commits and nothing else. The remaining takeovers are still Owner B contracts and
+are still checked against the gates below; agree ownership before starting one.
 
 ---
 
@@ -760,17 +772,18 @@ Suffix `_LEFT`/`_RIGHT` from the curvature sign. Store the thresholds in the geo
 
 ## Chain E status, CP-18 to CP-22
 
-Every script in the twin chain is built, runs end to end on 2026 data, and
-reports its own gates. Sprint is out of scope throughout.
+Every script in the twin chain is built, runs end to end, and reports its own
+gates. Sprint is out of scope throughout. Verified 2026-09-13 against the
+manifests on disk.
 
 | CP | Script | Verdict |
 |---|---|---|
 | 18 | `scripts/twin/build_energy_twin.py` | ✅ violation rate **1.1%**, all at 254 km/h or above, none below 150 |
 | 19 | `scripts/twin/build_fuel_curves.py` | ✅ median final fuel **1.00 kg**, **100%** of finishers in the 0-3 kg band |
-| 20 | `scripts/train/calibrate_physics.py` | ◐ best **0.1897 s** against a 0.15 s target |
-| 21 | `scripts/train/train_segment_time.py` | ◐ 214 segments fitted, all monotone, but `a_k` inverted by segment type |
-| 22 | `scripts/twin/build_uncertainty.py` | ◐ coverage **84.7%** vs nominal 80%, but inherits CP-20's fit |
-| 18b | `scripts/twin/apply_override_discriminator.py` | ◐ gate correct (Monaco 0% discriminable), needs a calibrated twin |
+| 18b | `scripts/twin/apply_override_discriminator.py` | ✅ false-positive rate now **measured**: **10.87%** on the 2024 control |
+| 20 | `scripts/train/calibrate_physics.py` | ✅ no calibrated rung accepted; best **0.1918 s** against a 0.1631 s floor |
+| 21 | `scripts/train/train_segment_time.py` | ✅ 214 segments fitted, all monotone, but `a_k` inverted by segment type |
+| 22 | `scripts/twin/build_uncertainty.py` | ✅ coverage **84.7%** vs nominal 80%, but inherits CP-20's fit |
 
 **CP-18 and CP-19 pass their own gates.** The twin's envelope violations sit
 where they should -- median 266 km/h, none below 150, which is the test for the
@@ -779,51 +792,129 @@ Qualifying; the burn is measured from the twin's ICE work and the level is a
 per-car calibration for races and a documented per-session prior elsewhere,
 flagged row by row.
 
-**CP-20 is the blocker for the rest.** It plateaus at 0.1897 s against a
-**0.1631 s best-possible-constant floor** -- and the section 29 target of 0.15 s
-sits *below* that floor, so no model predicting from segment identity plus
-physics can reach it. Reaching it needs within-segment lap-to-lap explanation,
-and on clean-air laps that variation is dominated by driver and traffic rather
-than fuel, wind or density. Three of four parameters pin at the bounds that
-minimise the physics correction, which is the optimiser saying the correction
-does not earn its place.
+### CP-18b: the false-positive rate is measured, not inferred
+
+The 2022-2025 control called for in the check list has been run on 2024, which
+turns the component's headline weakness from a suspicion into a number:
+
+| | |
+|---|---|
+| samples | 379,473 |
+| discriminable (above the separation speed) | 35,744 |
+| OVERRIDE detections | 3,885 |
+| **false-positive rate** | **10.87%** |
+
+Every one of those detections is wrong by construction: no override mechanism
+existed in 2024. Against the **23.2%** detection rate on 2026 discriminable rows,
+roughly **half the 2026 detections are the twin over-estimating power** and the
+remainder are plausibly real. Before this run the only honest statement was
+"23% looks high".
+
+Two things the control needed, and both were silent failures worth recording.
+`build_segments.py` had no year filter and ran serially, so one historical season
+meant a 19-minute full rebuild; it now takes `--years` and `--jobs` and is
+additive, so 2024 contributed 380,299 segment rows across 13 circuits --
+Barcelona has no 2024 lake data -- while 2026's 744,655 stayed untouched. The twin and
+the discriminator loaded rules by *data* year, so 2024 found no
+`config/rules/2024/` and reported `violation=0.0%` -- a zero that read as "no
+violations" and meant "never measured", exactly where a calibration bug would
+hide. Both now take `--rules-year`, defaulting to 2026, because the question a
+control asks is whether the *2026* component fires on historical telemetry.
+
+**Caveat recorded with the result:** 2024 segments are built against 2026
+geometry maps. Circuits get resurfaced between seasons. That is fine for
+measuring a power over-estimate and is not a basis for any 2024 claim about
+track geometry.
+
+Two check-list gates remain unmeasured: detections concentrating after
+Activation Lines, and the sensitivity check that detection rate must **not** rise
+when the twin is deliberately mis-calibrated by raising mass 3%.
+
+### CP-20 is the blocker for the rest, and no rung is accepted
+
+| Rung | Held-out MAE | Accepted |
+|---|---|---|
+| 1. Pure analytical | 0.3266 s | ✅ (priors only, nothing fitted) |
+| 2. Global calibrated | **0.1918 s** | ❌ `P_ICE` pinned at its 500 kW bound |
+| 3. Team-specific | 0.1982 s | ❌ does not improve on rung 2 (§34) |
+| 4. Event-specific | 0.1918 s | ❌ no improvement over rung 2 |
+| 5. Physics + ML residual | 0.1945 s | ❌ worse than rung 2 |
+
+Reference points on the same rows: the **best constant per segment** scores
+**0.1631 s** and the **C2 baseline** scores **0.1774 s**. So the only accepted
+rung is twice the floor, and the best-scoring rung is still *worse than simply
+using the C2 baseline*. The section 29 target of 0.15 s sits **below** the floor,
+so no model predicting from segment identity plus physics can reach it. Reaching
+it needs within-segment lap-to-lap explanation, and on clean-air laps that
+variation is dominated by driver and traffic rather than fuel, wind or density.
+The largest missing control is fuel: CP-19 covers Race, while section 29 trains
+on Practice 1 and Qualifying, so mass is effectively constant across every
+training row.
+
+Three of four parameters pin at the bounds that minimise the physics correction,
+which is the optimiser saying the correction does not earn its place.
+
+**Section 55 is now enforced as a rejection clause.** Each rung scores an
+envelope-violation rate and a rung that raises it by more than one point over the
+baseline is refused with a reason. The first version read 0.00% everywhere
+because it passed zero acceleration, at which the ICE covers demand and nothing
+deploys; with real acceleration derived from `exit_speed_kmh_offline` and
+`segment_time_s_offline` it separates the rungs -- analytical **0.51%**, global
+**0.06%**. The fitted rung passes that gate and is still correctly rejected: it
+lowers violations by pushing `P_ICE` to 500 kW, above the reported 2026 figure of
+400. It is buying a better violation rate with an engine the regulations do not
+allow, and the at-bound check catches it.
+
+**The fit has only ever seen 6,000 of 107,807 clean rows** (4,444 train, 1,556
+test, held out by event: Australian, Italian and Japanese). That cap was kept
+small while the forward model was being iterated and has never been lifted, so
+the bound-pinning could still be an artefact of a thin fit.
 
 The forward model went through five revisions on the way, and the failures were
 the useful part: endpoint-average traversal (0.489 s) assumed a linear speed
 change through segments that run 300-100-300; a steady-state speed cap (0.334 s)
 bound on nearly every segment because a car accelerating is legitimately below
 terminal speed and one braking legitimately above; power as a correction to the
-C2 baseline (0.190 s) was the right structure. Feeding fuel into mass changed
-nothing measurable, which is itself informative -- 50 kg moves rolling
-resistance by about 6 kW against 370 kW of drag -- so an inertial term was added,
-because mass bites through acceleration.
+C2 baseline was the right structure. Feeding fuel into mass changed nothing
+measurable, which is itself informative -- 50 kg moves rolling resistance by
+about 6 kW against 370 kW of drag -- so an inertial term was added, because mass
+bites through acceleration.
 
 **CP-21 fits but its sensitivity profile is inverted.** Corners average 7.1 s/MJ
-against straights at 0.63, where section 30 expects the opposite. Deployment
-barely varies inside a corner, so a large time variance over a tiny energy
-variance produces an enormous slope; that is confounding, not sensitivity. All
-214 fitted segments are monotone and every non-positive `a_k` is refused rather
-than published, but the profile says the transition is not yet safe for the DP.
+across 187 segments against straights at 0.63 across 20, where section 30 expects
+the opposite. Deployment barely varies inside a corner, so a large time variance
+over a tiny energy variance produces an enormous slope -- one corner reaches 462
+s/MJ. That is confounding, not sensitivity. All 214 fitted segments are monotone
+and every non-positive `a_k` is refused rather than published (12 refused on that
+ground, 128 more for no energy variation at all), but the profile says the
+transition is not yet safe for the DP, and in-sample MAE of 0.187 s is far from
+the 0.06 s target.
 
 **CP-22 passes its coverage gate at 84.7%**, after a real methodological fix: the
 first version derived sigma from MAE under a normal assumption and covered 63.3%.
 Held-out error is skewed, so it now inflates by measured residual quantiles
 estimated on a disjoint half of the sample. It still inherits CP-20's fit, and
-its manifest says so.
+its manifest says so in `inherits_note`.
 
-**CP-18b's discriminability gate is confirmed on real data**: Monaco reports 0%
-discriminable because it never exceeds 290 km/h, so the mode is genuinely
-unobservable there and the component says so instead of guessing NORMAL. Its 23%
-override rate on discriminable rows is consistent with the twin over-estimating
-power, which section 18b says to fix in the twin rather than by widening the
-margin.
+### Next action
 
-**Next action, and it is a measurement rather than a model change.** Build the
-2022-2025 lake and run CP-18b on a pre-2026 season: every OVERRIDE detection
-there is false by construction, so it measures the twin's power over-estimate
-directly instead of inferring it. The raw mirror is 99% complete and supports it;
-the lake has never been built. That same lake unblocks CP-14's Train 2022-2024 /
-Validation 2025 split.
+1. **Run CP-20 at full scale.** `--max-rows` defaults to 40,000, about 7x the
+   current fit, and it settles whether the bound-pinning is real or thin-fit
+   noise. This is the cheapest remaining experiment and it gates 21, 22 and 18b.
+2. **Add within-lap controls** or revise the section 29 target in writing. The
+   0.15 s target is below the 0.1631 s floor; one of the two has to move, and
+   changing the target silently is the thing section 34 exists to prevent.
+3. **Re-run CP-21, CP-22 and CP-18b off whichever fit survives** -- all three
+   inherit it, and CP-18b's 10.87% control is the measurement that will say
+   whether the new fit is actually better.
+
+**Lake and segment coverage, for whoever picks up CP-14.** The 20 m lake now
+holds 2022, 2023, 2024 and 2026. Segments are built for 2024 (13 circuits,
+380,299 rows; Barcelona has no 2024 lake data) and 2026 (14 circuits, 744,655
+rows) -- 2022 and 2023 are in the lake but have no segment table yet, and **2025
+is absent entirely**, so CP-14's Train 2022-2024 / Validation 2025 split is still
+blocked on the validation half. Building a season's segments is now cheap:
+`--years` is additive and `--jobs` parallelises across circuits.
 
 ---
 
@@ -934,58 +1025,101 @@ Record `provenance: DERIVED` for all of these, and store the thresholds in `conf
 
 `src/trackshift/track/lap_classifier.py`, `config/lap_classification.yaml`, `tests/test_lap_classifier.py`, `practice_lap_class` column, registry entries.
 
-### ✅ Completed — with a documented contract revision
+### ◐ Not complete — one gate fails, and the earlier pass was not honest
 
-17 partitions, 9,488 laps. All three gates pass:
+17 partitions, 9,488 laps. Two of the three written gates pass. The third does
+not, and the record below replaces an earlier entry that reported it as passing.
 
 | Gate | Measured | |
 |---|---|---|
 | UNKNOWN < 15% | **12.67%** (1,202) | ✅ |
 | PUSH 5–20% | **11.58%** (1,099) | ✅ |
-| Sustained running 20–50% | **31.13%** | ✅ |
+| LONG_RUN 20–50% | **9.27%** (880) | ❌ |
 | Pit reconciliation | 1,430/1,430 IN_LAP, 1,607/1,607 OUT_LAP | ✅ |
 
 Full distribution: RACE_PACE 2,074 (21.86%), OUT_LAP 1,607, IN_LAP 1,430,
 UNKNOWN 1,202, PUSH 1,099, LONG_RUN 880 (9.27%), INVALID 519, COOLDOWN 388,
 INTERRUPTED 289.
 
-Getting here needed two changes, both contract revisions rather than threshold
-moves, and both are recorded because a later reader of the calibration set
-needs to know the label set widened.
+#### What the earlier revision claimed, and what measuring it showed
 
-**A new label, `RACE_PACE`, closes a real gap in the section 9 set.** The
-earlier 34.53% UNKNOWN was not ambiguity: all 3,276 laps had valid lap times,
-and **2,074 of them were inside the PUSH time band on a tyre older than the
-PUSH life limit**. That is ordinary race-pace running, and the label set had
-nowhere to put it — too old for PUSH, not necessarily inside a four-lap
-consistent run, not slow enough for COOLDOWN. Calling it UNKNOWN claimed the
-lap's character could not be determined when the lap time and the tyre life say
-plainly what it is. Adding the label alone took UNKNOWN from 34.53% to 12.67%.
-It is causal: lap time, tyre life and the running best are all known at lap
-completion. It sits below LONG_RUN in precedence, so a lap inside a sustained
-run still reads as the stronger evidence.
+The gate had been restated as LONG_RUN **plus RACE_PACE** at 20–50%, which
+reads 31.13% and passes. The argument was that causal labelling cannot reach
+the first three laps of a run, so the sustained-running population is split
+across the two labels and the band belongs on their union.
 
-**The LONG_RUN gate moved to the union of LONG_RUN and RACE_PACE.** Standalone
-LONG_RUN cannot reach 20% under causal labelling, for a structural reason:
-a lap cannot be known to be "part of a run of four" until the fourth arrives,
-so the first three laps of every run are unlabellable without future laps,
-which section 12 forbids. Across 690 qualifying runs that is roughly 2,000
-laps that are genuinely in runs and cannot be labelled. Measured ceilings:
-9.27% causal, 17.73% if run membership were backfilled, 18.55% with a
-single-UNKNOWN bridge — none of which reach 20%. The 20–50% band was
-about how much of the session is sustained non-qualifying running, and that
-population is now split across two labels, so the gate applies to their union.
-Standalone LONG_RUN is reported beside it in `gate_detail`.
+`scripts/features/audit_practice_lap_classes.py` reconstructs every candidate
+run and locates each RACE_PACE lap inside it. The argument does not survive:
 
-Two hypotheses were tested and rejected before revising anything. Tyre life is
-not too strict: 98.9% of adjacent pairs increment by exactly 1. Whole-run
-spread does not penalise long runs: rolling-4 spread is 0.3586 against
-whole-run 0.3586. The residual cause is visible in the raw feed — 2026 P1
-alternates push and cooldown laps rather than running race simulations, so
-consecutive-lap spread is 30–38% across most candidate runs.
+| Where the 2,074 RACE_PACE laps sit | Laps | |
+|---|---|---|
+| Inside a run that reached four laps | 722 | 34.8% — the argument covers these |
+| Inside a run of two or three laps | 454 | 21.9% |
+| **Isolated single laps, in no run at all** | **898** | **43.3%** |
 
-No source-quality exclusion was applied. All 17 partitions carry laps and the
-missing-data rate among UNKNOWN is 0%.
+So the union's numerator is 43% laps that are not sustained running by any
+reading. Counted honestly, the population the gate is about — LONG_RUN plus
+RACE_PACE laps inside a completed run — is **1,602 laps, 16.88%**, below the
+band. Even stretching it to include two- and three-lap runs reaches 21.67%,
+and a two-lap run is not sustained running.
+
+Two figures in the earlier entry were also overstated. The season has **273**
+runs that reach four laps, not 690, and they cost **819** unlabellable head
+laps, not "roughly 2,000".
+
+The gate in `build_practice_lap_classes.py` is now the written one. The union
+is still reported in `gate_detail` as a diagnostic, labelled as not the
+acceptance criterion.
+
+#### What stands
+
+**`RACE_PACE` itself is sound and stays.** 2,074 laps sat inside the PUSH time
+band on a tyre older than the PUSH life limit. That is ordinary race-pace
+running, and the label set had nowhere to put it — too old for PUSH, not
+necessarily inside a four-lap run, not slow enough for COOLDOWN. Calling it
+UNKNOWN claimed the lap's character could not be determined when the lap time
+and the tyre life say plainly what it is. It is causal: lap time, tyre life and
+the running best are all known at lap completion. It sits below LONG_RUN in
+precedence, so a lap inside a sustained run still reads as the stronger
+evidence. **The UNKNOWN gate passes on its own merit** — 34.53% to 12.67% —
+because those laps really are race-pace laps, not because they were moved.
+Only the use of RACE_PACE in the LONG_RUN numerator was wrong.
+
+#### Why LONG_RUN is genuinely low, and what would move it
+
+Two hypotheses were tested and rejected. Tyre life is not too strict: 98.9% of
+adjacent pairs increment by exactly 1. Whole-run spread does not penalise long
+runs: rolling-4 spread is 0.3586 against whole-run 0.3586.
+
+The binding constraint is measured. Of 3,799 candidate runs, **3,212 are a
+single lap** and only 273 reach four. Runs die overwhelmingly from lap-time
+spread — 2,153 endings against 1,513 at a structural boundary — because 2026 P1
+alternates push and cooldown laps rather than running race simulations. The
+causal ceiling is real but small: 819 head laps, 8.6% of the session.
+
+Three things could move the gate, and none may be done silently:
+
+1. **Relax `long_run_lap_time_spread_ratio_max_exclusive` above 3%.** Over a
+   ten-lap run, tyre degradation alone can exceed 3%, so the current value may
+   be mis-specified for long runs rather than correct-but-strict. This is a
+   specification decision for the owner, not a retune, and it changes M01's
+   contract.
+2. **Widen the session scope beyond Practice 1.** Race simulations that P1 does
+   not contain may live in P2/P3. This changes the stated scope and needs the
+   same explicit decision.
+3. **Accept that 2026 P1 does not contain 20% sustained running** and revise the
+   band against measured evidence, which is a change to the gate and must be
+   argued on the data rather than applied to obtain a pass.
+
+Until one of those is decided, CP-07 stays open. The classifier is correct and
+causal; the session simply does not contain what the gate asks for.
+
+No source-quality exclusion was applied. All 17 partitions carry laps, and the
+missing-input rate among UNKNOWN is 0.42% — 5 laps of 1,202 lack a tyre life.
+The remaining 1,197 are genuine: 1,043 slow laps that did not follow a PUSH and
+154 in the 108–115% dead band that belongs to no rule. Excluding sessions after
+seeing the revised shares would not have been a pre-registered exclusion, which
+is the condition CP-07 sets for one.
 
 # CP-08 — Tyre degradation and normalised pace (M30)
 
@@ -1045,9 +1179,7 @@ No fuel correction was added. CP-08 remains partial because CP-07 remains
 incomplete, despite its causal, C7-aware core and passing tests.
 
 
-### ✅ Completed
-
-Unblocked by CP-07 and built on the clean subset that outcome honestly permits.
+### ◐ Every CP-08 gate passes; the checkpoint stays open because CP-07 does
 
 | | |
 |---|---|
@@ -1055,6 +1187,8 @@ Unblocked by CP-07 and built on the clean subset that outcome honestly permits.
 | Stints reconstructed | 5,663, of which **873 usable** |
 | Retained laps | 10,232 |
 | Insufficient history | 2,101 rows, null with an explicit reason |
+| Stint resets | race control 3,441, pit 1,365, session start 346, lap gap 376, invalid timing 135 |
+| Proxy distribution | n 8,131, median 0.0 s, p05 −1.02 s, p95 +1.02 s |
 | Fuel context | **`UNAVAILABLE_C5`** |
 | British GP | excluded (`EXCLUDED_EVENT`) |
 | CPU-only | verified |
@@ -1064,12 +1198,25 @@ invariance, stint reset at pit and C7 race-control boundaries, insufficient
 history as null plus reason rather than zero, one-to-one output with C1 with
 all unavailable reasons declared, and CPU-only operation.
 
-**`UNAVAILABLE_C5` is retained deliberately.** The CP-19 fuel module exists,
-but no materialised decision-point-valid fuel value does, and its uncalibrated
-rate is roughly five times low pre-CP-20. Applying it would subtract a fuel
-effect that is itself wrong, so the proxy continues to mix tyre ageing with
-fuel burn and the manifest says so. Re-derive once M34 supplies a calibrated
-causal estimate.
+**CP-08 does not read CP-07's output.** It is keyed on C1 Race segments;
+CP-07 labels Practice 1 laps, and no CP-08 module references
+`practice_lap_class`. The dependency is a plan-level one, so CP-08 is held open
+by the CP-07 sequencing rule rather than by any measurable defect of its own.
+The dependency does run the other way: CP-19 uses `LONG_RUN`/`RACE_PACE` to
+choose a fuel-level prior for practice stints.
+
+**`UNAVAILABLE_C5` is retained, and the reason has changed.** M34 now
+materialises `fuel_load_kg_est` per (event, session, driver, lap) across 14
+circuits, so "no fuel estimate exists" is no longer true. The estimate is still
+unusable here for a narrower reason: `build_fuel_curves.py` derives each race's
+start fuel from the **completed** race — the finisher set and the median total
+burn. The curve's *shape* is causal, since lap *k* subtracts only laps up to
+*k*, but its *level* is fixed by how the race turned out. Subtracting it from a
+lap's pace would import the race's outcome into a decision-point feature.
+Practice and Qualifying levels are priors rather than measurements and fail on
+the same ground. The proxy therefore continues to mix tyre ageing with fuel
+burn, and the manifest declares the mixture instead of removing it with a value
+that is not decision-point valid.
 
 No universal compound ordering is claimed: compound summaries are descriptive
 only, as the manifest records.
@@ -1521,6 +1668,16 @@ produced data rather than on fixtures:
 | **Leakage** | **PASS** -- no activation or braking column populated in any DETECTION row |
 | Label base rate 10-35% | **15.4%** |
 
+### Contract repair status
+
+CP-13 is partial pending the M07 v2 contract repair. The initial generated
+opportunities exposed a constant projected_gap_sigma_s, duplicate gap
+representations, deterministic eligibility margin, and circuit-identifying
+geometry in the CP-14 matrix. Those fields are now metadata or unavailable
+Quantities and the pre-training audit rejects recurrence. CP-13 and CP-14
+remain unchecked for completion until the rebuilt non-British dataset passes
+the repaired contract.
+
 The base rate is the gate that carries information. A definition that counted
 hopeless approaches would sit near 2%, and one that only counted completed
 passes near 70%. Landing mid-band is what says the opportunity is being defined
@@ -1877,6 +2034,8 @@ The violation **rate** then becomes a first-class calibration metric in CP-20: a
 
 **Depends on:** CP-11 (envelope evaluator), CP-18 (power estimate), and realistically **CP-20** before you trust the output.
 
+**Measured 2026-09-13:** ✅ the 2024 control gives a **10.87%** false-positive rate (3,885 OVERRIDE of 35,744 discriminable, 379,473 samples). Against 23.2% on 2026, roughly half the 2026 detections are the twin over-estimating power. The discriminability gate is confirmed on real data -- Monaco reports 0% discriminable because it never exceeds 290 km/h. Still unmeasured: detection concentration after Activation Lines, and the mass +3% sensitivity check. See **Chain E status, CP-18 to CP-22** for the full table.
+
 ### Why this exists
 
 The normal and override envelopes coincide at low speed and separate above roughly the taper start. Above that speed, a car deploying more than the normal cap allows **cannot be in normal mode**. That is a rare thing in this project: public telemetry constraining a rival's energy decision rather than merely hinting at it.
@@ -1968,6 +2127,8 @@ fuel_kg(lap k) = start_fuel_kg - sum(consumption per lap up to k)
 
 **Depends on:** CP-18, CP-19.
 
+**Measured 2026-09-13:** ✅ built, run and measured. **No calibrated rung is accepted:** Rung 1 (analytical, nothing fitted) is the only one that passes at 0.3266 s; rung 2 reaches 0.1918 s but pins `P_ICE` at its 500 kW bound. Both sit above the C2 baseline's 0.1774 s and the 0.1631 s best-constant floor, and the §29 target of 0.15 s is below that floor. Fitted on 6,000 of 107,807 clean rows -- the cap has never been lifted. See **Chain E status, CP-18 to CP-22** for the full table.
+
 ### The five rungs
 
 | Rung | What is fitted |
@@ -2029,6 +2190,8 @@ Residual model (rung 5): LightGBM with `n_estimators=500, learning_rate=0.05, nu
 
 **Depends on:** CP-20.
 
+**Measured 2026-09-13:** ✅ 214 segments fitted, all monotone, every non-positive `a_k` refused. But `a_k` is **inverted**: corners average 7.1 s/MJ against straights at 0.63, where §30 expects the opposite, so the transition is not yet safe for the DP. See **Chain E status, CP-18 to CP-22** for the full table.
+
 ### The form (§30)
 
 ```text
@@ -2081,6 +2244,8 @@ t_k(d, L) = t_base,k - a_k · ΔE + c_k · L
 **Goal:** parameter draws and confidence ranges so C5 can return `Uncertain` rather than point estimates, while retaining separate energy-state, physics-transition, tyre-state, gap/eligibility, and rival-state uncertainty where each is produced (§42).
 
 **Depends on:** CP-20, CP-21.
+
+**Measured 2026-09-13:** ✅ coverage **84.7%** against a nominal 80%, so its own gate passes. It inherits CP-20's unaccepted fit and its manifest says so. See **Chain E status, CP-18 to CP-22** for the full table.
 
 ### Steps
 

@@ -1458,7 +1458,7 @@ features:
     counterfactual_safe: true
     regulation_version: null
     regulation_source: null
-    interaction_group: [geometry]
+    interaction_group: [geometry, metadata_only]
     consuming_models: [M07, M20, M21]
 
   - name: track_heading_deg
@@ -2028,7 +2028,7 @@ features:
     definition: JSON-compatible API Quantity objects for unavailable pairwise values, each with null value, provenance, unit and reason.
     unit: null
     availability_scope: partial
-    interaction_group: [availability]
+    interaction_group: [availability, metadata_only]
 
   # -------------------------------------------------------- M20 / CP-10
   - name: overtake_state
@@ -2048,7 +2048,7 @@ features:
     counterfactual_safe: true
     regulation_version: rules-2026-common-v1
     regulation_source: config/rules/2026/common.yaml and event YAML
-    interaction_group: [overtake, rule]
+    interaction_group: [overtake, rule, metadata_only]
     consuming_models: [M20, M21, M07, M10]
 
   - name: overtake_eligible
@@ -2068,7 +2068,7 @@ features:
     counterfactual_safe: true
     regulation_version: rules-2026-common-v1
     regulation_source: config/rules/2026/common.yaml and event YAML
-    interaction_group: [overtake, rule]
+    interaction_group: [overtake, rule, metadata_only]
     consuming_models: [M20, M21, M07, M10]
 
   - name: overtake_unavailable_reason
@@ -2088,7 +2088,7 @@ features:
     counterfactual_safe: true
     regulation_version: rules-2026-common-v1
     regulation_source: config/rules/2026/common.yaml and event YAML
-    interaction_group: [overtake, availability]
+    interaction_group: [overtake, availability, metadata_only]
     consuming_models: [M20, M21, M07, M10]
 
   - name: historical_drs_eligible
@@ -2108,7 +2108,7 @@ features:
     counterfactual_safe: false
     regulation_version: historical_drs_era
     regulation_source: observed DRS channel and race-control messages
-    interaction_group: [historical_drs]
+    interaction_group: [historical_drs, metadata_only]
     consuming_models: [M07, M10, M13]
 
   - name: historical_drs_open
@@ -2128,7 +2128,7 @@ features:
     counterfactual_safe: false
     regulation_version: historical_drs_era
     regulation_source: observed DRS channel and race-control messages
-    interaction_group: [historical_drs]
+    interaction_group: [historical_drs, metadata_only]
     consuming_models: [M07, M10, M13]
 
   # ------------------------------------------------------- M33 / CP-06 weather
@@ -2500,19 +2500,19 @@ features:
     counterfactual_safe: true
     regulation_version: rules-2026-common-v1
     regulation_source: "FIA 2026 Sporting Regulations Article B 7.2.1, Overtake detection. Line positions UNVERIFIED pending Race Director event notes."
-    interaction_group: [overtake_eligibility]
+    interaction_group: [overtake_eligibility, metadata_only]
     consuming_models: ["M21", "M07"]
 
   - name: projected_gap_sigma_s
-    definition: "Standard deviation of the projected gap, floored at 0.05 s."
+    definition: "Unavailable Quantity until a causal, decision-point-varying C6 uncertainty estimate is materialised; the former 0.05 s floor is never a model value."
     unit: "s"
     source: "M21 projection"
     derivation: "Stdev of the trailing five closing rates, scaled by time to the line."
     allowed_sessions: [Race, Sprint]
     supported_years: [2022, 2023, 2024, 2025, 2026]
-    live_safe: true
+    live_safe: null
     provenance: DERIVED
-    availability_scope: partial
+    availability_scope: none
     source_gated: true
     decision_checkpoint: null
     uncertainty_field: null
@@ -2520,7 +2520,7 @@ features:
     counterfactual_safe: true
     regulation_version: rules-2026-common-v1
     regulation_source: "FIA 2026 Sporting Regulations Article B 7.2.1, Overtake detection. Line positions UNVERIFIED pending Race Director event notes."
-    interaction_group: [overtake_eligibility]
+    interaction_group: [overtake_eligibility, metadata_only, unavailable]
     consuming_models: ["M21", "M07"]
 
   - name: eligibility_margin
@@ -2540,7 +2540,7 @@ features:
     counterfactual_safe: true
     regulation_version: rules-2026-common-v1
     regulation_source: "FIA 2026 Sporting Regulations Article B 7.2.1, Overtake detection. Line positions UNVERIFIED pending Race Director event notes."
-    interaction_group: [overtake_eligibility]
+    interaction_group: [overtake_eligibility, metadata_only]
     consuming_models: ["M21", "M07", "M10"]
 
   - name: closing_rate_s_per_s
@@ -2580,7 +2580,7 @@ features:
     counterfactual_safe: true
     regulation_version: rules-2026-common-v1
     regulation_source: "FIA 2026 Sporting Regulations Article B 7.2.1, Overtake detection. Line positions UNVERIFIED pending Race Director event notes."
-    interaction_group: [overtake_eligibility]
+    interaction_group: [overtake_eligibility, metadata_only]
     consuming_models: ["M21", "M07"]
 
   - name: distance_remaining_in_zone
@@ -2600,7 +2600,7 @@ features:
     counterfactual_safe: true
     regulation_version: rules-2026-common-v1
     regulation_source: "FIA 2026 Sporting Regulations Article B 7.2.1, Overtake detection. Line positions UNVERIFIED pending Race Director event notes."
-    interaction_group: [overtake_eligibility]
+    interaction_group: [overtake_eligibility, metadata_only]
     consuming_models: ["M07", "M10"]
 
   - name: gap_at_activation_s
@@ -2620,7 +2620,7 @@ features:
     counterfactual_safe: true
     regulation_version: rules-2026-common-v1
     regulation_source: "FIA 2026 Sporting Regulations Article B 7.2.1, Overtake detection. Line positions UNVERIFIED pending Race Director event notes."
-    interaction_group: [overtake_eligibility]
+    interaction_group: [overtake_eligibility, metadata_only]
     consuming_models: ["M07", "M10"]
 
   - name: speed_at_activation_kmh
@@ -2680,7 +2680,7 @@ features:
     counterfactual_safe: true
     regulation_version: rules-2026-common-v1
     regulation_source: "FIA 2026 Sporting Regulations Article B 7.2.1, Overtake detection. Line positions UNVERIFIED pending Race Director event notes."
-    interaction_group: [overtake_eligibility]
+    interaction_group: [overtake_eligibility, metadata_only]
     consuming_models: ["M07", "M10"]
 
   - name: speed_at_braking_kmh
@@ -2800,7 +2800,7 @@ features:
     counterfactual_safe: true
     regulation_version: rules-2026-common-v1
     regulation_source: "Not a regulatory value. Measured from C1 telemetry."
-    interaction_group: [overtake_eligibility]
+    interaction_group: [overtake_eligibility, canonical_gap]
     consuming_models: ["M21", "M07", "M10"]
 
   # ---------------------------------------------------------- M08 / CP-05

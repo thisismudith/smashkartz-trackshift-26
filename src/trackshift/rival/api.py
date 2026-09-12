@@ -23,7 +23,8 @@ from .model import (
     rival_state as _rival_state,
 )
 from .synthetic import BENCHMARK_SEED, REGRESSION_SEED, STATES, SYNTHETIC_PROVENANCE, SyntheticConfig, generate
-from .era import evaluate_era_strategies, materialise_historical_m08
+from .era import (c10_prediction_evidence, evaluate_era_strategies, materialise_historical_m08,
+                  observation_predictive_nll, posterior_stability)
 from typing import Any, Iterable, Mapping, TypedDict
 
 
@@ -50,5 +51,6 @@ __all__ = [
     "SYNTHETIC_PROVENANCE", "REGRESSION_SEED", "BENCHMARK_SEED", "SyntheticConfig", "generate",
     "RivalModel", "ManifestMismatchError", "ModelUnavailableError", "extract_observation",
     "build_battle_sequences", "load_m08_sequences", "fit_model", "load_model", "fit_centroid",
-    "StateDistribution", "rival_state", "benchmark", "benchmark_candidates", "evaluate_era_strategies", "materialise_historical_m08",
+    "StateDistribution", "rival_state", "benchmark", "benchmark_candidates", "c10_prediction_evidence",
+    "observation_predictive_nll", "posterior_stability", "evaluate_era_strategies", "materialise_historical_m08",
 ]

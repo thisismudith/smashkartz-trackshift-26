@@ -41,8 +41,10 @@ from trackshift.rules.api import (  # noqa: E402
 )
 from trackshift.twin.api import (  # noqa: E402
     DEFAULT_K_SIGMA,
+    circuits_available,
     discriminate,
     historical_false_positive_rate,
+    read_partition,
 )
 
 TWIN = ROOT / "data" / "processed" / "energy_twin"
@@ -98,7 +100,7 @@ def main() -> int:
         if args.sigma_kw else twin_sigma_kw()
 
     circuits = args.circuit or sorted(
-        p.parent.name.removeprefix("circuit=") for p in TWIN.glob("circuit=*/energy_twin.parquet"))
+        circuits_available(TWIN, "energy_twin.parquet"))
     if not circuits:
         raise SystemExit("no energy twin output; run build_energy_twin.py first")
 
@@ -107,8 +109,7 @@ def main() -> int:
     all_inferences = []
 
     for circuit in circuits:
-        twin = pd.read_parquet(TWIN / f"circuit={circuit}" / "energy_twin.parquet")
-        twin = twin[twin["year"].astype(str) == str(args.year)]
+        twin = read_partition(TWIN, "energy_twin.parquet", year=args.year, circuit=circuit)
         if twin.empty:
             results.append({"circuit": circuit, "skipped": f"no {args.year} rows"})
             continue
@@ -155,7 +156,9 @@ def main() -> int:
 
         written = None
         if rows:
-            target = args.output_root / f"circuit={circuit}"
+            # Year in the path for the same reason as the twin: keyed on circuit
+            # alone, a control-season run silently overwrites the 2026 state.
+            target = args.output_root / f"circuit={circuit}" / f"year={args.year}"
             target.mkdir(parents=True, exist_ok=True)
             pd.DataFrame(rows).to_parquet(target / "override_state.parquet", index=False)
             written = str((target / "override_state.parquet").relative_to(ROOT))

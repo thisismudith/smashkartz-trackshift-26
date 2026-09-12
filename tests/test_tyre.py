@@ -14,6 +14,7 @@ sys.path.insert(0, str(ROOT / "src"))
 from trackshift.features.tyre_pace import (  # noqa: E402
     C1_KEY_COLUMNS,
     TYRE_PACE_PROVENANCE,
+    TyrePaceError,
     build_tyre_pace_overlay,
     load_tyre_pace_config,
 )
@@ -131,3 +132,52 @@ def test_config_and_module_are_cpu_only():
     module = importlib.import_module("trackshift.features.tyre_pace")
     assert module.TYRE_PACE_SCHEMA_VERSION == "m30_tyre_pace_overlay_v1"
     assert "torch" not in sys.modules
+
+
+def test_c5_fuel_stays_unavailable_because_the_level_is_not_decision_point_valid():
+    """The reason UNAVAILABLE_C5 survives M34 shipping.
+
+    M34 now materialises ``fuel_load_kg_est`` per lap, so "not available" is no
+    longer why this is null. The real reason is narrower and easier to lose:
+    ``build_fuel_curves.py`` calibrates each race's start fuel from the
+    *completed* race, so the curve's level encodes the outcome even though its
+    shape is causal. Subtracting it here would import the result of the race
+    into a decision-point feature.
+
+    This test fails if someone wires the fuel correction in on the strength of
+    the estimate merely existing.
+    """
+    config = load_tyre_pace_config()
+    assert config.fuel_context_status == "UNAVAILABLE_C5"
+    note = config.fuel_context_note.lower()
+    assert "decision-point valid" in note
+    assert "completed race" in note
+    assert "no fuel correction is applied" in note
+
+
+def test_a_materialised_fuel_estimate_alone_does_not_unlock_the_correction(tmp_path):
+    """Any status other than UNAVAILABLE_C5 is rejected by the loader, so the
+    correction cannot be switched on by editing configuration alone."""
+    config_path = tmp_path / "tyre_pace.yaml"
+    config_path.write_text(
+        "\n".join([
+            "schema_version: m30_tyre_pace_config_v1",
+            "producer_version: m30_tyre_pace_v1",
+            "scope:",
+            "  years: [2026]",
+            "  sessions: [Race]",
+            "proxy:",
+            "  initial_baseline_retained_laps: 3",
+            "  rolling_retained_laps: 5",
+            "normalised_pace:",
+            "  minimum_prior_samples: 3",
+            "  similar_tyre_life_laps: 3",
+            "fuel_context:",
+            "  status: AVAILABLE",
+            "  note: wired up",
+            "provenance: DERIVED",
+            "",
+        ]),
+        encoding="utf-8")
+    with pytest.raises(TyrePaceError):
+        load_tyre_pace_config(config_path)

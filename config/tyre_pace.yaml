@@ -11,9 +11,26 @@ normalised_pace:
   minimum_prior_samples: 3
   similar_tyre_life_laps: 3
 fuel_context:
+  # Status stays UNAVAILABLE_C5, but the reason has changed and the old one is
+  # no longer true. M34 now materialises fuel_load_kg_est per (event, session,
+  # driver, lap) in data/processed/fuel_curves, so the estimate EXISTS. It is
+  # still not usable here, for a reason that matters more than absence:
+  #
+  #   scripts/twin/build_fuel_curves.py derives each race's start fuel from the
+  #   completed race -- laps_by_driver.max(), the finisher set, and the median
+  #   total burn. The curve's SHAPE is causal (lap k subtracts only laps to k),
+  #   but its LEVEL is fixed by how the race turned out.
+  #
+  # Subtracting that level from a lap's pace would import the race's outcome
+  # into a decision-point feature. So the fuel confound stays declared and
+  # uncorrected rather than corrected with a value that is not decision-point
+  # valid. Practice and Qualifying levels are priors, not measurements, and are
+  # excluded on the same ground.
   status: UNAVAILABLE_C5
   note: >-
-    C5/M34 fuel-load estimates are not available. No assumed fuel correction is
-    applied: the proxy mixes tyre ageing, fuel burn, traffic, weather and other
-    unmodelled context effects.
+    C5/M34 fuel estimates are materialised but not decision-point valid: race
+    start fuel is calibrated from the completed race, so the level encodes the
+    outcome. No fuel correction is applied. The proxy therefore mixes tyre
+    ageing, fuel burn, traffic, weather and other unmodelled context effects,
+    and that mixture is declared rather than silently removed.
 provenance: DERIVED

@@ -104,6 +104,7 @@ def _checkpoint_features(view, zone: dict, checkpoint: str, cutoff: float,
     if zone.get("zone_end_offset_m") is not None:
         features["distance_remaining_in_zone"] = float(zone["zone_end_offset_m"]) - cutoff
 
+    unavailable: dict[str, dict[str, Any]] = {}
     if gap_s is not None:
         speed_mps = (_number_or_none(last.get("speed_kmh")) or 0.0) / 3.6
         # Distance still to run to the Detection Line. Zero at and after it,
@@ -116,9 +117,18 @@ def _checkpoint_features(view, zone: dict, checkpoint: str, cutoff: float,
         features.update({
             "p_eligible": projection.p_eligible,
             "projected_gap_at_detection_s": projection.mu_s,
-            "projected_gap_sigma_s": projection.sigma_s,
             "eligibility_margin": projection.eligibility_margin_s,
         })
+        # The historical floor-only value is not a decision-point-varying C6
+        # uncertainty estimate. Keep the public field unavailable until a real
+        # causal uncertainty source is materialised; never train on 0.05.
+        unavailable["projected_gap_sigma_s"] = {
+            "value": None,
+            "unit": "s",
+            "provenance": "INFERRED",
+            "reason": "UNAVAILABLE_C6: decision-point-varying gap uncertainty is not materialised",
+        }
+        features["projected_gap_sigma_s"] = None
 
     if checkpoint in ("ACTIVATION", "BRAKING"):
         row = _at_offset(view, zone["activation_offset_m"])
@@ -130,7 +140,9 @@ def _checkpoint_features(view, zone: dict, checkpoint: str, cutoff: float,
     if checkpoint == "BRAKING":
         features["speed_at_braking_kmh"] = _number_or_none(last.get("speed_kmh"))
 
-    return {key: value for key, value in features.items() if value is not None}
+    if unavailable:
+        features["unavailable_quantities"] = unavailable
+    return features
 
 
 def _git_commit() -> str | None:
@@ -366,7 +378,7 @@ def build_event(event: str, year: str, output_root: Path) -> dict[str, Any]:
         target.mkdir(parents=True, exist_ok=True)
         destination = target / "opportunities.parquet"
         pd.DataFrame(rows_out).to_parquet(destination, index=False)
-        written = str(destination.relative_to(ROOT))
+        written = str(destination.resolve().relative_to(ROOT.resolve()))
 
     return {**plan, "opportunities": opportunities, "rows": len(rows_out), "written": written}
 
