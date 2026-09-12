@@ -212,6 +212,16 @@ Each checkpoint uses the same structure.
 
 **src/trackshift/features/pairwise.py**, **scripts/features/build_pairwise_features.py**, **tests/test_pairwise.py**, C8 pairwise table.
 
+### Revalidation status — 2026-09-12
+
+**CP-04 remains unchecked.** The C2 public driver-baseline artifact is now
+joined through the public track API, but the available C1 partitions expose
+only `segment_time_s_offline`; CP-04 deliberately leaves the C2 residual null
+rather than using a full-segment value at entry. The local non-British C8
+revalidation also required the documented legacy track-status bridge because
+materialised C7 is absent. C5 remains unavailable and C6 is intentionally not
+joined until its public contract lands.
+
 ---
 
 # CP-05: Rival-state feature dataset

@@ -123,13 +123,13 @@ datasets:
     producer: scripts/features/build_baselines.py
     consumers: [M06, M08, M10]
     live_status: OFFLINE_ONLY
-    status: planned
+    status: built
     notes: >-
       Contract C2. Built from normal_race_model_eligible rows only. Rows below
       the declared minimum sample count carry baseline_valid false rather than
       being dropped, so a thin baseline is visible instead of missing. The
       core producer excludes British GP by default and keeps 2026 separate from
-      the 2022–2025 DRS era; status remains planned pending all-year C1 input.
+      the 2022–2025 DRS era; current local artifact covers 2026 pending all-year C1 input.
 
   - name: team_segment_baselines
     description: Per-team median reference per track segment (section 14).
@@ -140,7 +140,7 @@ datasets:
     producer: scripts/features/build_baselines.py
     consumers: [M06, M08, M10]
     live_status: OFFLINE_ONLY
-    status: planned
+    status: built
 
   - name: field_segment_baselines
     description: Whole-field median reference per track segment (section 14).
@@ -151,7 +151,7 @@ datasets:
     producer: scripts/features/build_baselines.py
     consumers: [M06, M08, M10]
     live_status: OFFLINE_ONLY
-    status: planned
+    status: built
 
   - name: race_context
     description: >-
@@ -188,7 +188,7 @@ datasets:
   - name: pairwise_segment_features
     description: Attacker/defender differentials per battle segment (section 17).
     source: segments, battle_episodes
-    schema_version: m06_pairwise_segment_features_v1
+    schema_version: m06_pairwise_segment_features_v2
     partitioning: year / event / session
     primary_key: [battle_id, segment_index]
     producer: scripts/features/build_pairwise_features.py
@@ -198,8 +198,8 @@ datasets:
     notes: >-
       M06/CP-04, owned by Rishabh. One causal row per C8 battle segment;
       rolling values use only current and earlier same-battle rows and reset at
-      C7 pit/race-control transitions. C2 baselines and C5 fuel/ERS values are
-      explicit unavailable API Quantities until their public contracts land.
+      C7 pit/race-control transitions. C2 residuals use valid public C2 driver
+      baselines only; C5 fuel/ERS values remain explicit unavailable API Quantities.
 
   - name: battle_episodes
     description: Continuous attacker/defender fights, the unit of leakage-safe splitting (section 18).
