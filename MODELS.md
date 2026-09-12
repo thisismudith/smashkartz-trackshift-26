@@ -6,7 +6,7 @@ Training procedures are deliberately out of scope here. Each model gets its own 
 
 The UI-facing surface of every model listed here is specified in `API.md`. `MODELS.md` says who builds what; `API.md` says what the frontend can call. Per-owner build plans live in their own files: `CHECKPOINTS_TANVEER.md` covers Owner B's chains (R, P, E) and foundations.
 
-Written against `TrackShift AGENTS.md` as of commit `09c7691`. If that file changes, re-run the coverage checkpoint in §9 before building against this plan.
+Written against `TrackShift AGENTS.md` as of commit `7d2f5fd`. If that file changes, re-run the coverage checkpoint in §9 before building against this plan.
 
 ---
 
@@ -183,8 +183,10 @@ Per §60, each hand-off is defined by input schema, output schema, units, proven
 | `brake_onset_m`, `brake_fraction`, `full_throttle_fraction`, `lift_fraction`, `coast_fraction` | m, ratio | DERIVED |
 | `mean_gradient`, `elevation_change` | ratio, m | DERIVED |
 | `gap_entry`, `gap_exit` | s | DERIVED |
+| `distance_gap_entry_m`, `time_gap_entry_s`, `relative_speed_to_ahead_mps`, `relative_acceleration_to_ahead_mps2`, `gap_rate_ahead_s_per_s` | m, s, m/s, m/s², s/s | DERIVED |
 | `tyre_compound`, `tyre_life`, `stint` | —, laps, — | OBSERVED |
 | `tyre_degradation_proxy` | ratio | DERIVED |
+| `tyre_state_est`, `tyre_state_uncertainty` | model-defined | INFERRED |
 | `sector`, `zone`, `corner_id`, `corner_type`, `corner_phase` (static per track map, versioned) | — | DERIVED |
 | `track_heading_deg` | deg | DERIVED |
 | `wind_head_component_mps`, `wind_cross_component_mps`, `wet_track_flag` (time-aligned to segment entry) | m/s, m/s, bool | DERIVED |
@@ -201,14 +203,17 @@ Keyed by `(track, segment_id, [driver|team])`; one column per baselined quantity
 **C3. Rule engine API** — `src/trackshift/rules/api.py`
 
 ```text
-legal_actions(state, event_rules) -> ActionSet
-    state:       segment_id, energy_e, gap_g, eligibility_eps, race_control_state
-    returns:     the set of permitted (deploy_level, lift_amount) pairs
+legal_actions(state: StrategicState, event_rules) -> ActionSet
+    state:       segment_id; Energy Store state and uncertainty; deployed/harvested energy;
+                 remaining recharge budget; tyre state; time/distance gap; relative speed;
+                 gap rate; Overtake state; race-control state; applicable power-envelope regime
+    returns:     permitted (deploy_level, lift_amount) pairs plus exclusions with rule sources
     guarantee:   illegal actions are absent from the set, never low-scored (§31)
 
 eligibility(state, event_rules) -> EligibilityResult
-    returns:     armed: bool, p_eligible: float in [0,1], eligibility_margin_s: float
-    provenance:  RULE for thresholds, INFERRED for p_eligible when gap is projected
+    returns:     armed state, projected-gap distribution, p_eligible, eligibility margin,
+                 and optional energy-to-unlock estimate with uncertainty
+    provenance:  RULE for thresholds, INFERRED or SIMULATED for causal projections
 ```
 
 Failure: unknown event or missing rule key raises; it never defaults to "Overtake enabled".
@@ -231,22 +236,27 @@ Input features are `LIVE_SAFE` only (§44) **and must belong to the given checkp
 **C5. Energy twin / segment-time API** — `src/trackshift/twin/api.py`
 
 ```text
-segment_time(segment_id, deploy_level, lift_amount, context) -> SegmentTimeEstimate
-    t_s:          float
-    t_draws_s:    array of samples from parameter uncertainty (§42)
-    delta_e_kj:   electrical energy consumed, tagged SIMULATED
-    provenance:   SIMULATED
+segment_time(segment_id, action, strategic_context) -> SegmentTimeEstimate
+    strategic_context: entry speed; tyre state; fuel; aero; weather; regulation/power state;
+                       current gap dynamics and a causal rival-response assumption
+    t_s, t_draws_s:    segment-time distribution
+    delta_e_kj:        segment deployment energy, SIMULATED
+    harvested_e_kj:    segment harvested energy, SIMULATED
+    projected_gap_delta_s: causal downstream gap effect where modelled
+    provenance:         SIMULATED
 
-energy_state(telemetry_window) -> EnergyEstimate
+energy_state(telemetry_window, event_rules) -> EnergyEstimate
     ers_energy_state_est_kj, ers_energy_state_uncertainty_kj
     ers_deployment_est_kw, ers_harvest_est_kw
+    energy_deployed_kj, energy_harvested_kj, energy_recharge_budget_remaining
+    ers_power_limit_kw, power_envelope_regime
     fuel_load_kg_est, fuel_load_uncertainty_kg        (from M34)
-    provenance: SIMULATED (ERS), INFERRED (fuel)
+    provenance: SIMULATED (ERS), INFERRED (fuel), RULE (limits)
 ```
 
 Causal: uses only telemetry at or before the window end (§12). Never labelled OBSERVED (§11, §28, §58). These are the only permitted sources of ERS and fuel context for any live feature.
 
-**C6. Opportunity and rule-derived features** — appended to `overtake_opportunities` and available to Chain S, each tagged with the checkpoint at which it becomes available: `gap_at_checkpoint`, `eligibility_margin`, `projected_gap_at_detection`, `probability_eligible`, `energy_required_to_unlock`, `delta_speed_checkpoint`, `delta_acceleration_checkpoint`, `distance_detection_to_activation`, `distance_activation_to_brake`, `overtake_eligible`, `overtake_state` (2026, rule engine only), `historical_drs_eligible`, `historical_drs_open` (2022–2025 covariates only). The registry's `decision checkpoint` field is authoritative for which rows may carry which feature.
+**C6. Opportunity and rule-derived features** — appended to `overtake_opportunities` and available to Chain S, each tagged with the checkpoint at which it becomes available: time/distance gap, relative speed, relative acceleration, gap rate, `eligibility_margin`, causal `projected_gap_at_detection`, `probability_eligible`, `energy_required_to_unlock` with uncertainty, `eligibility_fragility_per_kj` where supported, `delta_speed_checkpoint`, `delta_acceleration_checkpoint`, `distance_detection_to_activation`, `distance_activation_to_brake`, `overtake_eligible`, `overtake_state` (2026, rule engine only), `historical_drs_eligible`, `historical_drs_open` (2022–2025 covariates only). The registry's `decision checkpoint`, causal status, and counterfactual-safe fields are authoritative for which rows may carry which feature.
 
 ### 5.2 Rishabh → Tanveer
 
@@ -254,7 +264,7 @@ Causal: uses only telemetry at or before the window end (§12). Never labelled O
 
 **C8. Battle episodes and pairwise rows** — `data/processed/battle_episodes/`, `data/processed/pairwise_segment_features/`
 
-Battle key `battle_id` (format `YYYY_EVT_Session_ATT_DEF_BattleNN`), `attacker`, `defender`, `start_lap`, `end_lap`, `duration_segments`, `duration_s`, `minimum_gap`, `maximum_closing_rate`, `detection_opportunities`, `pass_attempted`, `pass_completed`, `bounded_by` (why the episode ended: PASS / PAIR_SWITCH / RACE_CONTROL_TRANSITION / PIT_TRANSITION / SESSION_END). An episode never spans a race-control or pit-state transition, and no rolling feature is computed across one. Chain P builds M07 by joining opportunities onto these.
+Battle key `battle_id` (format `YYYY_EVT_Session_ATT_DEF_BattleNN`), `attacker`, `defender`, `start_lap`, `end_lap`, `duration_segments`, `duration_s`, `minimum_gap`, `maximum_closing_rate`, `detection_opportunities`, `pass_attempted`, `pass_completed`, `bounded_by` (why the episode ended: PASS / PAIR_SWITCH / RACE_CONTROL_TRANSITION / PIT_TRANSITION / SESSION_END). Pairwise rows retain time and distance gap, relative speed, relative acceleration, and gap rate as separate causal fields. An episode never spans a race-control or pit-state transition, and no rolling feature is computed across one. Chain P builds M07 by joining opportunities onto these.
 
 **C9. Splitter** — `src/trackshift/data/splits.py`
 
@@ -438,10 +448,10 @@ artifacts/
         pass_model_report.md            (T)  Brier, log loss, calibration, ROC-AUC, PR-AUC, N
         rival_model_report.md           (R)  synthetic state recovery, predictive log likelihood, next-segment prediction, stability, calibration, latency
         twin_report.md                  (T)  MAE, RMSE, by speed regime, by segment type, constraint violations
-        planner_report.md               (R)  P(ahead), final energy, rule violations, CVaR, latency
-        ablation_report.md              (both)
+        planner_report.md               (R)  P(ahead), final energy, decision regret, rule violations, CVaR, decision stability, latency
+        ablation_report.md              (both)  component and strategic ablations
     dp/
-        value_tables/<event>/           (R)  V(k,e,g,eps) and lambda_E
+        value_tables/<event>/           (R)  V(strategic_state) and lambda_E
 ```
 
 ### 7.5 Tests (§52)
@@ -456,11 +466,11 @@ tests/
     test_opportunities.py               (T)  a DETECTION row never carries an ACTIVATION/BRAKING feature
     test_pairing.py                     (R)  driver-ahead, battle start/end, switching after pass, no self-pair
     test_splits.py                      (R)  no battle in two folds
-    test_rules.py                       (T)  below / at / above every threshold; Detection, Activation, disabled
+    test_rules.py                       (T)  below / at / above every threshold; Detection, Activation, disabled, power-envelope and recharge-budget boundaries
     test_pass_api.py                    (T)  feature-order rejection, calibration bounds
-    test_twin.py                        (T)  physical constraints, SIMULATED tagging
+    test_twin.py                        (T)  physical constraints, causal Energy Store accounting, SIMULATED tagging
     test_rival_api.py                   (R)  distribution sums to 1, merged-state path
-    test_dp.py                          (R)  zero illegal actions, energy accounting, boundary conditions
+    test_dp.py                          (R)  zero illegal actions, energy accounting, boundary conditions, uncertainty-stable policy checks
     test_simulator.py                   (R)  seeded determinism
 ```
 
