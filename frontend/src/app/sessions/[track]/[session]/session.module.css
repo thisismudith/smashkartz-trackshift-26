@@ -40,36 +40,6 @@
 
 .controls { display: flex; flex-direction: column; gap: 0.7rem; }
 
-.segmented {
-  display: flex;
-  flex-wrap: wrap;
-  align-self: flex-start;
-  border: 1px solid var(--haas-grey);
-}
-
-.segment {
-  background: none;
-  border: 0;
-  border-right: 1px solid rgba(174, 174, 174, 0.4);
-  color: var(--haas-grey);
-  font: inherit;
-  font-size: 0.7rem;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  padding: 0.45rem 0.9rem;
-  cursor: pointer;
-}
-
-.segment:last-child { border-right: 0; }
-.segment:hover { background: rgba(174, 174, 174, 0.12); color: var(--haas-white); }
-.segment[aria-selected="true"] { background: var(--haas-red); color: var(--haas-white); }
-.segment:focus-visible { outline: 1px solid var(--haas-white); outline-offset: -3px; }
-
-
-
-
-
-
 /* --- views -------------------------------------------------------------- */
 
 .views { display: flex; flex-direction: column; gap: 2rem; }

@@ -28,7 +28,11 @@ export function useFilters(
       const url = new URL(window.location.href);
       const q = serialiseFilters(next, url.searchParams);
       url.search = q.toString();
-      window.history.replaceState(null, "", url);
+      // Pass the EXISTING history state through. Next 16 patches history.pushState/replaceState
+      // to keep its router in sync, and it stores its own tree in history.state -- handing it
+      // `null` wipes that, and the router resyncs and scrolls the page to the top. It looks
+      // exactly like a reload even though no document is fetched.
+      window.history.replaceState(window.history.state, "", url);
     },
     [setState],
   );

@@ -74,6 +74,32 @@ def build_rules() -> dict:
     return event_rules_to_mapping(default_event_rules())
 
 
+def discover_events(sessions: list[str]) -> list[str]:
+    """Event directories that actually hold a buildable session.
+
+    NOT a directory listing. `data/2026` also contains .git, .github, cache,
+    cache_preseason and schemas, and it holds a Spanish Grand Prix that only ever ran
+    Practice -- 19 entries for 13 real circuits. A naive glob hands build_track_model
+    ".git" and the whole rebuild dies on it. An event qualifies only if one of the
+    REQUESTED sessions exists under it and that session has at least one driver
+    directory carrying a lap file, which is the same evidence the builders need.
+    """
+    out = []
+    if not DATA_ROOT.is_dir():
+        return out
+    for d in sorted(DATA_ROOT.iterdir()):
+        if not d.is_dir() or d.name.startswith(".") or "Testing" in d.name:
+            continue
+        for session in sessions:
+            sdir = d / session
+            if not sdir.is_dir():
+                continue
+            if any(any(drv.glob("*_tel.json")) for drv in sdir.iterdir() if drv.is_dir()):
+                out.append(d.name)
+                break
+    return out
+
+
 def build_one_event(event: str, sessions: list[str]) -> dict:
     """Build one event's track model and replay packs, and WRITE its artifacts.
 
@@ -185,8 +211,9 @@ def main():
 
     events = list(args.events)
     if args.all:
-        events = sorted(d.name for d in DATA_ROOT.iterdir()
-                        if d.is_dir() and "Testing" not in d.name)
+        events = discover_events(list(args.sessions))
+        print(f"discovered {len(events)} buildable event(s) for sessions "
+              f"{', '.join(args.sessions)}")
     jobs = args.jobs if args.jobs > 0 else max(1, min(12, (os.cpu_count() or 4) - 2))
     jobs = max(1, min(jobs, len(events)))
 

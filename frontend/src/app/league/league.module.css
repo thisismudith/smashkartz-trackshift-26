@@ -1,0 +1,212 @@
+/* Cross-circuit energy league. Same surface language as insights.module.css: square, 1px
+   borders, uppercase micro-labels, tabular numerals. No hue appears here — series colour is
+   set inline by the marks, from CHART or the team catalogue. */
+
+.main {
+  min-height: 100dvh;
+  padding: clamp(1.5rem, 5vw, 4rem) clamp(1rem, 6vw, 5rem) 4rem;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(1.6rem, 4vh, 2.8rem);
+  max-width: 78rem;
+  margin: 0 auto;
+}
+
+.head {
+  max-width: 60rem;
+}
+
+.kicker {
+  font-size: 0.75rem;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--haas-grey);
+}
+
+.title {
+  font-family: var(--font-display), Impact, "Arial Narrow", sans-serif;
+  font-weight: 900;
+  font-stretch: 118%;
+  font-size: clamp(2.2rem, 6.5vw, 4.2rem);
+  line-height: 1;
+  letter-spacing: 0.015em;
+  text-transform: uppercase;
+  margin-top: 0.4rem;
+  transform: skewX(-8deg);
+  transform-origin: left center;
+}
+
+.title em {
+  font-style: normal;
+  color: var(--haas-red);
+}
+
+.lede {
+  margin-top: 1.1rem;
+  max-width: 48rem;
+  font-size: clamp(0.95rem, 1.4vw, 1.1rem);
+  line-height: 1.55;
+  color: var(--haas-grey);
+}
+
+.lede strong {
+  color: var(--haas-white);
+  font-weight: 400;
+}
+
+/* --- headline strip ------------------------------------------------------ */
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr));
+  gap: 1px;
+  background: #2a2a2a;
+  border: 1px solid #2a2a2a;
+}
+
+.tile {
+  background: var(--haas-black);
+  padding: 0.9rem 1rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.tileLabel {
+  font-size: 0.62rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--haas-grey);
+}
+
+.tileValue {
+  font-size: clamp(1.5rem, 4vw, 2rem);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--haas-white);
+}
+
+.tileValue[data-tone="warn"] {
+  color: #d0a608;
+}
+
+.tileUnit {
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  color: var(--haas-grey);
+  margin-left: 0.35rem;
+}
+
+.tileNote {
+  font-size: 0.7rem;
+  line-height: 1.45;
+  color: var(--haas-grey);
+}
+
+/* --- loading ------------------------------------------------------------- */
+
+.loadRow {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.track {
+  height: 4px;
+  border: 1px solid #2a2a2a;
+  background: transparent;
+}
+
+.fill {
+  height: 100%;
+  background: var(--haas-red);
+  transition: width 0.18s linear;
+}
+
+.loadText {
+  font-size: 0.68rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--haas-grey);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- controls + chart ---------------------------------------------------- */
+
+.block {
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.9rem 1.4rem;
+}
+
+.control {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.controlLabel {
+  font-size: 0.62rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--haas-grey);
+}
+
+.panel {
+  border: 1px solid #2a2a2a;
+  padding: clamp(0.85rem, 2.5vw, 1.3rem);
+  min-width: 0;
+}
+
+.coverage {
+  font-size: 0.7rem;
+  line-height: 1.5;
+  letter-spacing: 0.02em;
+  color: var(--haas-grey);
+  font-variant-numeric: tabular-nums;
+  border-left: 1px solid var(--haas-grey);
+  padding-left: 0.7rem;
+}
+
+.coverage b {
+  color: var(--haas-white);
+  font-weight: 400;
+}
+
+.footnotes {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  max-width: 52rem;
+  font-size: 0.72rem;
+  line-height: 1.55;
+  color: var(--haas-grey);
+}
+
+.footnotes h2 {
+  font-size: 0.68rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--haas-white);
+  font-weight: 400;
+}
+
+.warn {
+  color: #d0a608;
+}
+
+.fail {
+  border: 1px solid #d0a608;
+  padding: 0.6rem 0.8rem;
+  font-size: 0.72rem;
+  line-height: 1.5;
+  color: #d0a608;
+}

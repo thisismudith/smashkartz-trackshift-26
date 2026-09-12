@@ -1,0 +1,189 @@
+/* Driver-vs-driver traces. Same surface language as the rest of the session page:
+   #111111 ground, square corners, 1px borders, uppercase micro-labels, no blur or gradients. */
+
+.wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 1.4rem;
+}
+
+/* --- pickers ------------------------------------------------------------ */
+
+/* auto-fit rather than four fixed columns: at 400px these stack, at 1440px they sit in a row,
+   and nothing ever forces the page wider than the viewport. */
+.pickers {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: 0.7rem;
+  align-items: end;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
+.fieldLabel {
+  font-size: 0.62rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--haas-grey);
+}
+
+.selectWrap {
+  position: relative;
+  display: block;
+  min-width: 0;
+}
+
+/* The caret is drawn here, not by the platform: appearance:none removes the native control
+   surface, which is the only way the picker matches the 1px square theme on every browser. */
+.selectWrap::after {
+  content: "▾";
+  position: absolute;
+  right: 0.55rem;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.6rem;
+  color: var(--haas-grey);
+  pointer-events: none;
+}
+
+.select {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  background: #0b0b0b;
+  color: var(--haas-white);
+  border: 1px solid #2a2a2a;
+  border-radius: 0;
+  padding: 0.45rem 1.6rem 0.45rem 0.6rem;
+  font: inherit;
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+  cursor: pointer;
+  text-overflow: ellipsis;
+}
+
+.select:hover { border-color: #444; }
+.select:focus-visible { outline: 1px solid var(--haas-grey); outline-offset: 1px; }
+.select:disabled { color: var(--haas-grey); cursor: not-allowed; }
+
+/* The option list is drawn by the platform; only its colours can be set. */
+.select option { background: #0b0b0b; color: var(--haas-white); }
+
+.swap {
+  background: #0b0b0b;
+  color: var(--haas-grey);
+  border: 1px solid #2a2a2a;
+  border-radius: 0;
+  padding: 0.45rem 0.7rem;
+  font: inherit;
+  font-size: 0.68rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.swap:hover { color: var(--haas-white); border-color: #444; }
+.swap:focus-visible { outline: 1px solid var(--haas-grey); outline-offset: 1px; }
+
+/* --- honesty banners ---------------------------------------------------- */
+
+.caution {
+  border-left: 3px solid #a88606;
+  background: rgba(168, 134, 6, 0.06);
+  padding: 0.8rem 1rem;
+  font-size: 0.8rem;
+  line-height: 1.55;
+  color: var(--haas-grey);
+  max-width: 74ch;
+}
+
+.blocking {
+  border-left-color: var(--haas-red);
+  background: rgba(218, 41, 28, 0.07);
+}
+
+.caution strong { color: #d0a608; font-weight: 600; }
+.blocking strong { color: var(--haas-red); }
+
+.cautionHead {
+  display: block;
+  font-size: 0.66rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--haas-white);
+  margin-bottom: 0.3rem;
+}
+
+/* --- lap facts ---------------------------------------------------------- */
+
+/* One row per compared lap: what it is, and what is measurably wrong with it. */
+.facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
+  gap: 0.7rem;
+}
+
+.fact {
+  border: 1px solid #2a2a2a;
+  padding: 0.6rem 0.7rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.factHead {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.factCode { color: var(--haas-white); font-weight: 600; }
+
+.factSwatch {
+  width: 14px;
+  height: 0;
+  border-top-width: 2px;
+  border-top-style: solid;
+  align-self: center;
+  flex: none;
+}
+
+.factRow {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.8rem;
+  font-size: 0.72rem;
+  color: var(--haas-grey);
+  font-variant-numeric: tabular-nums;
+}
+
+.factRow b { color: var(--haas-white); font-weight: 500; }
+
+.bad { color: var(--haas-red); }
+
+/* --- the stack ---------------------------------------------------------- */
+
+/* Panels touch: the point of the view is that one x axis runs down all of them, and a gap
+   between panels reads as a break in that axis. */
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.panelNote {
+  font-size: 0.7rem;
+  line-height: 1.45;
+  color: var(--haas-grey);
+  max-width: 70ch;
+}

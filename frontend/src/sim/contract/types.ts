@@ -36,7 +36,14 @@ export interface CarState {
   /** Where this car's POSITION came from. OBSERVED = projected from real telemetry.
    * RULE = a documented placement the feed does not contain (grid slot, parked queue,
    * pit-lane start). Gaps are never computed from a RULE position. */
-  positionProvenance: Provenance;
+  /** Where this car's POSITION came from. OBSERVED = projected from real telemetry.
+   * RULE = a documented placement the feed does not contain (grid slot, parked queue,
+   * pit-lane start). **null = there is no position** -- the producer withdrew one it
+   * could not place, so the car is not drawn and no gap is computed from it. null is
+   * used rather than a seventh provenance word because absence is not a provenance:
+   * every tag in the vocabulary describes where a value CAME FROM, and there is no
+   * value here. Gaps are never computed from a RULE or null position. */
+  positionProvenance: Provenance | null;
   /** Energy twin summary for the lap this car is on (INFERRED/SIMULATED). */
   energy: LapEnergy | null;
 }
@@ -116,7 +123,7 @@ export interface TrackModel {
    * Never one stitched path: the two are different pieces of tarmac and joining
    * them folds the ribbon back on itself. Null when too few pit laps to trace. */
   pitLanePath: { role: string; x: Float32Array; y: Float32Array; z: Float32Array }[] | null;
-  grid: { order: string[]; pitchMetres: number };
+  grid: { order: string[]; pitchMetres: number; unplaced?: string[] | null };
   referenceProfile: { binMetres: number; speedKph: Float32Array; gear: Uint8Array };
 }
 

@@ -71,6 +71,32 @@ export interface RuleEnvelope {
   verified: boolean;
 }
 
+/** One row of the sampled envelope table: the cap at one speed, in one mode. */
+export interface RuleCurveSample {
+  speed_kmh: number;
+  max_power_kw: number;
+}
+
+/** `max_electrical_power_kw` evaluated on a declared speed grid, both modes, by the Python
+ * that owns the curve (AGENTS.md section 32, API.md section 5.3a). This is how the UI reads a
+ * cap at a speed: BY LOOKUP. Interpolating between these rows in TypeScript would be the second
+ * implementation of the curve that section 32 forbids, and the number on screen would no longer
+ * be provably the number the optimiser saw.
+ *
+ * The grid is every multiple of `step_kmh` from 0 to the highest breakpoint PLUS every
+ * breakpoint of every mode, and it is shared by both modes -- so the two caps at one speed are
+ * comparable by index, and no sampled segment hides the cliff. */
+export interface SampledCurves {
+  step_kmh: number;
+  /** Above this speed the two modes differ; at or below it override confers nothing
+   * (section 20.2). null means the curves never differ -- not zero. */
+  separation_speed_kmh: number | null;
+  curves: Record<string, RuleCurveSample[]>;
+  provenance: string;
+  verified: boolean;
+  note: string;
+}
+
 export interface RuleSet {
   schema_version: number;
   provenance: string;
@@ -88,6 +114,9 @@ export interface RuleSet {
     configuration_version: string;
   };
   power_envelope: Record<string, RuleEnvelope>;
+  /** Absent from artifacts built before the sampled table landed; a consumer must then say
+   * it has no table rather than interpolating the breakpoints itself. */
+  sampled_curves?: SampledCurves;
   energy_budget: {
     ers_store_capacity: RuleQuantity;
     deploy_budget: RuleQuantity;

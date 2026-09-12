@@ -21,7 +21,15 @@ export interface RawTrackModel {
     entryStation: number | null; exitStation: number | null;
     mergeStation: number | null; loopLateral: number | null;
   };
-  grid: { order: string[]; pitchMetres: number };
+  grid: {
+    order: string[];
+    pitchMetres: number;
+    /** Drivers whose lap-1 position is NOT a measurement -- a shared placeholder
+     * coordinate, or a projection implausibly far off the ring. Python already
+     * separates these from `order` and from `pitStarters`; parsing it here is what
+     * stops the frontend inventing a slot for them. */
+    unplaced?: string[] | null;
+  };
   /** zCm may be null per vertex once Python stops shipping the held pit-lane elevation
    * as if it were measured; parseTrackModel turns that into NaN and the renderer takes
    * the drawn elevation from the adjacent racing surface either way. */
@@ -234,7 +242,11 @@ export function parseTrackModel(raw: RawTrackModel): TrackModel {
       mergeStation: raw.pitLane.mergeStation,
       loopLateral: raw.pitLane.loopLateral,
     },
-    grid: { order: raw.grid.order, pitchMetres: raw.grid.pitchMetres },
+    grid: {
+      order: raw.grid.order,
+      pitchMetres: raw.grid.pitchMetres,
+      unplaced: Array.isArray(raw.grid.unplaced) ? raw.grid.unplaced : [],
+    },
     pitLanePath: raw.pitLanePath
       ? raw.pitLanePath.segments.map((seg) => ({
           role: seg.role,

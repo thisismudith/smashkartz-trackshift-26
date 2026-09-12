@@ -53,6 +53,7 @@ export function FilterBar({
           selected={state.years}
           onChange={(v) => onChange("years", v)}
           placeholder="All"
+          emptyMeans="all"
           showChips={false}
           disabled={facets.years.length <= 1}
           disabledReason="Only 2026 artifacts are built. The 2025 raw mirror exists but has not been processed."
@@ -66,6 +67,7 @@ export function FilterBar({
           selected={state.circuits}
           onChange={(v) => onChange("circuits", v)}
           placeholder="All"
+          emptyMeans="all"
         />
       ) : null}
 
@@ -76,6 +78,7 @@ export function FilterBar({
           selected={state.sessions}
           onChange={(v) => onChange("sessions", v)}
           placeholder="All"
+          emptyMeans="all"
           showChips={false}
         />
       ) : null}
@@ -87,6 +90,7 @@ export function FilterBar({
           selected={state.teams}
           onChange={(v) => onChange("teams", v)}
           placeholder="All"
+          emptyMeans="all"
         />
       ) : null}
 
@@ -97,6 +101,7 @@ export function FilterBar({
           selected={state.drivers}
           onChange={(v) => onChange("drivers", v)}
           placeholder="All"
+          emptyMeans="all"
           note={facets.driverNote}
         />
       ) : null}
@@ -150,6 +155,12 @@ export function useFacetOptions(catalogue: Catalogue, index: SimIndex, state: Fi
 
     // Entries actually present at the in-scope circuits, so the driver list reflects who raced
     // there rather than the whole season's roster.
+    //
+    // `tracks[].entries` rather than `catalogue.drivers` on purpose, and it matters: drivers has
+    // 35 rows / 32 distinct codes because it includes practice-only and reserve entries (ARO,
+    // BEG, BRO, CRA, FOR, HER, HIR, IWA, VES), none of whom have a fitted parameter. entries has
+    // exactly 23 codes, which is exactly the key set of params.driverOffsetSeconds -- verified.
+    // Offering the other nine would mean offering filters that can only ever empty a chart.
     const entriesInScope = catalogue.tracks
       .filter((t) => scopeSlugs.has(t.slug))
       .flatMap((t) => t.entries);

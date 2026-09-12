@@ -19,6 +19,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useId,
   useMemo,
   useRef,
@@ -28,7 +29,9 @@ import {
   type ReactNode,
 } from "react";
 import s from "./charts.module.css";
-import { linearScale, niceTicks, linePath, stepPath, bandPath, type LinearScale } from "./scale";
+import {
+  linearScale, niceTicks, linePath, stepPath, bandPath, resolveBrush, type LinearScale,
+} from "./scale";
 
 interface PlotCtx {
   xs: LinearScale;
@@ -74,6 +77,17 @@ export interface PlotProps {
     xLabel?: string;
     xFormat?: (v: number) => string;
   };
+  /**
+   * Drag across the plot to select an x range.
+   *
+   * Plot does NOT zoom itself -- it reports the range and the caller narrows `xDomain`. Keeping
+   * the domain owned by the caller means a zoom can be shared between stacked panels that share
+   * an x axis, and it keeps this component free of view state it would have to reconcile with
+   * incoming props.
+   *
+   * Called with null when the drag was too short to be a range, which is the gesture for "reset".
+   */
+  brush?: { onChange: (range: [number, number] | null) => void };
   children: ReactNode;
 }
 
@@ -98,19 +112,55 @@ function nearestIndex(xs: readonly number[], target: number): number {
 export function Plot({
   xDomain,
   yDomain,
-  width = 720,
+  width: fixedWidth,
   height = 280,
   margin,
   ariaLabel,
   hover,
+  brush,
   children,
 }: PlotProps) {
+  /**
+   * The viewBox width TRACKS the rendered width, 1:1.
+   *
+   * With a fixed viewBox the SVG is scaled by CSS, and so is its text: a 720-unit box rendered
+   * at 350 px on a phone shrank 10px labels to about 5px, which is unreadable. Measuring the
+   * container and using those pixels as the viewBox means one unit is one device-independent
+   * pixel at every width, so axis labels stay the size they are declared. The height stays as
+   * given, so a chart simply gets relatively taller as the screen narrows.
+   *
+   * `fixedWidth` overrides it, for tests and for any caller that genuinely wants a fixed box.
+   */
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+  const [measured, setMeasured] = useState<number | null>(null);
+  useEffect(() => {
+    if (fixedWidth !== undefined) return;
+    const el = wrapRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver((entries) => {
+      const w = entries[0]?.contentRect.width ?? 0;
+      // round to 2px so a sub-pixel reflow does not thrash the chart through React
+      if (w > 0) setMeasured(Math.round(w / 2) * 2);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [fixedWidth]);
+
+  // 720 is the SSR / pre-measure fallback: it renders a sane chart before the observer fires.
+  const width = fixedWidth ?? measured ?? 720;
+
+  // Margins shrink on a narrow chart, or the plotting area vanishes into the axis gutters.
+  const tight = width < 520;
   const m = {
     left: margin?.left ?? 48,
     right: margin?.right ?? 16,
     top: margin?.top ?? 12,
     bottom: margin?.bottom ?? 34,
   };
+  if (tight) {
+    m.left = Math.min(m.left, 44);
+    m.right = Math.min(m.right, 12);
+  }
   const rawId = useId();
   const clipId = `plotclip-${rawId.replace(/[^a-zA-Z0-9_-]/g, "")}`;
   const ctx = useMemo<PlotCtx>(() => {
@@ -150,18 +200,65 @@ export function Plot({
     [ctx, width],
   );
 
+  // Brush anchors, in DATA units so they survive a resize mid-drag.
+  const [brushFrom, setBrushFrom] = useState<number | null>(null);
+  const [brushTo, setBrushTo] = useState<number | null>(null);
+
+  const onDown = (e: ReactPointerEvent<SVGSVGElement>) => {
+    if (!brush) return;
+    const x = toDataX(e.clientX);
+    if (x === null) return;
+    // capture so the drag keeps tracking once the pointer leaves the chart, which it will --
+    // people overshoot the edge when selecting the end of a range
+    e.currentTarget.setPointerCapture(e.pointerId);
+    setBrushFrom(x);
+    setBrushTo(x);
+  };
+
   const onMove = (e: ReactPointerEvent<SVGSVGElement>) => {
-    if (!hover) return;
-    setHoverX(toDataX(e.clientX));
+    const x = toDataX(e.clientX);
+    if (brushFrom !== null) {
+      // clamp to the domain: a drag past the edge should select to the edge, not beyond it
+      const [d0, d1] = [xDomain[0], xDomain[1]];
+      const lo = Math.min(d0, d1);
+      const hi = Math.max(d0, d1);
+      const raw = x ?? (e.clientX > 0 ? hi : lo);
+      setBrushTo(Math.max(lo, Math.min(hi, raw)));
+    }
+    if (hover) setHoverX(x);
+  };
+
+  const onUp = (e: ReactPointerEvent<SVGSVGElement>) => {
+    if (!brush || brushFrom === null || brushTo === null) return;
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    } catch {
+      /* the pointer may already be released; not worth failing the gesture over */
+    }
+    const from = brushFrom;
+    const to = brushTo;
+    setBrushFrom(null);
+    setBrushTo(null);
+    brush.onChange(resolveBrush(from, to, xDomain, ctx.xs));
   };
 
   // Keyboard access: the chart is focusable when hoverable, and arrows step the crosshair along
   // the first series. Without this the tooltip is pointer-only, which puts the numbers out of
   // reach of anyone not using a mouse.
   const onKey = (e: ReactKeyboardEvent<SVGSVGElement>) => {
-    if (!hover || hover.series.length === 0) return;
+    if (!hover || hover.series.length === 0) {
+      if (e.key === "Escape" && brush) brush.onChange(null);
+      return;
+    }
     const xs0 = hover.series[0].x;
     if (xs0.length === 0) return;
+    if (e.key === "Escape" && brush) {
+      e.preventDefault();
+      setBrushFrom(null);
+      setBrushTo(null);
+      brush.onChange(null);
+      return;
+    }
     if (e.key !== "ArrowLeft" && e.key !== "ArrowRight" && e.key !== "Home" && e.key !== "End") return;
     e.preventDefault();
     const cur = hoverX === null ? -1 : nearestIndex(xs0 as number[], hoverX);
@@ -206,17 +303,20 @@ export function Plot({
 
   return (
     <Ctx.Provider value={ctx}>
-      <div className={s.plotInner}>
+      <div className={s.plotInner} ref={wrapRef}>
         <svg
           ref={svgRef}
           className={s.plot}
           viewBox={`0 0 ${width} ${height}`}
           role="img"
           aria-label={ariaLabel}
-          tabIndex={hover ? 0 : undefined}
-          onPointerMove={hover ? onMove : undefined}
+          tabIndex={hover || brush ? 0 : undefined}
+          data-brushable={brush ? "true" : undefined}
+          onPointerDown={brush ? onDown : undefined}
+          onPointerMove={hover || brush ? onMove : undefined}
+          onPointerUp={brush ? onUp : undefined}
           onPointerLeave={hover ? () => setHoverX(null) : undefined}
-          onKeyDown={hover ? onKey : undefined}
+          onKeyDown={hover || brush ? onKey : undefined}
           onBlur={hover ? () => setHoverX(null) : undefined}
         >
           <defs>
@@ -230,6 +330,16 @@ export function Plot({
             </clipPath>
           </defs>
           {children}
+          {brushFrom !== null && brushTo !== null ? (
+            <rect
+              className={s.brushRect}
+              x={Math.min(ctx.xs(brushFrom), ctx.xs(brushTo))}
+              y={ctx.inner.top}
+              width={Math.abs(ctx.xs(brushTo) - ctx.xs(brushFrom))}
+              height={Math.max(0, ctx.inner.bottom - ctx.inner.top)}
+              aria-hidden="true"
+            />
+          ) : null}
           {readout ? (
             <g className={s.hoverLayer} aria-hidden="true">
               <line
@@ -528,11 +638,18 @@ export function RefLine({
   if (x !== undefined) {
     const px = xs(x);
     if (px < inner.left || px > inner.right) return null;
+    // near the right edge the label would run off the plot, so hang it to the left instead
+    const nearRight = px > inner.left + 0.72 * (inner.right - inner.left);
     return (
       <g>
         <line className={s.refLine} style={colour ? { stroke: colour } : undefined} x1={px} x2={px} y1={inner.top} y2={inner.bottom} />
         {label ? (
-          <text className={s.refLabel} x={px + 4} y={inner.top + 10}>
+          <text
+            className={s.refLabel}
+            x={px + (nearRight ? -4 : 4)}
+            y={inner.top + 10}
+            textAnchor={nearRight ? "end" : "start"}
+          >
             {label}
           </text>
         ) : null}

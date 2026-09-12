@@ -72,7 +72,7 @@ import type {
 } from "../contract/types";
 import { type DecodedLap, decodeLap, sampleLap } from "../data/codec";
 import type { RawDriverEntry, RawLapEntry, RawSessionManifest } from "../data/manifest";
-import { halfWidthAt, trackPointAt } from "../data/manifest";
+import { halfWidthAt, lapPositionFrame, trackPointAt } from "../data/manifest";
 // The two-column grid stagger and the parked queue are PRESENTATION placements, so they
 // legitimately take the presentation layer's car width -- the same 2.0 m the renderer
 // actually draws. Nothing else in this file depends on the renderer.
@@ -307,6 +307,9 @@ export class ReplayTimeline implements RaceTimeline {
   /** Grid order actually used for placement. Falls back to lap-1 finishing order
    * when the track model's own grid detection covered too little of the field. */
   private gridOrder: string[] = [];
+  /** Drivers whose lap-1 position is not a measurement, straight from the track model.
+   * Kept as a Set because sampleAt consults it at 60 Hz. */
+  private gridUnplaced = new Set<string>();
   /** driver -> index in gridOrder. sampleAt runs at 60 Hz; indexOf inside a comparator
    * is O(n) per comparison, this is O(1). */
   private gridIndex = new Map<string, number>();
@@ -385,6 +388,7 @@ export class ReplayTimeline implements RaceTimeline {
     }
 
     this.gridOrder.forEach((d, i) => this.gridIndex.set(d, i));
+    this.gridUnplaced = new Set(this.track.grid.unplaced ?? []);
 
     finishes.sort((a, b) => a.t - b.t);
     this.finishOrder = finishes.map((f) => f.driver);
@@ -450,7 +454,7 @@ export class ReplayTimeline implements RaceTimeline {
     lapsDone: number; lapProgress: number; rankProgress: number; stationM: number;
     lapEntry: RawLapEntry | null;
     kind: CarState["status"]; lateralOverride?: number; cur?: { lap: RawLapEntry; idx: number } | null;
-    posProvenance: Provenance; officialPos: number | null; positionFrame: PositionFrame | null;
+    posProvenance: Provenance | null; officialPos: number | null; positionFrame: PositionFrame | null;
   } {
     const cur = this.currentLap(dl, t);
     // Grid slots sit BEHIND the start/finish line, and a car on the run to the line
@@ -474,6 +478,20 @@ export class ReplayTimeline implements RaceTimeline {
           lapEntry: first ?? null, kind: "pit", officialPos: null,
           lateralOverride: pit.loopLateral ?? 0,
           posProvenance: "RULE", positionFrame: null,
+        };
+      }
+      // A driver Python could not place has NO grid position, and the old fallback gave
+      // EVERY such driver the same slot (gridOrder.length), stacking them on one point.
+      // At Monaco that is 19 of 22 cars on a single coordinate -- the pile visible in
+      // the render. Python already separates them into grid.unplaced with the reason;
+      // the honest answer is the same as any other absent position: no station, no gap,
+      // and the renderer draws nothing rather than drawing a heap.
+      if (this.gridUnplaced.has(dl.entry.driver)) {
+        return {
+          lapsDone: 0, lapProgress: 0, rankProgress: slotFraction(this.gridOrder.length),
+          stationM: NaN,
+          lapEntry: first ?? null, kind: "grid", lateralOverride: NaN,
+          posProvenance: null, officialPos: null, positionFrame: null,
         };
       }
       const safeSlot = slot >= 0 ? slot : this.gridOrder.length;
@@ -500,8 +518,20 @@ export class ReplayTimeline implements RaceTimeline {
     // taken from it is a MEASUREMENT or a rescaled wheel-speed integral. See PositionFrame.
     // Every observed branch below reads its station out of exactly this lap, so one test
     // covers all of them.
-    const frame: PositionFrame = lap.positionFrame === "B" ? "B" : "A";
-    const framedProvenance: Provenance = frame === "B" ? "DERIVED" : "OBSERVED";
+    // Anything that is not explicitly "A" is NOT a measurement. The old test collapsed
+    // frame NONE (the encoder saying this lap has no usable position channel AT ALL) and
+    // a missing tag (an older pack that predates the field) into "A", so both were
+    // published as OBSERVED -- claiming a measurement precisely where the producer said
+    // there is none. lapPositionFrame/lapPositionsMeasured exist to make that mistake
+    // unavailable; use them rather than re-testing the string here.
+    const rawFrame = lapPositionFrame(lap);
+    const frame: PositionFrame | null =
+      rawFrame === "B" ? "B" : rawFrame === "A" ? "A" : null;
+    // null, not a provenance word: frame NONE means the encoder found no usable
+    // position on this lap at all, and absence is not a place a value came from.
+    const framedProvenance: Provenance | null = rawFrame === "A" ? "OBSERVED"
+      : rawFrame === "B" ? "DERIVED"
+      : null;
 
     if (lap.sesT !== null && t > lap.sesT) {
       // this lap is finished; are we between laps or at the end of the session?
@@ -575,11 +605,22 @@ export class ReplayTimeline implements RaceTimeline {
     const frac = lapDistanceFraction(
       decoded, sample, this.track.lengthMetres, this.track.timingLines.sf, rel,
     );
+    // A withdrawn position makes `frac` non-finite. Two things must NOT happen then:
+    // the car must not be ranked by a NaN (Array.sort with a NaN key is
+    // implementation-defined, so one absent car scrambles the whole order), and it must
+    // not be handed a plausible station. Falling back to the lap-table anchor is honest
+    // -- lapsDone comes from the timing feed, not from x/y, so it is still measured --
+    // and the station stays absent so no consumer can draw or gap it.
+    const positionKnown = Number.isFinite(frac)
+      && (!sample || Number.isFinite(sample.stationM));
     return {
       lapsDone: nonFf1gLapsBefore,
-      lapProgress: frac,
-      rankProgress: nonFf1gLapsBefore + frac,
-      stationM: sample ? sample.stationM : this.track.timingLines.sf,
+      lapProgress: positionKnown ? frac : 0,
+      rankProgress: nonFf1gLapsBefore + (positionKnown ? frac : 0),
+      // NOT the start/finish line. Substituting a real place on the circuit for an
+      // unknown one is the same fabrication the encoder just stopped doing; NaN keeps
+      // it absent, and the renderer skips a car it cannot place.
+      stationM: positionKnown && sample ? sample.stationM : NaN,
       lapEntry: lap, kind: inPit ? "pit" : "track", cur,
       // Frame B has no x/y at all: the station is the driver's own integrated wheel-speed
       // distance rescaled onto one lap of the ring and the lateral is hard-zeroed, so it
@@ -634,9 +675,18 @@ export class ReplayTimeline implements RaceTimeline {
     for (const lap of dl.laps) {
       const dec = dl.decoded.get(lap.lap);
       if (dec && dec.n > 0 && lap.lST !== null) {
-        baseMax = Math.max(baseMax, lapsBefore + signedFromLine(dec.stationM[0], L, sf) / L);
-        if (baseMax > x) { nextStart = lap.lST; break; }
-        best = { lST: lap.lST, dec, base: baseMax };
+        // A lap whose FIRST sample has a withdrawn position contributes NaN here, and
+        // NaN poisons a running maximum permanently: Math.max(anything, NaN) is NaN and
+        // `NaN > x` is false, so baseMax never recovers, `target` becomes NaN, and this
+        // whole driver's timing inverse silently returns nothing for the rest of the
+        // session -- the gap column just empties. Skip the unusable anchor instead; the
+        // later laps still anchor the inverse.
+        const anchor = lapsBefore + signedFromLine(dec.stationM[0], L, sf) / L;
+        if (Number.isFinite(anchor)) {
+          baseMax = Math.max(baseMax, anchor);
+          if (baseMax > x) { nextStart = lap.lST; break; }
+          best = { lST: lap.lST, dec, base: baseMax };
+        }
       }
       if (!lap.ff1G && lap.sesT !== null) lapsBefore++;
     }
@@ -647,6 +697,11 @@ export class ReplayTimeline implements RaceTimeline {
     let raw = 0, travelled = 0;
     for (let j = 1; j < dec.n; j++) {
       let step = dec.stationM[j] - dec.stationM[j - 1];
+      // A withdrawn position on either end makes this step unknowable. Treating it as
+      // zero says "the car did not move over this interval", which is wrong but BOUNDED
+      // and keeps the walk monotone; adding NaN would poison `raw` for every later
+      // sample and lose the whole lap, which is wrong AND unbounded.
+      if (!Number.isFinite(step)) step = 0;
       if (step < -L / 2) step += L;
       if (step > L / 2) step -= L;
       raw += step;

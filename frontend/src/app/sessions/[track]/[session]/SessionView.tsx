@@ -23,6 +23,7 @@ import {
 } from "@/sim/charts";
 import { CHART } from "@/lib/palette";
 import { MultiSelect, type SelectOption } from "@/components/filters";
+import { Segmented } from "@/components/ui";
 import s from "./session.module.css";
 
 type View = "pace" | "energy" | "overtake";
@@ -32,10 +33,10 @@ interface DriverStyle {
   dashed: boolean;
 }
 
-const VIEWS: { key: View; label: string }[] = [
-  { key: "energy", label: "Energy & ERS" },
-  { key: "overtake", label: "Overtaking" },
-  { key: "pace", label: "Pace & progression" },
+const VIEWS: { value: View; label: string }[] = [
+  { value: "energy", label: "Energy & ERS" },
+  { value: "overtake", label: "Overtaking" },
+  { value: "pace", label: "Pace & progression" },
 ];
 
 export default function SessionView({
@@ -60,7 +61,7 @@ export default function SessionView({
     setViewState(v);
     const url = new URL(window.location.href);
     url.searchParams.set("view", v);
-    window.history.replaceState(null, "", url);
+    window.history.replaceState(window.history.state, "", url);
   };
   const [selected, setSelected] = useState<string[]>([]);
 
@@ -163,20 +164,7 @@ export default function SessionView({
       </header>
 
       <div className={s.controls}>
-        <div className={s.segmented} role="tablist" aria-label="View">
-          {VIEWS.map((v) => (
-            <button
-              key={v.key}
-              type="button"
-              role="tab"
-              aria-selected={v.key === view}
-              className={s.segment}
-              onClick={() => setView(v.key)}
-            >
-              {v.label}
-            </button>
-          ))}
-        </div>
+        <Segmented label="View" options={VIEWS} value={view} onChange={setView} />
 
         <MultiSelect
           label="Drivers"

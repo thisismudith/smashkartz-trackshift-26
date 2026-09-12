@@ -8,6 +8,7 @@ import {
   linePath,
   stepPath,
   bandPath,
+  resolveBrush,
 } from "./scale";
 
 describe("linearScale", () => {
@@ -156,5 +157,31 @@ describe("path builders", () => {
 
   it("bandPath returns empty string when no column is complete", () => {
     expect(bandPath([0, 1], [NaN, NaN], [1, 2])).toBe("");
+  });
+});
+
+describe("resolveBrush", () => {
+  const domain = [0, 100] as const;
+  const toPx = (v: number) => v * 5; // 5 px per unit
+
+  it("returns the ordered range for a real drag", () => {
+    expect(resolveBrush(70, 20, domain, toPx)).toEqual([20, 70]);
+  });
+
+  it("treats a too-short drag as a reset, not a sliver zoom", () => {
+    expect(resolveBrush(40, 41, domain, toPx)).toBeNull(); // 5px < 8px threshold
+    expect(resolveBrush(40, 40, domain, toPx)).toBeNull();
+  });
+
+  it("clamps an overshoot to the domain rather than selecting past the data", () => {
+    expect(resolveBrush(-50, 150, domain, toPx)).toEqual([0, 100]);
+  });
+
+  it("honours an inverted domain", () => {
+    expect(resolveBrush(10, 80, [100, 0], toPx)).toEqual([10, 80]);
+  });
+
+  it("returns null for non-finite input rather than an invalid range", () => {
+    expect(resolveBrush(NaN, 50, domain, toPx)).toBeNull();
   });
 });

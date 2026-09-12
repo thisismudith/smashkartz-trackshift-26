@@ -16,6 +16,7 @@ import { CHART } from "@/lib/palette";
 import { defaultSimSource, type SimIndex } from "@/sim/data/source";
 import type { Catalogue } from "@/sim/data/catalogue";
 import { FilterBar, useFilters, type FilterState } from "@/components/filters";
+import { Segmented } from "@/components/ui";
 import type { FittedParams, Leaf } from "@/sim/engine/params";
 import {
   ChartFrame,
@@ -180,20 +181,12 @@ export default function InsightsView({ initialFilters }: { initialFilters: Filte
       />
 
       <section className={s.block}>
-        <div className={s.segmented} role="tablist" aria-label="Circuit metric">
-          {METRICS.map((m) => (
-            <button
-              key={m.key}
-              type="button"
-              role="tab"
-              aria-selected={m.key === metricKey}
-              className={s.segment}
-              onClick={() => setMetricKey(m.key)}
-            >
-              {m.label}
-            </button>
-          ))}
-        </div>
+        <Segmented
+          label="Circuit metric"
+          options={METRICS.map((m) => ({ value: m.key, label: m.label }))}
+          value={metricKey}
+          onChange={setMetricKey}
+        />
 
         <ForestChart
           title={metric.label}
@@ -302,7 +295,6 @@ function ForestChart({
         xDomain={[niceMin, niceMax]}
         yDomain={[0, rows.length]}
         height={height}
-        width={compact ? 620 : 720}
         margin={{ left: compact ? 54 : 140, right: 22, top: 10, bottom: 36 }}
         ariaLabel={`${title}: estimate and 95% confidence interval for each of ${rows.length} entries`}
       >

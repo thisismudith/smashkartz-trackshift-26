@@ -606,6 +606,81 @@ just do not read the numbers as results.
 
 ---
 
+## 11. Interaction layer — filters and dynamic charts
+
+Added after the user asked for "all filters and choosing searchselect multiple options … and just
+more features to add/remove/select/all/none … dynamic graphs are better than static ones".
+
+### 11.1 Filter kit — `src/components/filters/`
+
+| File | Role |
+|---|---|
+| `filterState.ts` | Pure, **not** a `"use client"` module: `FACETS`, `FilterState`, `parseFilters`, `serialiseFilters`. It must be importable from a server component, and a client-only module throws *"Attempted to call parseFilters() from the server"* — that was a real 500-and-reload-loop during the build. |
+| `useFilters.ts` | The client half: reads/writes the address bar with `replaceState`. |
+| `MultiSelect.tsx` | Searchable multi-select: trigger, search box, All / None / Invert, grouped options with colour swatch and meta, removable chips. |
+| `FilterBar.tsx` | The five facets plus Reset, with `useFacetOptions()` doing downward cross-filtering. |
+
+**The URL is the store.** `?circuits=british-grand-prix,monaco-grand-prix&teams=Ferrari&drivers=HAM,LEC`.
+A filtered view is a thing you send someone; a chart you can only describe in words is worth less.
+Resolved server-side in `page.tsx` so the first paint is already filtered — no read-then-correct
+flash. Writes use `replaceState`, because a checkbox click is a refinement, not a new page.
+
+**Empty means empty.** There is no "empty implies all" shorthand: it would make *I cleared this*
+and *I never touched this* render identically, which is the same class of error as zero-filling a
+missing value.
+
+**Bulk actions apply to what is visible.** "All" after a search means all matches, not everything
+including things you cannot see.
+
+**Colour follows the entity.** Option swatches come from the option, so deselecting a driver never
+recolours the survivors.
+
+Three facet decisions worth knowing, each verified against the artifacts:
+
+- **Year has exactly one value (2026).** Rendered, disabled, with the reason. Omitting it would
+  imply the dimension does not exist; faking it would be worse.
+- **Driver options come from `tracks[].entries`, not `catalogue.drivers`.** Measured:
+  `catalogue.drivers` has 35 rows / 32 distinct codes because it includes practice-only and
+  reserve entries (ARO, BEG, BRO, CRA, FOR, HER, HIR, IWA, VES) who have no fitted parameter.
+  `tracks[].entries` has exactly 23 codes — precisely the key set of `params.driverOffsetSeconds`.
+  Offering the other nine would mean offering filters that can only empty a chart.
+- **`LAW` is the one driver appearing under two teams** (Racing Bulls → Red Bull Racing) within the
+  entry lists. The two entries are merged into one person, and the merge is **stated in the panel
+  note** rather than done silently.
+
+### 11.2 Chart interaction — `src/sim/charts/`
+
+| Capability | Where | Notes |
+|---|---|---|
+| Crosshair + shared tooltip | `Plot`'s `hover` prop | Snaps to the nearest x across all series; a series with no sample near the snapped x is omitted rather than carried forward, which would invent a value it does not have. |
+| Keyboard access | `Plot` | The chart is focusable when hoverable; ←/→/Home/End step the crosshair. Without it the numbers are pointer-only. |
+| Legend click-to-isolate | `useSeriesToggle` + `ChartFrame`'s `hidden` / `onToggleSeries` | The caller filters what it passes to the marks, so the **y domain recomputes from the visible series** — hiding the outlier rescales the chart, which is the point of hiding it. |
+| Responsive sizing | `Plot` | The viewBox **tracks the rendered width 1:1** via `ResizeObserver`. With a fixed 720-unit box scaled to 350 px on a phone, 10 px labels rendered at ~5 px and were unreadable. |
+| Teammate disambiguation | `driverStyles()` | Two cars of one team share a colour; the second is dashed, in the line, the legend swatch, the option swatch and the chip. |
+
+**Pointer → data.** The SVG is scaled by CSS, so a client x means nothing until it is divided by
+the rendered width and multiplied by the viewBox width. Done by hand rather than via
+`getScreenCTM()` to stay cheap enough for every `pointermove`.
+
+### 11.3 Shared control — `src/components/ui/Segmented.tsx`
+
+There were five spellings of the segmented button bar (two `role="tablist"`/`aria-selected`, three
+`role="group"`/`data-active`). The two on the analysis pages are now one component with the correct
+tablist semantics. The three inside `src/sim/ui/` are deliberately untouched — that package was
+being edited concurrently.
+
+### 11.4 Defects this work surfaced and fixed
+
+- Marks were painted **outside the plot** — `.plot` needs `overflow: visible` for axis labels, so
+  data now wears a `clipPath` and axes do not.
+- `Grid` drew ticks outside the domain, because `niceTicks` rounds outward and only the axes
+  bounds-checked. A stray rule appeared in the margin.
+- Direct labels and `RefLine` labels ran off the right edge; both now flip their anchor.
+- `CatalogueEntry.number` was typed `number` but is a **string** in the artifact, and
+  `Catalogue.drivers` was typed with a `driver` key it does not have.
+
+---
+
 ## Appendix — where the findings came from
 
 | Claim | Verified by |

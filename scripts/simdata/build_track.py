@@ -705,8 +705,15 @@ def build_track_model(event: str) -> dict:
         },
         "capabilities": capabilities,
         "ring": {
-            "dsMetres": ring.ds,
+            # dsMetres is DERIVED FROM the shipped lengthMetres, not from ring.ds.
+            # lengthMetres is rounded for legibility and the frontend recomputes
+            # ds = lengthMetres / n (manifest.ts, and four render sites), so shipping the
+            # unrounded ring.ds made the two disagree by up to a rounding step. Every
+            # station-to-vertex lookup in the renderer uses that quotient, so the shipped
+            # pair must be exactly self-consistent; deriving it here makes that true by
+            # construction rather than by luck.
             "lengthMetres": round(ring.length, 2),
+            "dsMetres": round(ring.length, 2) / ring.n,
             # centimetre-quantised integers: far more compact than float text and it
             # compresses better besides. Heading is recomputed at runtime from x/y
             # (atan2 of the forward difference) rather than shipped.

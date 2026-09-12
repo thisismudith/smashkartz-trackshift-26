@@ -348,3 +348,19 @@
   align-items: center;
   gap: 0.4rem 0.8rem;
 }
+
+/* --- brush --------------------------------------------------------------- */
+
+.plot[data-brushable="true"] {
+  cursor: crosshair;
+  /* stop the browser from turning a horizontal drag into a page swipe on touch */
+  touch-action: none;
+}
+
+.brushRect {
+  fill: var(--haas-grey);
+  fill-opacity: 0.16;
+  stroke: var(--haas-grey);
+  stroke-width: 1;
+  pointer-events: none;
+}

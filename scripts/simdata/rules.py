@@ -56,6 +56,13 @@ MODES = (MODE_NORMAL, MODE_OVERRIDE)
 #: channel in data/2026, so it is not a physically meaningful interpolation region.
 CLIFF_EPSILON_KMH = 0.001
 
+#: Default speed step for the sampled curve table (API.md section 5.3a `step_kmh`). A
+#: consumer reads the cap off that table instead of reimplementing the interpolation
+#: (section 32), so the step is also the resolution at which a UI may offer a speed: 5 km/h
+#: puts ~73 points per mode on the wire, which is nothing, and lets a slider stepping at 5
+#: land on a sample every time.
+DEFAULT_SAMPLE_STEP_KMH = 5.0
+
 
 class RuleConfigError(ValueError):
     """Raised when a rule configuration is missing a key or is internally inconsistent.
@@ -524,7 +531,13 @@ def evaluate_envelope_kw(envelope: PowerEnvelope, speed_kmh: float) -> float:
     v0, v1 = bps[i], bps[i + 1]
     p0, p1 = pws[i], pws[i + 1]
     alpha = (v - v0) / (v1 - v0)
-    return max(0.0, (1.0 - alpha) * p0 + alpha * p1)
+    # p0 + a*(p1 - p0), not (1-a)*p0 + a*p1: the second form is not exact on a FLAT segment
+    # (at 20 km/h it returned 350.00000000000006 kW), and a consumer comparing the two modes
+    # below the separation speed would read that 6e-14 as override conferring an advantage
+    # where section 20.2 says there is none. alpha is always in [0, 1) here -- a speed landing
+    # exactly on a breakpoint takes that breakpoint's own segment at alpha = 0 -- so this form
+    # is exact at both ends of every segment it is used on.
+    return max(0.0, p0 + alpha * (p1 - p0))
 
 
 def max_electrical_power_kw(
@@ -601,6 +614,102 @@ def envelope_separation_speed_kmh(
             return float(v if prev is None else prev)
         prev = v
     return None
+
+
+# ---------------------------------------------------------------------------
+# Sampled curve table (UI.md section 6.4, API.md section 5.3a)
+# ---------------------------------------------------------------------------
+def sampled_speeds_kmh(
+    event_rules: EventRules | Mapping[str, Any],
+    *,
+    step_kmh: float = DEFAULT_SAMPLE_STEP_KMH,
+) -> tuple[float, ...]:
+    """The speed grid both curves are sampled on: every multiple of `step_kmh` from 0 to
+    the highest breakpoint of any mode inclusive, UNION every breakpoint of every mode.
+
+    The breakpoints are in the grid because a fixed step walks straight past them. The
+    normal-mode cliff lives between 339.999 and 340.0 km/h; a 5 km/h grid that skipped it
+    would draw the cap sliding smoothly through a discontinuity, which is exactly the
+    shape section 20.1 says must not be smoothed away.
+
+    ONE grid shared by both modes rather than a grid per mode, so a consumer can compare
+    the two caps at the same speed by index -- which is what the override discriminator
+    and the /lab calculator do -- without aligning two different x sets first.
+    """
+    rules = _resolve(event_rules)
+    step = float(step_kmh)
+    if not math.isfinite(step) or step <= 0.0:
+        raise RuleConfigError(f"step_kmh must be a positive finite number, got {step_kmh!r}")
+
+    breakpoints = {
+        float(v)
+        for envelope in rules.power_envelope.values()
+        for v in envelope.breakpoints_kmh
+    }
+    top = max(breakpoints)
+    if top <= 0.0:
+        raise RuleConfigError("the highest breakpoint must be positive to sample a curve")
+
+    # floor with a relative nudge: 355.0 / 5.0 is exactly 71 here, but a step that does not
+    # divide the range must not lose its last point to a 1-ulp shortfall.
+    count = int(math.floor(top / step + 1e-9))
+    grid = {float(i) * step for i in range(count + 1)}
+    grid.update(v for v in breakpoints if 0.0 <= v <= top)
+    return tuple(sorted(grid))
+
+
+def sample_envelope_curve(
+    mode: str,
+    event_rules: EventRules | Mapping[str, Any],
+    *,
+    step_kmh: float = DEFAULT_SAMPLE_STEP_KMH,
+) -> list[dict[str, float]]:
+    """One mode's curve as `[{"speed_kmh": v, "max_power_kw": p}, ...]`.
+
+    Every power here is `max_electrical_power_kw(v, mode, event_rules)` -- the same call
+    the DP, the simulator and the twin make (section 32). That is the whole guarantee of
+    this table: a consumer that looks a value up is provably reading the number the
+    optimiser saw, and never has cause to interpolate a curve of its own.
+    """
+    rules = _resolve(event_rules)
+    speeds = sampled_speeds_kmh(rules, step_kmh=step_kmh)
+    caps = max_electrical_power_kw_series(speeds, mode, rules)
+    return [{"speed_kmh": v, "max_power_kw": p} for v, p in zip(speeds, caps)]
+
+
+def sampled_curves_mapping(
+    event_rules: EventRules | Mapping[str, Any],
+    *,
+    step_kmh: float = DEFAULT_SAMPLE_STEP_KMH,
+) -> dict[str, Any]:
+    """The `sampled_curves` block of the config mapping (API.md section 5.3a).
+
+    `separation_speed_kmh` travels with the samples because a consumer cannot recover it
+    from them safely: below it the two sampled columns are equal, and "the last speed at
+    which they are equal" is a property of the curves, not of whatever grid was requested.
+    It is None when the two curves never differ -- and a consumer must then say the modes
+    are indistinguishable everywhere rather than reading None as zero.
+    """
+    rules = _resolve(event_rules)
+    step = float(step_kmh)
+    return {
+        "step_kmh": step,
+        "separation_speed_kmh": envelope_separation_speed_kmh(rules),
+        "curves": {
+            mode: sample_envelope_curve(mode, rules, step_kmh=step)
+            for mode in sorted(rules.power_envelope)
+        },
+        "provenance": PROVENANCE,
+        "verified": all(e.verified for e in rules.power_envelope.values()),
+        "note": (
+            "Sampled from max_electrical_power_kw, the system's only implementation of the "
+            "envelope (AGENTS.md section 32): read the cap off this table rather than "
+            "interpolating a second copy of the curve. The grid is every multiple of "
+            "step_kmh from 0 to the highest breakpoint, plus every breakpoint of every "
+            "mode, so no sampled segment hides a discontinuity. UNVERIFIED: derived from "
+            "reported values, not verified regulation (section 20.1)."
+        ),
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -701,6 +810,7 @@ def event_rules_to_mapping(event_rules: EventRules) -> dict[str, Any]:
             "deploy_budget": energy(rules.deploy_budget),
             "harvest_budget": energy(rules.harvest_budget),
         },
+        "sampled_curves": sampled_curves_mapping(rules),
         "compliance": describe_compliance(rules),
     }
 
@@ -779,6 +889,7 @@ __all__ = [
     "MODE_OVERRIDE",
     "MODES",
     "CLIFF_EPSILON_KMH",
+    "DEFAULT_SAMPLE_STEP_KMH",
     "RuleConfigError",
     "UnknownModeError",
     "ReportedFormula",
@@ -798,6 +909,9 @@ __all__ = [
     "max_electrical_power_kw_series",
     "envelope_breakpoints_kmh",
     "envelope_separation_speed_kmh",
+    "sampled_speeds_kmh",
+    "sample_envelope_curve",
+    "sampled_curves_mapping",
     "unverified_keys",
     "describe_compliance",
     "event_rules_to_mapping",

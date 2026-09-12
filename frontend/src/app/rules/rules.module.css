@@ -119,6 +119,86 @@
   max-width: 64ch;
 }
 
+/* --- headroom control --------------------------------------------------- */
+/* Docked into ChartFrame's controls slot, which is already a wrapping flex row, so this only
+   has to be a row that survives 400px: the note takes the whole line once the field no longer
+   fits beside it. */
+
+.headroom {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.6rem;
+  max-width: 100%;
+}
+
+.headroomLabel {
+  font-size: 0.62rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--haas-grey);
+}
+
+.headroomInput {
+  font-family: inherit;
+  font-variant-numeric: tabular-nums;
+  background: rgba(174, 174, 174, 0.07);
+  border: 1px solid rgba(174, 174, 174, 0.45);
+  border-radius: 0;
+  color: var(--haas-white);
+  padding: 0.3rem 0.45rem;
+  font-size: 0.85rem;
+  width: 5.5rem;
+  min-width: 0;
+  transition: border-color 0.14s ease, background-color 0.14s ease;
+}
+
+.headroomInput:hover {
+  background: rgba(174, 174, 174, 0.12);
+}
+
+.headroomInput:focus-visible {
+  outline: none;
+  border-color: var(--haas-red);
+}
+
+.headroomUnit {
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  color: var(--haas-grey);
+}
+
+.headroomClear {
+  font-family: inherit;
+  font-size: 0.62rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--haas-grey);
+  background: none;
+  border: 1px solid #2a2a2a;
+  border-radius: 0;
+  padding: 0.2rem 0.45rem;
+  cursor: pointer;
+}
+
+.headroomClear:hover {
+  color: var(--haas-white);
+  border-color: var(--haas-grey);
+}
+
+.headroomClear:focus-visible {
+  outline: 1px solid var(--haas-red);
+  outline-offset: 1px;
+}
+
+.headroomNote {
+  font-size: 0.68rem;
+  line-height: 1.45;
+  color: #7a7a7a;
+  font-variant-numeric: tabular-nums;
+  max-width: 46ch;
+}
+
 /* --- derivations -------------------------------------------------------- */
 
 .derivations {

@@ -230,3 +230,30 @@ export function bandPath(
   if (fwd.length === 0) return "";
   return `M${fwd.join("L")}L${back.join("L")}Z`;
 }
+
+/**
+ * Resolve a drag into an x-domain range, or null when it was too short to be a selection.
+ *
+ * Lives here rather than inside Plot so the decision is testable without a pointer: the two things
+ * that actually go wrong with a brush are (a) a stray click zooming to a sliver nobody meant to
+ * choose, and (b) an overshoot past the axis selecting beyond the data. Both are arithmetic, and
+ * both are cheaper to test than to reproduce with a synthetic PointerEvent.
+ *
+ * `toPx` converts a domain value to a pixel so the minimum-drag threshold is expressed in the
+ * units a human actually drags in.
+ */
+export function resolveBrush(
+  from: number,
+  to: number,
+  domain: readonly [number, number],
+  toPx: (v: number) => number,
+  minPx = 8,
+): [number, number] | null {
+  if (!Number.isFinite(from) || !Number.isFinite(to)) return null;
+  const lo = Math.min(domain[0], domain[1]);
+  const hi = Math.max(domain[0], domain[1]);
+  const a = Math.max(lo, Math.min(hi, Math.min(from, to)));
+  const b = Math.max(lo, Math.min(hi, Math.max(from, to)));
+  if (Math.abs(toPx(b) - toPx(a)) < minPx) return null;
+  return [a, b];
+}

@@ -259,43 +259,67 @@ describe("energy meters against unverified regulation placeholders", () => {
   });
 });
 
+/** Collapses the thin space groupDigits inserts to an ASCII one, so an expectation can
+ * be written with an ordinary space and still compare equal. Two visually identical
+ * strings failing Object.is is a miserable thing to debug. */
+const norm = (v: string) => v.replace(/\s+/g, " ");
+
 describe("per-session position integrity", () => {
+  // Field names here are scripts/simdata/replay.py's own, verbatim. They were once the
+  // consumer's invented names against a producer that emits different ones, so the
+  // panel printed "unknown" forever while the numbers sat in the manifest. Using the
+  // wire names in the tests is what keeps the two from drifting apart again.
   it("reports an unreported count as unknown, never as zero", () => {
     const lines = describePositionIntegrity(undefined);
-    expect(lines.map((l) => l.value)).toEqual(["unknown", "unknown"]);
+    expect(lines.map((l) => l.value)).toEqual(["unknown", "unknown", "unknown"]);
     expect(lines.every((l) => !l.alert)).toBe(true);
     expect(positionIntegrityUnknown(undefined)).toBe(true);
     expect(positionIntegrityUnknown(null)).toBe(true);
+    expect(positionIntegrityUnknown({})).toBe(true);
   });
 
   it("distinguishes a reported zero from an unreported count", () => {
     const lines = describePositionIntegrity({
-      positionsWithdrawn: 0, positionSamples: 614258, derivedFrameLaps: 0, totalLaps: 1452,
+      samples: 614258, samplesPositionAbsent: 0,
+      lapsFrameA: 1452, lapsFrameB: 0, lapsFrameNone: 0,
     });
-    expect(lines.map((l) => l.value)).toEqual(["none", "none"]);
+    expect(lines.map((l) => l.value)).toEqual(["none", "none", "none"]);
     expect(positionIntegrityUnknown({
-      positionsWithdrawn: 0, positionSamples: 1, derivedFrameLaps: 0, totalLaps: 1,
+      samples: 1, samplesPositionAbsent: 0, lapsFrameA: 1, lapsFrameB: 0, lapsFrameNone: 0,
     })).toBe(false);
   });
 
   it("states a real withdrawal as a count and a share of the session", () => {
-    // Chinese Qualifying: rawio.SentinelIndex masks 40.26% of samples there.
+    // Chinese Qualifying: rawio.SentinelIndex masks 40.26 % of its samples.
     const lines = describePositionIntegrity({
-      positionsWithdrawn: 402_600, positionSamples: 1_000_000,
-      derivedFrameLaps: 1324, totalLaps: 1452,
+      samples: 1_000_000, samplesPositionAbsent: 402_600,
+      lapsFrameA: 128, lapsFrameB: 1324, lapsFrameNone: 0,
     });
-    expect(lines[0].value).toBe("402 600 samples (40.3%)");
+    expect(norm(lines[0].value)).toBe("402 600 samples (40.3%)");
     expect(lines[0].alert).toBe(true);
-    expect(lines[1].value).toBe("1 324 laps (91.2%)");
+    expect(norm(lines[1].value)).toBe("1 324 laps (91.2%)");
     expect(lines[1].alert).toBe(true);
   });
 
   it("reports a half-known session honestly rather than filling the hole", () => {
     const lines = describePositionIntegrity({
-      positionsWithdrawn: null, positionSamples: null, derivedFrameLaps: 1324, totalLaps: 1452,
+      lapsFrameA: 128, lapsFrameB: 1324, lapsFrameNone: 0,
     });
     expect(lines[0].value).toBe("unknown");
-    expect(lines[1].value).toBe("1 324 laps (91.2%)");
+    expect(norm(lines[1].value)).toBe("1 324 laps (91.2%)");
+  });
+
+  it("counts unplaceable laps separately from derived ones", () => {
+    // A frame-NONE lap has neither a position channel nor a usable distance channel.
+    // Folding it in with the derived laps would overstate what the pack can actually
+    // place, which is the opposite of what this readout is for.
+    const lines = describePositionIntegrity({
+      samples: 100, samplesPositionAbsent: 10,
+      lapsFrameA: 50, lapsFrameB: 30, lapsFrameNone: 20,
+    });
+    expect(norm(lines[1].value)).toBe("30 laps (30.0%)");
+    expect(norm(lines[2].value)).toBe("20 laps (20.0%)");
+    expect(lines[2].alert).toBe(true);
   });
 });
 

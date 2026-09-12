@@ -35,10 +35,14 @@ from simdata.rules import (  # noqa: E402
     describe_compliance,
     envelope_breakpoints_kmh,
     envelope_separation_speed_kmh,
+    DEFAULT_SAMPLE_STEP_KMH,
     event_rules_from_mapping,
     event_rules_to_mapping,
     max_electrical_power_kw,
     max_electrical_power_kw_series,
+    sample_envelope_curve,
+    sampled_curves_mapping,
+    sampled_speeds_kmh,
     unverified_keys,
     with_power_envelope,
 )
@@ -434,3 +438,142 @@ def test_replacing_the_curve_changes_the_answer_without_touching_code():
     assert max_electrical_power_kw(320.0, MODE_NORMAL, swapped) == 0.0
     # the original is untouched: pure functions, no shared mutable state
     assert max_electrical_power_kw(200.0, MODE_NORMAL, RULES) == pytest.approx(350.0)
+
+
+# ---------------------------------------------------------------------------
+# UI.md section 6.4 / API.md section 5.3a: the sampled curve table
+#
+# The table exists so no consumer implements the curve a second time (section 32). Its
+# entire value is the identity below: a sampled power IS max_electrical_power_kw at that
+# speed. Everything else here guards the grid the identity is asserted on.
+# ---------------------------------------------------------------------------
+SAMPLED = sampled_curves_mapping(RULES)
+
+
+@pytest.mark.parametrize("mode", MODES)
+def test_every_sampled_value_equals_the_evaluator(mode):
+    """THE guarantee: the number a UI reads off the table is the number the optimiser saw."""
+    for point in SAMPLED["curves"][mode]:
+        assert point["max_power_kw"] == max_electrical_power_kw(
+            point["speed_kmh"], mode, RULES
+        )
+
+
+@pytest.mark.parametrize("mode", MODES)
+def test_sample_grid_covers_every_breakpoint_exactly(mode):
+    """Including the cliff pair at 339.999 / 340.0, which a 5 km/h step walks straight past."""
+    speeds = [p["speed_kmh"] for p in SAMPLED["curves"][mode]]
+    for v in envelope_breakpoints_kmh(mode, RULES):
+        assert v in speeds, f"breakpoint {v} km/h is not a sample"
+
+
+def test_sample_grid_is_shared_by_both_modes():
+    """Same x set for both curves, so a consumer compares caps by index (the /lab readout)."""
+    speeds = {mode: [p["speed_kmh"] for p in SAMPLED["curves"][mode]] for mode in MODES}
+    assert speeds[MODE_NORMAL] == speeds[MODE_OVERRIDE] == list(sampled_speeds_kmh(RULES))
+
+
+def test_sample_grid_runs_the_declared_step_from_zero_to_the_top_breakpoint():
+    speeds = list(sampled_speeds_kmh(RULES))
+    top = max(max(envelope_breakpoints_kmh(m, RULES)) for m in MODES)
+    assert speeds[0] == 0.0
+    assert speeds[-1] == top == 355.0
+    assert speeds == sorted(set(speeds)), "the grid must be ascending and free of duplicates"
+    step = SAMPLED["step_kmh"]
+    assert step == DEFAULT_SAMPLE_STEP_KMH
+    for i in range(int(top / step) + 1):          # every step multiple is present
+        assert i * step in speeds
+    extra = [v for v in speeds if abs(v / step - round(v / step)) > 1e-9]
+    assert set(extra) <= {337.5, 340.0 - CLIFF_EPSILON_KMH}, (
+        "the only off-step samples may be breakpoints"
+    )
+
+
+def test_a_slider_stepping_at_5_always_lands_on_a_sample():
+    """The /lab calculator's contract: it looks up, it never interpolates."""
+    table = {p["speed_kmh"]: p["max_power_kw"] for p in SAMPLED["curves"][MODE_OVERRIDE]}
+    for i in range(0, 72):
+        assert float(i * 5) in table
+
+
+def test_the_table_stays_small():
+    for mode in MODES:
+        assert len(SAMPLED["curves"][mode]) < 100
+
+
+def test_sampled_curves_ride_in_the_config_mapping():
+    m = event_rules_to_mapping(RULES)
+    assert m["sampled_curves"]["curves"].keys() == {MODE_NORMAL, MODE_OVERRIDE}
+    assert m["sampled_curves"] == SAMPLED
+
+
+def test_sampled_curves_round_trip_through_the_mapping():
+    """from_mapping -> to_mapping reproduces the block, so an artifact rebuilt from a
+    config file carries the same table as one built from the dataclasses."""
+    m = event_rules_to_mapping(RULES)
+    again = event_rules_to_mapping(event_rules_from_mapping(m))
+    assert again["sampled_curves"] == m["sampled_curves"]
+
+
+def test_sampled_block_is_badged_unverified_and_tagged_rule():
+    assert SAMPLED["provenance"] == "RULE"
+    assert SAMPLED["verified"] is False
+    assert "UNVERIFIED" in SAMPLED["note"]
+
+
+def test_sampled_separation_speed_is_the_engine_value():
+    assert SAMPLED["separation_speed_kmh"] == envelope_separation_speed_kmh(RULES)
+
+
+def test_modes_are_indistinguishable_in_the_table_at_and_below_the_separation_speed():
+    """A UI reading only the table must reach the same conclusion as section 20.2."""
+    sep = SAMPLED["separation_speed_kmh"]
+    n = {p["speed_kmh"]: p["max_power_kw"] for p in SAMPLED["curves"][MODE_NORMAL]}
+    o = {p["speed_kmh"]: p["max_power_kw"] for p in SAMPLED["curves"][MODE_OVERRIDE]}
+    below = [v for v in n if v <= sep]
+    above = [v for v in n if v > sep]
+    assert all(n[v] == o[v] for v in below), "override must confer nothing below separation"
+    assert any(o[v] > n[v] for v in above), "the table must show the curves parting"
+
+
+@pytest.mark.parametrize("step", [1.0, 2.5, 10.0, 355.0])
+def test_a_custom_step_keeps_the_identity_and_the_breakpoints(step):
+    block = sampled_curves_mapping(RULES, step_kmh=step)
+    assert block["step_kmh"] == step
+    for mode in MODES:
+        points = block["curves"][mode]
+        speeds = [p["speed_kmh"] for p in points]
+        assert speeds[0] == 0.0 and speeds[-1] == 355.0
+        for v in envelope_breakpoints_kmh(mode, RULES):
+            assert v in speeds
+        for p in points:
+            assert p["max_power_kw"] == max_electrical_power_kw(p["speed_kmh"], mode, RULES)
+
+
+@pytest.mark.parametrize("bad", [0.0, -5.0, float("nan"), float("inf")])
+def test_a_non_positive_or_non_finite_step_refuses_to_sample(bad):
+    with pytest.raises(RuleConfigError):
+        sampled_speeds_kmh(RULES, step_kmh=bad)
+
+
+def test_sampling_follows_a_corrected_curve_from_configuration():
+    """Section 20.1: the shape is config. Swap a curve and the table must move with it."""
+    flat = PowerEnvelope(
+        breakpoints_kmh=(0.0, 200.0),
+        max_power_kw=(120.0, 60.0),
+        source="test",
+        citation="test",
+    )
+    rules = with_power_envelope(RULES, MODE_NORMAL, flat)
+    block = sampled_curves_mapping(rules)
+    normal = {p["speed_kmh"]: p["max_power_kw"] for p in block["curves"][MODE_NORMAL]}
+    assert normal[0.0] == pytest.approx(120.0, abs=TOL)
+    assert normal[100.0] == pytest.approx(90.0, abs=TOL)
+    assert normal[200.0] == pytest.approx(60.0, abs=TOL)
+    assert normal[355.0] == pytest.approx(60.0, abs=TOL)     # clamped past the last point
+    assert 200.0 in normal, "the replaced curve's breakpoints must join the grid"
+
+
+def test_unknown_mode_is_not_sampled_into_a_default_curve():
+    with pytest.raises(UnknownModeError):
+        sample_envelope_curve("overtake", RULES)

@@ -192,3 +192,185 @@
   font-size: 0.92em;
   color: var(--haas-white);
 }
+
+/* --- envelope calculator (UI.md 6.4) ------------------------------------ */
+
+.calc {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.calc code {
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 0.92em;
+  color: var(--haas-white);
+}
+
+/* the unverified badge rides beside the title, not in a footnote: section 20.1 says the
+   claim and the caveat travel together */
+.badges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.badge {
+  border: 1px solid #2a2a2a;
+  padding: 0.15rem 0.45rem;
+  font-size: 0.6rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #7a7a7a;
+}
+
+.badge[data-kind="unverified"] {
+  border-color: #6b5604;
+  color: #d0a608;
+}
+
+.badgeNote {
+  font-size: 0.66rem;
+  line-height: 1.4;
+  color: #6a6a6a;
+}
+
+.calcGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
+  gap: 1rem;
+  align-items: start;
+}
+
+.calcControls,
+.readouts {
+  border: 1px solid #2a2a2a;
+  padding: 1rem 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.control {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+.controlLabel {
+  font-size: 0.64rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--haas-grey);
+}
+
+.yours {
+  margin-left: 0.4rem;
+  color: #6a6a6a;
+  letter-spacing: 0.1em;
+}
+
+.sliderRow {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  min-width: 0;
+}
+
+.slider {
+  flex: 1 1 6rem;
+  min-width: 0;
+  accent-color: var(--haas-red);
+}
+
+.slider:focus-visible { outline: 1px solid var(--haas-white); outline-offset: 2px; }
+
+.num {
+  width: 6rem;
+  flex: 0 0 auto;
+  background: var(--haas-black);
+  border: 1px solid var(--haas-grey);
+  border-radius: 0;
+  color: var(--haas-white);
+  font: inherit;
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+  padding: 0.35rem 0.5rem;
+}
+
+.num:focus-visible { outline: 1px solid var(--haas-red); outline-offset: -2px; }
+
+/* a snapped speed is a statement about what was read, so it is text, not a tooltip */
+.snap {
+  font-size: 0.66rem;
+  line-height: 1.45;
+  color: #d0a608;
+}
+
+.readout {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  border-top: 1px solid #222;
+  padding-top: 0.6rem;
+}
+
+.readout:first-child { border-top: 0; padding-top: 0; }
+
+.readoutLabel {
+  font-size: 0.64rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--haas-grey);
+}
+
+.readoutValue {
+  font-size: clamp(1.9rem, 6vw, 2.6rem);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--haas-white);
+}
+
+.readoutValueSmall {
+  font-size: 1.15rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--haas-white);
+}
+
+/* over the cap is a finding, not an error state: gold, the third categorical hue */
+.readoutValueSmall[data-over="true"] { color: #d0a608; }
+
+.readoutUnit {
+  font-size: 0.6rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #7a7a7a;
+  margin-left: 0.35rem;
+}
+
+.readoutMissing {
+  font-size: 0.78rem;
+  color: #6a6a6a;
+}
+
+.calcNote {
+  font-size: 0.72rem;
+  line-height: 1.5;
+  color: #8a8a8a;
+}
+
+.calcNote strong { color: var(--haas-white); font-weight: 400; }
+
+/* "the modes are indistinguishable here" is the one sentence this panel must not bury */
+.calcFlat {
+  font-size: 0.72rem;
+  line-height: 1.5;
+  color: #9a9a9a;
+  border-left: 2px solid #d0a608;
+  padding-left: 0.6rem;
+}
+
+.calcFlat strong { color: var(--haas-white); font-weight: 400; }

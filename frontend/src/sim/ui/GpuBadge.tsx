@@ -48,6 +48,14 @@ export function GpuBadge({
           {perf.fps} fps
           {perf.refreshHz ? ` / ${perf.refreshHz} Hz` : ""} · {perf.frameMs.toFixed(1)} ms
           {perf.qualityTier > 0 ? ` · quality -${perf.qualityTier}` : ""}
+          {perf.carsHidden > 0 ? (
+            <span
+              className={styles.gpuWarn}
+              title="These cars have no position in the feed for this instant, so they are not drawn rather than placed somewhere they were not measured."
+            >
+              {" "}· {perf.carsHidden} car{perf.carsHidden === 1 ? "" : "s"} unplaced
+            </span>
+          ) : null}
         </span>
       ) : null}
 

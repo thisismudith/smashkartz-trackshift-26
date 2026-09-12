@@ -34,6 +34,9 @@ export interface PerfStats {
   qualityTier: 0 | 1 | 2;
   /** Panel refresh measured from rAF; null until enough frames have been timed. */
   refreshHz: number | null;
+  /** Cars not drawn this frame because their position was withdrawn upstream. A car
+   * that vanishes should be a number someone can read, not a mystery. */
+  carsHidden: number;
 }
 
 const SOFTWARE_MARKERS = ["swiftshader", "llvmpipe", "software", "microsoft basic render"];
@@ -432,6 +435,9 @@ export class SimRenderer {
   /** Pose interpolated between the last two sim frames, so the picture updates at the
    * display's refresh rate rather than the sim's fixed 60 Hz tick. */
   private blendScratch: Float32Array | null = null;
+  /** Cars hidden this frame because their position was withdrawn upstream. Counted so
+   * "the car vanished" is a reportable number rather than a mystery. */
+  private hiddenThisFrame = 0;
   /** Team colour per instance as set up, so dimming can be undone exactly. */
   private baseColours: Float32Array | null = null;
   /** Fade the field so the focused car stands out. Implemented as a colour blend
@@ -783,10 +789,28 @@ export class SimRenderer {
     this.focusDrawnIndex = -1;
 
     const track = this.track;
+    this.hiddenThisFrame = 0;
     for (let i = 0; i < n; i++) {
       // The DECLUTTERED, EASED lateral -- not pose[o + 1]. This is exactly why the
       // camera has to follow focusDrawnPos: the car is drawn up to a full lane away
       // from its recorded lateral.
+      // A car whose position was WITHDRAWN upstream arrives here as NaN -- the encoder
+      // writes NaN for a position it refuses to invent, and timeline.ts now passes that
+      // through instead of substituting the start/finish line. Composing a matrix from
+      // NaN puts the whole instance in an undefined state (three.js does not validate),
+      // and a single NaN vertex can drop the entire InstancedMesh from the draw. So an
+      // unplaceable car is HIDDEN, by zero scale, rather than drawn somewhere wrong.
+      // This is the last line of defence, not the fix: the fix is that nothing upstream
+      // fabricates a position. Both exist because the whole class of bug here was a
+      // number standing in for "unknown".
+      if (!Number.isFinite(station[i]) || !Number.isFinite(lateral[i])) {
+        this.matrixScratch.makeScale(0, 0, 0);
+        this.cars.setMatrixAt(i, this.matrixScratch);
+        this.hiddenThisFrame++;
+        if (this.labels) this.labels.sprites[i].visible = false;
+        continue;
+      }
+      if (this.labels && this.showLabels) this.labels.sprites[i].visible = true;
       carRenderPos(track, station[i], lateral[i], this.carGeomMinY,
         this.posScratch, this.headingBox);
       carOrientation(this.headingBox.value, this.quatScratch);
@@ -1032,7 +1056,7 @@ export class SimRenderer {
         this.perfSampleAcc = 0;
         this.onPerfSample({
           fps: Math.round(this.fpsEma), frameMs, qualityTier: this.qualityTier,
-          refreshHz: this.refreshHz,
+          refreshHz: this.refreshHz, carsHidden: this.hiddenThisFrame,
         });
       }
     };

@@ -6,10 +6,17 @@
  *
  * Two decisions worth knowing about:
  *
- * 1. EMPTY MEANS EMPTY. An empty selection shows nothing, and the caller renders an explicit
- *    "nothing selected" state. The tempting alternative -- empty implies all -- makes "I
- *    deselected everything" and "I have not chosen yet" render identically, which is the same
- *    class of error as zero-filling a missing value.
+ * 1. `emptyMeans` decides what an empty selection MEANS, and the control must be consistent
+ *    with it end to end.
+ *
+ *    "all" (a filter facet): empty is the default, unfiltered state. The trigger reads "All",
+ *    and the All button CLEARS the selection rather than enumerating every option -- ticking
+ *    13 circuits to say "all circuits" produces 13 chips and a URL nobody can read, to express
+ *    the state you were already in. There is no None, because "none" is not a filter, it is an
+ *    empty page.
+ *
+ *    "none" (a series picker, e.g. which drivers to plot): empty is a real choice and shows
+ *    nothing, so All and None are both meaningful and both enumerate.
  *
  * 2. OPTIONS CARRY THEIR OWN COLOUR. The swatch comes from the option, not from its position in
  *    the list, so removing a driver never recolours the survivors.
@@ -51,6 +58,11 @@ export interface MultiSelectProps {
   disabledReason?: string;
   /** Note rendered inside the panel, above the list. Use it to explain a facet's limits. */
   note?: string;
+  /**
+   * What an empty selection means. "all" for a filter facet (empty = unfiltered, and the All
+   * button clears); "none" for a series picker (empty = show nothing). Default "none".
+   */
+  emptyMeans?: "all" | "none";
 }
 
 export function MultiSelect({
@@ -63,6 +75,7 @@ export function MultiSelect({
   disabled = false,
   disabledReason,
   note,
+  emptyMeans = "none",
 }: MultiSelectProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -72,6 +85,8 @@ export function MultiSelect({
 
   const selectedSet = useMemo(() => new Set(selected), [selected]);
   const enabled = useMemo(() => options.filter((o) => !o.disabled), [options]);
+
+  const searching = query.trim().length > 0;
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -110,15 +125,25 @@ export function MultiSelect({
   }, [open]);
 
   const toggle = (value: string) => {
-    onChange(
-      selectedSet.has(value) ? selected.filter((v) => v !== value) : [...selected, value],
-    );
+    const next = selectedSet.has(value)
+      ? selected.filter((v) => v !== value)
+      : [...selected, value];
+    // Under emptyMeans="all", "everything ticked" and "nothing ticked" are the SAME state, so
+    // collapse to the canonical empty one. Otherwise ticking the last box would leave 13 chips
+    // and a long URL describing the default.
+    if (emptyMeans === "all" && next.length === enabled.length) onChange([]);
+    else onChange(next);
   };
 
   // Bulk actions apply to what is CURRENTLY VISIBLE, so "All" after a search means "all matches"
   // rather than silently selecting things the user cannot see.
   const visible = filtered.filter((o) => !o.disabled).map((o) => o.value);
-  const selectAllVisible = () => onChange([...new Set([...selected, ...visible])]);
+  const impliesAll = emptyMeans === "all";
+  // With emptyMeans="all", selecting everything IS the empty state -- so All clears instead of
+  // enumerating. While a search is active it still means "add these matches", because clearing
+  // there would throw away a narrowing the user just made.
+  const selectAllVisible = () =>
+    impliesAll && !searching ? onChange([]) : onChange([...new Set([...selected, ...visible])]);
   const clearVisible = () => onChange(selected.filter((v) => !visible.includes(v)));
   const invertVisible = () =>
     onChange([
@@ -128,7 +153,6 @@ export function MultiSelect({
 
   const count = selected.length;
   const total = enabled.length;
-  const searching = query.trim().length > 0;
 
   return (
     <div className={s.root} ref={rootRef}>
@@ -141,13 +165,23 @@ export function MultiSelect({
         disabled={disabled}
         title={disabled ? disabledReason : undefined}
         onClick={() => {
-          setOpen((v) => !v);
-          window.setTimeout(() => searchRef.current?.focus(), 0);
+          setOpen((v) => {
+            const next = !v;
+            // preventScroll matters more than it looks: the bar sits near the top of the page,
+            // so a plain focus() scrolls the panel into view and yanks the reader back to the
+            // top mid-analysis. That jump is what makes a filter feel like a page reload.
+            if (next) window.setTimeout(() => searchRef.current?.focus({ preventScroll: true }), 0);
+            return next;
+          });
         }}
       >
         <span className={s.triggerLabel}>{label}</span>
         <span className={s.triggerValue}>
-          {count === 0 ? placeholder : count === total ? `All ${total}` : `${count} of ${total}`}
+          {count === 0
+            ? placeholder
+            : count === total && impliesAll
+              ? placeholder
+              : `${count} of ${total}`}
         </span>
         <span className={s.caret} aria-hidden="true" />
       </button>
@@ -166,16 +200,18 @@ export function MultiSelect({
 
           <div className={s.bulk}>
             <button type="button" className={s.bulkBtn} onClick={selectAllVisible}>
-              {searching ? "All matches" : "All"}
+              {searching ? "Add matches" : "All"}
             </button>
-            <button type="button" className={s.bulkBtn} onClick={clearVisible}>
-              None
-            </button>
+            {impliesAll ? null : (
+              <button type="button" className={s.bulkBtn} onClick={clearVisible}>
+                None
+              </button>
+            )}
             <button type="button" className={s.bulkBtn} onClick={invertVisible}>
               Invert
             </button>
             <span className={s.bulkCount}>
-              {filtered.length} shown · {count} selected
+              {filtered.length} shown · {count === 0 && impliesAll ? "all" : `${count} selected`}
             </span>
           </div>
 

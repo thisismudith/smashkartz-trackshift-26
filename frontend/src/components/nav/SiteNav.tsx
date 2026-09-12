@@ -26,6 +26,7 @@ const ENTRIES: Entry[] = [
   { href: "/sessions", label: "Sessions" },
   { href: "/rules", label: "Regulation" },
   { href: "/insights", label: "Insights" },
+  { href: "/league", label: "League" },
   { href: "/lab", label: "Lab" },
   { href: "/decision", label: "Decision", pending: "awaiting M22" },
   { href: "/sim", label: "Simulator" },

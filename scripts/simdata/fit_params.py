@@ -294,9 +294,17 @@ def build_params() -> dict:
                     "wet pace, the compound crossover and INTERMEDIATE/WET degradation "
                     "must ship as documented, user-visible defaults",
         },
-        "buildSeconds": round(time.time() - t0, 1),
+        # Deliberately NOT emitted: a wall-clock duration inside a
+        # content-addressed artifact makes every rebuild produce a new
+        # params.<hash>.json for no change in content, which breaks this
+        # pipeline's own promise of being "deterministic given the same raw
+        # data" and churns the index on every run. The build prints its
+        # timing instead.
     }
     return out
+
+
+_T0 = time.time()
 
 
 def main():
@@ -310,7 +318,7 @@ def main():
     digest = hashlib.sha256(payload).hexdigest()[:10]
     path = out_dir / f"params.{digest}.json"
     path.write_bytes(payload)
-    print(f"params: {path.name}  {len(payload)/1024:.1f} KB  built in {params['buildSeconds']}s")
+    print(f"params: {path.name}  {len(payload)/1024:.1f} KB  built in {time.time() - _T0:.1f}s")
 
 
 if __name__ == "__main__":

@@ -22,7 +22,7 @@ export interface OrderedDashboardRow extends DashboardRow {
    * documented placement (grid slot, pit-lane start, parked queue). DERIVED = a
    * position frame B lap, reconstructed from the wheel-speed distance channel because
    * the x/y trace was unusable. */
-  positionProvenance: Provenance;
+  positionProvenance: Provenance | null;
   /** The provenance of the NUMBER printed in `gapToLeader`/`interval`, or null when no
    * number is printed. Never "OBSERVED" unless the position it was measured from was
    * itself observed. */
@@ -64,10 +64,17 @@ const UNMEASURED_TOKEN: Record<Exclude<Provenance, "OBSERVED">, string> = {
 };
 
 function bearsGap(car: CarState): boolean {
-  return GAP_BEARING_PROVENANCE.includes(car.positionProvenance);
+  // A null provenance is an ABSENT position, so it can never bear a gap -- `includes`
+  // on a Provenance[] would reject it anyway, but stating it is clearer than relying on
+  // that.
+  return car.positionProvenance !== null
+    && GAP_BEARING_PROVENANCE.includes(car.positionProvenance);
 }
 
-function unmeasuredToken(p: Provenance): string {
+function unmeasuredToken(p: Provenance | null): string {
+  // Not "—": a dash reads as "no data yet". NO POS says the producer looked, found
+  // nothing it could stand behind, and withdrew the position rather than invent one.
+  if (p === null) return "NO POS";
   return p === "OBSERVED" ? "—" : UNMEASURED_TOKEN[p];
 }
 
@@ -118,7 +125,18 @@ function gapProvenanceOf(car: CarState): Provenance | null {
 
 /** How to describe a car's position provenance to a viewer. Returned as data, not JSX,
  * so the wording is unit-testable: the panels only render it. */
-export function describePositionProvenance(p: Provenance): { label: string; note: string } {
+export function describePositionProvenance(
+  p: Provenance | null,
+): { label: string; note: string } {
+  // null is ABSENCE, not a provenance. Handled before the switch so it can never fall
+  // through to "Default", which would claim a fallback value exists when none does.
+  if (p === null) {
+    return {
+      label: "No position",
+      note: "The feed carries no usable position for this car at this instant, so none is"
+        + " shown. It is not placed anywhere, and no gap is computed from it.",
+    };
+  }
   switch (p) {
     case "OBSERVED":
       return {
@@ -254,17 +272,42 @@ export function meterState(
  * absent count is never read as zero: "no positions were withdrawn" and "nobody
  * counted" are different statements and the panel prints them differently.
  */
+/**
+ * The manifest's `positionIntegrity` block, named EXACTLY as scripts/simdata/replay.py
+ * writes it.
+ *
+ * This interface originally used its own invented names (positionsWithdrawn,
+ * positionSamples, derivedFrameLaps, totalLaps) against a producer that emits
+ * samplesPositionAbsent, samples, lapsFrameB and three lap counters. The result was a
+ * readout that could never display anything: the numbers sat in the manifest and the
+ * panel printed "unknown" forever. The wire shape is the contract, so the consumer
+ * follows the producer rather than the other way round. Every field is optional because
+ * a pack built before this block existed simply has none -- and absent must read as
+ * "unknown", never as 0.
+ */
 export interface SessionPositionIntegrity {
-  /** Samples whose x/y the build withdrew because the feed had frozen on a sentinel or
-   * stale coordinate (scripts/simdata/rawio.py stuck_mask / SentinelIndex). */
-  positionsWithdrawn: number | null;
-  /** Total position samples in the session -- the denominator for the above. */
-  positionSamples: number | null;
-  /** Laps placed by the derived distance frame (position frame B) rather than by a
-   * measured x/y trace. */
-  derivedFrameLaps: number | null;
-  /** Total laps in the session -- the denominator for the above. */
-  totalLaps: number | null;
+  /** Total position samples in the session: the denominator for the counts below. */
+  samples?: number | null;
+  /** Samples with NO position at all -- the producer refused to place them rather than
+   * invent a coordinate. Includes both sentinel withdrawals and rejected projections. */
+  samplesPositionAbsent?: number | null;
+  /** The subset withdrawn because the feed had frozen on a session sentinel. */
+  samplesSentinelWithdrawn?: number | null;
+  /** The subset rejected for projecting implausibly far from the racing line. */
+  samplesLateralRejected?: number | null;
+  /** Laps whose station came from a measured x/y trace. */
+  lapsFrameA?: number | null;
+  /** Laps placed by the derived distance frame rather than a measured trace. */
+  lapsFrameB?: number | null;
+  /** Laps with neither a usable position channel nor a usable distance channel. */
+  lapsFrameNone?: number | null;
+}
+
+/** Laps across all three frames, or null when the producer reported none of them. */
+function totalLaps(i: SessionPositionIntegrity): number | null {
+  const parts = [i.lapsFrameA, i.lapsFrameB, i.lapsFrameNone]
+    .filter((v): v is number => typeof v === "number");
+  return parts.length ? parts.reduce((a, b) => a + b, 0) : null;
 }
 
 export interface IntegrityLine {
@@ -300,12 +343,12 @@ function ratioLine(
 export function describePositionIntegrity(
   integrity: SessionPositionIntegrity | null | undefined,
 ): IntegrityLine[] {
-  const i = integrity ?? {
-    positionsWithdrawn: null, positionSamples: null, derivedFrameLaps: null, totalLaps: null,
-  };
+  const i: SessionPositionIntegrity = integrity ?? {};
+  const laps = totalLaps(i);
   return [
-    ratioLine("Withdrawn", i.positionsWithdrawn, i.positionSamples, "samples"),
-    ratioLine("Derived laps", i.derivedFrameLaps, i.totalLaps, "laps"),
+    ratioLine("No position", i.samplesPositionAbsent ?? null, i.samples ?? null, "samples"),
+    ratioLine("Derived laps", i.lapsFrameB ?? null, laps, "laps"),
+    ratioLine("Unplaceable laps", i.lapsFrameNone ?? null, laps, "laps"),
   ];
 }
 
@@ -314,8 +357,9 @@ export function describePositionIntegrity(
 export function positionIntegrityUnknown(
   integrity: SessionPositionIntegrity | null | undefined,
 ): boolean {
-  return !integrity
-    || (integrity.positionsWithdrawn === null && integrity.derivedFrameLaps === null);
+  if (!integrity) return true;
+  return [integrity.samplesPositionAbsent, integrity.lapsFrameB, integrity.lapsFrameNone]
+    .every((v) => typeof v !== "number");
 }
 
 export function buildDashboardSnapshot(
