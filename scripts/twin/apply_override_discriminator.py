@@ -83,6 +83,11 @@ def main() -> int:
 
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--year", default="2026")
+    parser.add_argument("--rules-year", default="2026",
+                        help="Season whose envelope to apply. Stays 2026 for a "
+                             "historical control: the question is whether the 2026 "
+                             "component would fire on pre-2026 telemetry, so the "
+                             "2026 envelope is the right one to test against.")
     parser.add_argument("--circuit", action="append")
     parser.add_argument("--k-sigma", type=float, default=DEFAULT_K_SIGMA)
     parser.add_argument("--sigma-kw", type=float, help="Override the CP-22 sigma")
@@ -115,7 +120,7 @@ def main() -> int:
         frame = twin.merge(segments.drop_duplicates(keys), on=keys, how="left")
 
         try:
-            rules = load_event_rules(f"{circuit}_grand_prix", str(args.year))
+            rules = load_event_rules(f"{circuit}_grand_prix", str(args.rules_year))
         except Exception:
             results.append({"circuit": circuit, "skipped": "no rule configuration"})
             continue

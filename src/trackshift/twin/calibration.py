@@ -75,6 +75,10 @@ class RungResult:
     cells_fitted: int = 1
     cells_fallen_back: int = 0
     residual_share: float | None = None
+    #: Share of samples whose implied deployment exceeds the override cap under
+    #: these parameters. Section 55: a calibration that lowers RMSE while raising
+    #: this has not improved, so it is carried beside the error, not instead.
+    envelope_violation_rate: float | None = None
     accepted: bool | None = None
     rejection_reason: str | None = None
 
@@ -221,6 +225,12 @@ def compare_rungs(results: Sequence[RungResult]) -> list[RungResult]:
     """
     ordered = sorted(results, key=lambda item: RUNGS.index(item.rung))
     best: float | None = None
+    # The analytical rung sets the violation baseline: it is the priors, untouched
+    # by any fit, so a fitted rung that violates more has bought its error
+    # reduction with physics it does not have.
+    baseline_violation = next((r.envelope_violation_rate for r in ordered
+                               if r.rung == "analytical"
+                               and r.envelope_violation_rate is not None), None)
     for result in ordered:
         reasons: list[str] = []
         if result.violations:
@@ -234,6 +244,15 @@ def compare_rungs(results: Sequence[RungResult]) -> list[RungResult]:
             reasons.append(
                 f"held-out MAE {result.mae_s:.4f} s does not improve on the previous "
                 f"rung's {best:.4f} s"
+            )
+        if (result.envelope_violation_rate is not None
+                and baseline_violation is not None
+                and result.envelope_violation_rate > baseline_violation + 0.01):
+            reasons.append(
+                f"envelope violation rate rose to {result.envelope_violation_rate:.1%} "
+                f"from {baseline_violation:.1%}. Section 55: a calibration that lowers "
+                "error while deploying more power than the rules allow has not improved, "
+                "it has moved the error somewhere less visible."
             )
         if result.cells_fitted == 0:
             reasons.append(

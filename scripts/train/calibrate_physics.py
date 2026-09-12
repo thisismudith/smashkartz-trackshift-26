@@ -245,6 +245,63 @@ def _params_from(values: dict[str, float], priors: dict[str, float]) -> PhysicsP
     )
 
 
+
+def envelope_violation_rate(rows, parameters, priors, rules_cache) -> float | None:
+    """Share of rows whose implied deployment exceeds the override cap.
+
+    Section 55 makes this a first-class calibration metric, not a diagnostic.
+    The 2024 control measured a 10.9% false-positive rate for the override
+    discriminator, which is the same over-estimate seen from the other side: a
+    fit that reduces segment-time error by lowering CdA is buying that reduction
+    by attributing missing drag to electrical power the car is not allowed to
+    use.
+    """
+    from trackshift.rules.api import max_electrical_power_kw
+    from trackshift.twin.api import segment_power
+
+    violations = counted = 0
+    for row in rows:
+        event = str(row.get("event") or "")
+        circuit = str(row.get("circuit") or "")
+        rules = rules_cache.get(circuit)
+        if rules is None:
+            continue
+        speed = row.get("entry_speed_kmh")
+        try:
+            speed = float(speed)
+        except (TypeError, ValueError):
+            continue
+        if speed <= 0:
+            continue
+        rho = row.get("air_density_proxy")
+        try:
+            rho = float(rho)
+            if rho <= 0 or rho != rho:
+                rho = None
+        except (TypeError, ValueError):
+            rho = None
+        try:
+            cap = max_electrical_power_kw(speed, "override", rules)
+        except Exception:
+            continue
+        # Real acceleration, not zero. At zero the ICE covers the demand and
+        # nothing deploys, so the whole diagnostic reads 0% and says nothing.
+        accel = 0.0
+        try:
+            exit_speed = float(row.get("exit_speed_kmh_offline"))
+            duration = float(row.get("segment_time_s_offline"))
+            if duration > 0:
+                accel = (exit_speed - speed) / 3.6 / duration
+        except (TypeError, ValueError):
+            accel = 0.0
+        power = segment_power(speed, accel, parameters, rho_kgm3=rho,
+                              fallback_rho_kgm3=priors["fallback_rho"],
+                              envelope_cap_kw=cap)
+        counted += 1
+        violations += int(power.envelope_violation)
+    return (violations / counted) if counted else None
+
+
 def main() -> int:
     import numpy as np
     import pandas as pd
@@ -286,6 +343,15 @@ def main() -> int:
     y_train = np.array([float(r["segment_time_s_offline"]) for r in train_rows])
     y_test = np.array([float(r["segment_time_s_offline"]) for r in test_rows])
 
+    from trackshift.rules.api import load_event_rules
+
+    rules_cache = {}
+    for circuit in sorted({str(r.get("circuit")) for r in test_rows}):
+        try:
+            rules_cache[circuit] = load_event_rules(f"{circuit}_grand_prix", str(args.year))
+        except Exception:
+            pass
+
     x0 = [priors["cda_m2"], priors["crr"], priors["eta_drivetrain"], priors["p_ice_max_kw"]]
     results: list[RungResult] = []
     artefacts: dict[str, Any] = {}
@@ -296,7 +362,8 @@ def main() -> int:
     results.append(RungResult(
         "analytical", dict(zip(PARAMETER_NAMES, x0)),
         mae_s=mean_absolute_error(y_test, pred), rmse_s=root_mean_square_error(y_test, pred),
-        n_segments=len(test_rows)))
+        n_segments=len(test_rows),
+        envelope_violation_rate=envelope_violation_rate(test_rows, analytical, priors, rules_cache)))
 
     # Rung 2: one global parameter set.
     fit = fit_parameters(_residual_fn(train_rows, priors, y_train), x0)
@@ -305,7 +372,8 @@ def main() -> int:
     results.append(RungResult(
         "global", fit["parameters"],
         mae_s=mean_absolute_error(y_test, pred), rmse_s=root_mean_square_error(y_test, pred),
-        n_segments=len(test_rows), at_bound=fit["at_bound"], violations=fit["violations"]))
+        n_segments=len(test_rows), at_bound=fit["at_bound"], violations=fit["violations"],
+        envelope_violation_rate=envelope_violation_rate(test_rows, global_params, priors, rules_cache)))
     artefacts["global_jacobian_shape"] = list(np.asarray(fit["jacobian"]).shape)
     global_fit = fit
 
@@ -447,6 +515,17 @@ def main() -> int:
                      "trains on Practice 1 and Qualifying, so mass is constant across "
                      "every training row."),
         },
+        "envelope_violation_by_rung": {
+            r.rung: r.envelope_violation_rate for r in compared
+            if r.envelope_violation_rate is not None
+        },
+        "violation_note": (
+            "Section 55. The 2024 control measured a 10.9% false-positive rate for the "
+            "override discriminator, which is this same over-estimate seen from the other "
+            "side. A fit that lowers segment-time error by lowering CdA is attributing "
+            "missing drag to electrical power the car may not legally use, so the rate is "
+            "a rejection criterion here rather than a footnote."
+        ),
         "calibration_meets_targets": all(
             r.mae_s <= MAE_TARGETS[r.rung] for r in compared if r.rung in MAE_TARGETS
         ),

@@ -86,7 +86,8 @@ def load_priors(path: Path = PRIORS) -> dict[str, Any]:
     }
 
 
-def build_circuit(circuit: str, year: str, output_root: Path, fuel_kg: float) -> dict[str, Any]:
+def build_circuit(circuit: str, year: str, output_root: Path, fuel_kg: float,
+                  rules_year: str | None = None) -> dict[str, Any]:
     """Build one circuit. Module-level so it pickles into the process pool."""
     import pandas as pd
 
@@ -123,7 +124,7 @@ def build_circuit(circuit: str, year: str, output_root: Path, fuel_kg: float) ->
 
     rules = None
     try:
-        rules = load_event_rules(f"{circuit}_grand_prix", str(year))
+        rules = load_event_rules(f"{circuit}_grand_prix", str(rules_year or year))
     except Exception:
         rules = None
 
@@ -222,6 +223,11 @@ def build_circuit(circuit: str, year: str, output_root: Path, fuel_kg: float) ->
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--year", default="2026")
+    parser.add_argument("--rules-year", default="2026",
+                        help="Season whose envelope to apply. Stays 2026 for a "
+                             "historical control: the question is whether the 2026 "
+                             "component would fire on pre-2026 telemetry, so the "
+                             "2026 envelope is the right one to test against.")
     parser.add_argument("--circuit", action="append", help="C1 circuit key; repeat to select several")
     parser.add_argument("--segments-dir", type=Path, default=SEGMENTS)
     parser.add_argument("--output-root", type=Path, default=OUT)
@@ -244,7 +250,7 @@ def main() -> int:
 
     if args.jobs > 1 and len(circuits) > 1:
         with ProcessPoolExecutor(max_workers=args.jobs) as pool:
-            futures = {pool.submit(build_circuit, c, args.year, args.output_root, args.fuel_kg): c
+            futures = {pool.submit(build_circuit, c, args.year, args.output_root, args.fuel_kg, args.rules_year): c
                        for c in circuits}
             pending = set(futures)
             while pending:
@@ -260,7 +266,8 @@ def main() -> int:
     else:
         for circuit in circuits:
             prog.set_label(circuit)
-            results.append(build_circuit(circuit, args.year, args.output_root, args.fuel_kg))
+            results.append(build_circuit(circuit, args.year, args.output_root, args.fuel_kg,
+                                         args.rules_year))
             prog.tick()
     prog.close()
 
