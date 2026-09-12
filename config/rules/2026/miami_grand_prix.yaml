@@ -1,0 +1,73 @@
+# TrackShift 2026 event rule configuration (M18, CP-03).
+#
+# Every regulatory value is UNVERIFIED until traced to an FIA article and
+# recorded in its source field (AGENTS.md sections 20.1, 21, 57). Values here
+# are usable for modelling immediately; they simply may not back a claim that
+# the system is legal by construction.
+#
+# value_source tiers:
+#   RULE_FIA             cited to a Sporting/Technical Regulation or event note
+#   OBSERVED_RCM         derived from race-control messages in the raw mirror
+#   DERIVED_TELEMETRY    measured from the telemetry itself
+#   PROXY_HISTORICAL_DRS inferred from 2022-2025 DRS activity; development only
+#   UNVERIFIED           not yet sourced
+
+schema_version: 1
+event: miami_grand_prix
+event_display: "Miami Grand Prix"
+circuit: miami
+year: 2026
+
+complete_in_mirror: true
+
+lap_length_m:
+  value: 5332.9
+  value_source: DERIVED_TELEMETRY
+  source: "median max(distance) over 30 sampled Race laps, lap 1 excluded"
+  published_circuit_length_m: 5412
+  delta_vs_published_m: -79.1
+  delta_vs_published_pct: -1.46
+  note: >-
+    Telemetry distance is integrated along the path the car actually drove, so it
+    reads shorter than the homologated circuit length: straight-line integration
+    between samples undershoots the arc through a corner. The shortfall tracks
+    corner density, from -0.61% at Monza to -2.58% at the Hungaroring.
+    USE THE MEASURED VALUE. CP-05 segments on telemetry distance, so segment
+    boundaries must live in the same coordinate system; the published figure is a
+    sanity cross-check only, and is not interchangeable with it.
+
+geometry:
+  corner_count: 19
+  rotation_deg: 2.0
+  value_source: OBSERVED
+  source: "data/raw/tracinginsights/2026/Miami Grand Prix/Race/corners.json"
+  corner_distances_m: [368.7, 477.2, 574.9, 1125.2, 1272.2, 1400.0, 1550.0, 1637.1, 2159.3, 2429.7, 3073.9, 3191.4, 3326.5, 3396.5, 3418.5, 3508.2, 4825.5, 4970.2, 5174.9]
+
+overtake:
+  enabled: true
+  # Race control states WHETHER Overtake is available, never WHERE. Line
+  # positions are not derivable from rcm.json and stay UNVERIFIED until an
+  # FIA event note is found, or PROXY_HISTORICAL_DRS from derive_drs_zones.py.
+  zones:
+    - zone: 1
+      name: "TODO"
+      detection_line_m:
+        value: null
+        value_source: UNVERIFIED
+        source: "TODO: FIA event notes 2026 Miami Grand Prix"
+      activation_line_m:
+        value: null
+        value_source: UNVERIFIED
+        source: "TODO: FIA event notes 2026 Miami Grand Prix"
+
+race_control:
+  overtake_windows_source: "artifacts/race_control/2026_miami_grand_prix.json"
+  value_source: OBSERVED_RCM
+  source: "race-control messages in the raw mirror, extracted by scripts/data/extract_race_control.py"
+  overtake_enabled_messages: 3
+  overtake_disabled_messages: 3
+
+# Season-wide values (power envelope, energy budgets, detection gap) live in
+# common.yaml. Add a key here only to override the season value for this
+# event, and only with a cited source.
+overrides: {}

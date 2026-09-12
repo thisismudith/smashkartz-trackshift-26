@@ -1,0 +1,73 @@
+# TrackShift 2026 event rule configuration (M18, CP-03).
+#
+# Every regulatory value is UNVERIFIED until traced to an FIA article and
+# recorded in its source field (AGENTS.md sections 20.1, 21, 57). Values here
+# are usable for modelling immediately; they simply may not back a claim that
+# the system is legal by construction.
+#
+# value_source tiers:
+#   RULE_FIA             cited to a Sporting/Technical Regulation or event note
+#   OBSERVED_RCM         derived from race-control messages in the raw mirror
+#   DERIVED_TELEMETRY    measured from the telemetry itself
+#   PROXY_HISTORICAL_DRS inferred from 2022-2025 DRS activity; development only
+#   UNVERIFIED           not yet sourced
+
+schema_version: 1
+event: australian_grand_prix
+event_display: "Australian Grand Prix"
+circuit: australian
+year: 2026
+
+complete_in_mirror: true
+
+lap_length_m:
+  value: 5226.7
+  value_source: DERIVED_TELEMETRY
+  source: "median max(distance) over 30 sampled Race laps, lap 1 excluded"
+  published_circuit_length_m: 5278
+  delta_vs_published_m: -51.3
+  delta_vs_published_pct: -0.97
+  note: >-
+    Telemetry distance is integrated along the path the car actually drove, so it
+    reads shorter than the homologated circuit length: straight-line integration
+    between samples undershoots the arc through a corner. The shortfall tracks
+    corner density, from -0.61% at Monza to -2.58% at the Hungaroring.
+    USE THE MEASURED VALUE. CP-05 segments on telemetry distance, so segment
+    boundaries must live in the same coordinate system; the published figure is a
+    sanity cross-check only, and is not interchangeable with it.
+
+geometry:
+  corner_count: 14
+  rotation_deg: 44.0
+  value_source: OBSERVED
+  source: "data/raw/tracinginsights/2026/Australian Grand Prix/Race/corners.json"
+  corner_distances_m: [353.9, 436.7, 1082.3, 1240.2, 1435.1, 1864.7, 1987.2, 2157.2, 3279.2, 3383.6, 4087.8, 4359.1, 4608.5, 4765.0]
+
+overtake:
+  enabled: true
+  # Race control states WHETHER Overtake is available, never WHERE. Line
+  # positions are not derivable from rcm.json and stay UNVERIFIED until an
+  # FIA event note is found, or PROXY_HISTORICAL_DRS from derive_drs_zones.py.
+  zones:
+    - zone: 1
+      name: "TODO"
+      detection_line_m:
+        value: null
+        value_source: UNVERIFIED
+        source: "TODO: FIA event notes 2026 Australian Grand Prix"
+      activation_line_m:
+        value: null
+        value_source: UNVERIFIED
+        source: "TODO: FIA event notes 2026 Australian Grand Prix"
+
+race_control:
+  overtake_windows_source: "artifacts/race_control/2026_australian_grand_prix.json"
+  value_source: OBSERVED_RCM
+  source: "race-control messages in the raw mirror, extracted by scripts/data/extract_race_control.py"
+  overtake_enabled_messages: 5
+  overtake_disabled_messages: 1
+
+# Season-wide values (power envelope, energy budgets, detection gap) live in
+# common.yaml. Add a key here only to override the season value for this
+# event, and only with a cited source.
+overrides: {}

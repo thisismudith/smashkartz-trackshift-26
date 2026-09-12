@@ -1,0 +1,786 @@
+{
+  "schema_version": 1,
+  "generated_utc": "2026-09-12T12:05:55.702058+00:00",
+  "value_source": "OBSERVED_RCM",
+  "source": "race-control messages in data\\raw\\tracinginsights\\2026\\Pre-Season Testing 1",
+  "note": "Tier B. Race control states WHETHER Overtake is available, never WHERE. Detection and Activation Line positions are not derivable from these messages and remain Tier A (FIA event note) or Tier C (DRS proxy).",
+  "year": "2026",
+  "event": "pre-season_testing_1",
+  "event_display": "Pre-Season Testing 1",
+  "sessions": {
+    "Practice 1": {
+      "messages_total": 48,
+      "counts": {
+        "flag_clear": 15,
+        "flag_double_yellow": 7,
+        "flag_green": 4,
+        "flag_red": 2,
+        "flag_yellow": 9,
+        "overtake_enabled": 2,
+        "vsc_deployed": 1,
+        "vsc_ending": 1
+      },
+      "overtake_windows": [
+        {
+          "start": "2026-02-11T08:38:43.000000000",
+          "start_message": "OVERTAKE ENABLED",
+          "end": null,
+          "end_message": null,
+          "note": "still open at the end of the message feed"
+        }
+      ],
+      "safety_car": [],
+      "virtual_safety_car": [
+        {
+          "start": "2026-02-11T16:04:58.000000000",
+          "start_message": "VSC DEPLOYED",
+          "end": "2026-02-11T16:07:18.000000000",
+          "end_message": "VSC ENDING"
+        }
+      ],
+      "flags": [
+        {
+          "time": "2026-02-11T07:00:02.000000000",
+          "flag": "GREEN",
+          "scope": "Track",
+          "sector": null,
+          "message": "GREEN LIGHT - PIT EXIT OPEN"
+        },
+        {
+          "time": "2026-02-11T08:19:13.000000000",
+          "flag": "YELLOW",
+          "scope": "Sector",
+          "sector": 10.0,
+          "message": "YELLOW IN TRACK SECTOR 10"
+        },
+        {
+          "time": "2026-02-11T08:19:19.000000000",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 10.0,
+          "message": "CLEAR IN TRACK SECTOR 10"
+        },
+        {
+          "time": "2026-02-11T08:31:09.000000000",
+          "flag": "YELLOW",
+          "scope": "Sector",
+          "sector": 2.0,
+          "message": "YELLOW IN TRACK SECTOR 2"
+        },
+        {
+          "time": "2026-02-11T08:31:12.000000000",
+          "flag": "DOUBLE YELLOW",
+          "scope": "Sector",
+          "sector": 2.0,
+          "message": "DOUBLE YELLOW IN TRACK SECTOR 2"
+        },
+        {
+          "time": "2026-02-11T08:31:15.000000000",
+          "flag": "YELLOW",
+          "scope": "Sector",
+          "sector": 1.0,
+          "message": "YELLOW IN TRACK SECTOR 1"
+        },
+        {
+          "time": "2026-02-11T08:31:16.000000000",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 2.0,
+          "message": "CLEAR IN TRACK SECTOR 2"
+        },
+        {
+          "time": "2026-02-11T08:31:18.000000000",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 1.0,
+          "message": "CLEAR IN TRACK SECTOR 1"
+        },
+        {
+          "time": "2026-02-11T08:35:46.000000000",
+          "flag": "DOUBLE YELLOW",
+          "scope": "Sector",
+          "sector": 7.0,
+          "message": "DOUBLE YELLOW IN TRACK SECTOR 7"
+        },
+        {
+          "time": "2026-02-11T08:35:47.000000000",
+          "flag": "YELLOW",
+          "scope": "Sector",
+          "sector": 7.0,
+          "message": "YELLOW IN TRACK SECTOR 7"
+        },
+        {
+          "time": "2026-02-11T08:35:52.000000000",
+          "flag": "YELLOW",
+          "scope": "Sector",
+          "sector": 6.0,
+          "message": "YELLOW IN TRACK SECTOR 6"
+        },
+        {
+          "time": "2026-02-11T08:36:17.000000000",
+          "flag": "DOUBLE YELLOW",
+          "scope": "Sector",
+          "sector": 7.0,
+          "message": "DOUBLE YELLOW IN TRACK SECTOR 7"
+        },
+        {
+          "time": "2026-02-11T08:36:33.000000000",
+          "flag": "YELLOW",
+          "scope": "Sector",
+          "sector": 7.0,
+          "message": "YELLOW IN TRACK SECTOR 7"
+        },
+        {
+          "time": "2026-02-11T08:36:38.000000000",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 6.0,
+          "message": "CLEAR IN TRACK SECTOR 6"
+        },
+        {
+          "time": "2026-02-11T08:37:18.000000000",
+          "flag": "RED",
+          "scope": "Track",
+          "sector": null,
+          "message": "RED FLAG"
+        },
+        {
+          "time": "2026-02-11T08:37:18.000000000",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 7.0,
+          "message": "CLEAR IN TRACK SECTOR 7"
+        },
+        {
+          "time": "2026-02-11T08:38:41.000000000",
+          "flag": "CLEAR",
+          "scope": "Track",
+          "sector": null,
+          "message": "TRACK CLEAR"
+        },
+        {
+          "time": "2026-02-11T08:43:00.000000000",
+          "flag": "GREEN",
+          "scope": "Track",
+          "sector": null,
+          "message": "GREEN LIGHT - PIT EXIT OPEN"
+        },
+        {
+          "time": "2026-02-11T08:57:08.000000000",
+          "flag": "YELLOW",
+          "scope": "Sector",
+          "sector": 2.0,
+          "message": "YELLOW IN TRACK SECTOR 2"
+        },
+        {
+          "time": "2026-02-11T08:57:10.000000000",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 2.0,
+          "message": "CLEAR IN TRACK SECTOR 2"
+        },
+        {
+          "time": "2026-02-11T09:03:10.000000000",
+          "flag": "YELLOW",
+          "scope": "Sector",
+          "sector": 10.0,
+          "message": "YELLOW IN TRACK SECTOR 10"
+        },
+        {
+          "time": "2026-02-11T09:03:14.000000000",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 10.0,
+          "message": "CLEAR IN TRACK SECTOR 10"
+        },
+        {
+          "time": "2026-02-11T11:03:21.000000000",
+          "flag": "DOUBLE YELLOW",
+          "scope": "Sector",
+          "sector": 1.0,
+          "message": "DOUBLE YELLOW IN TRACK SECTOR 1"
+        },
+        {
+          "time": "2026-02-11T11:03:26.000000000",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 1.0,
+          "message": "CLEAR IN TRACK SECTOR 1"
+        },
+        {
+          "time": "2026-02-11T12:00:00.000000000",
+          "flag": "GREEN",
+          "scope": "Track",
+          "sector": null,
+          "message": "GREEN LIGHT - PIT EXIT OPEN"
+        },
+        {
+          "time": "2026-02-11T12:35:17.000000000",
+          "flag": "DOUBLE YELLOW",
+          "scope": "Sector",
+          "sector": 2.0,
+          "message": "DOUBLE YELLOW IN TRACK SECTOR 2"
+        },
+        {
+          "time": "2026-02-11T12:35:18.000000000",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 2.0,
+          "message": "CLEAR IN TRACK SECTOR 2"
+        },
+        {
+          "time": "2026-02-11T13:30:41.000000000",
+          "flag": "YELLOW",
+          "scope": "Sector",
+          "sector": 16.0,
+          "message": "YELLOW IN TRACK SECTOR 16"
+        },
+        {
+          "time": "2026-02-11T13:31:43.000000000",
+          "flag": "RED",
+          "scope": "Track",
+          "sector": null,
+          "message": "RED FLAG"
+        },
+        {
+          "time": "2026-02-11T13:31:44.000000000",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 16.0,
+          "message": "CLEAR IN TRACK SECTOR 16"
+        },
+        {
+          "time": "2026-02-11T13:34:21.000000000",
+          "flag": "CLEAR",
+          "scope": "Track",
+          "sector": null,
+          "message": "TRACK CLEAR"
+        },
+        {
+          "time": "2026-02-11T13:35:01.000000000",
+          "flag": "GREEN",
+          "scope": "Track",
+          "sector": null,
+          "message": "GREEN LIGHT - PIT EXIT OPEN"
+        },
+        {
+          "time": "2026-02-11T16:05:01.000000000",
+          "flag": "DOUBLE YELLOW",
+          "scope": "Sector",
+          "sector": 18.0,
+          "message": "DOUBLE YELLOW IN TRACK SECTOR 18"
+        },
+        {
+          "time": "2026-02-11T16:06:01.000000000",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 18.0,
+          "message": "CLEAR IN TRACK SECTOR 18"
+        },
+        {
+          "time": "2026-02-11T16:06:16.000000000",
+          "flag": "DOUBLE YELLOW",
+          "scope": "Sector",
+          "sector": 18.0,
+          "message": "DOUBLE YELLOW IN TRACK SECTOR 18"
+        },
+        {
+          "time": "2026-02-11T16:07:16.000000000",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 18.0,
+          "message": "CLEAR IN TRACK SECTOR 18"
+        },
+        {
+          "time": "2026-02-11T16:07:29.000000000",
+          "flag": "CLEAR",
+          "scope": "Track",
+          "sector": null,
+          "message": "TRACK CLEAR"
+        }
+      ],
+      "messages": [
+        {
+          "time": "2026-02-11T06:58:39.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "PINK HEAD PADDING MATERIAL MUST BE USED"
+        },
+        {
+          "time": "2026-02-11T07:00:02.000000000",
+          "category": "Flag",
+          "flag": "GREEN",
+          "scope": "Track",
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "GREEN LIGHT - PIT EXIT OPEN"
+        },
+        {
+          "time": "2026-02-11T08:19:13.000000000",
+          "category": "Flag",
+          "flag": "YELLOW",
+          "scope": "Sector",
+          "sector": 10.0,
+          "status": null,
+          "lap": null,
+          "message": "YELLOW IN TRACK SECTOR 10"
+        },
+        {
+          "time": "2026-02-11T08:19:19.000000000",
+          "category": "Flag",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 10.0,
+          "status": null,
+          "lap": null,
+          "message": "CLEAR IN TRACK SECTOR 10"
+        },
+        {
+          "time": "2026-02-11T08:31:09.000000000",
+          "category": "Flag",
+          "flag": "YELLOW",
+          "scope": "Sector",
+          "sector": 2.0,
+          "status": null,
+          "lap": null,
+          "message": "YELLOW IN TRACK SECTOR 2"
+        },
+        {
+          "time": "2026-02-11T08:31:12.000000000",
+          "category": "Flag",
+          "flag": "DOUBLE YELLOW",
+          "scope": "Sector",
+          "sector": 2.0,
+          "status": null,
+          "lap": null,
+          "message": "DOUBLE YELLOW IN TRACK SECTOR 2"
+        },
+        {
+          "time": "2026-02-11T08:31:15.000000000",
+          "category": "Flag",
+          "flag": "YELLOW",
+          "scope": "Sector",
+          "sector": 1.0,
+          "status": null,
+          "lap": null,
+          "message": "YELLOW IN TRACK SECTOR 1"
+        },
+        {
+          "time": "2026-02-11T08:31:16.000000000",
+          "category": "Flag",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 2.0,
+          "status": null,
+          "lap": null,
+          "message": "CLEAR IN TRACK SECTOR 2"
+        },
+        {
+          "time": "2026-02-11T08:31:18.000000000",
+          "category": "Flag",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 1.0,
+          "status": null,
+          "lap": null,
+          "message": "CLEAR IN TRACK SECTOR 1"
+        },
+        {
+          "time": "2026-02-11T08:35:46.000000000",
+          "category": "Flag",
+          "flag": "DOUBLE YELLOW",
+          "scope": "Sector",
+          "sector": 7.0,
+          "status": null,
+          "lap": null,
+          "message": "DOUBLE YELLOW IN TRACK SECTOR 7"
+        },
+        {
+          "time": "2026-02-11T08:35:47.000000000",
+          "category": "Flag",
+          "flag": "YELLOW",
+          "scope": "Sector",
+          "sector": 7.0,
+          "status": null,
+          "lap": null,
+          "message": "YELLOW IN TRACK SECTOR 7"
+        },
+        {
+          "time": "2026-02-11T08:35:52.000000000",
+          "category": "Flag",
+          "flag": "YELLOW",
+          "scope": "Sector",
+          "sector": 6.0,
+          "status": null,
+          "lap": null,
+          "message": "YELLOW IN TRACK SECTOR 6"
+        },
+        {
+          "time": "2026-02-11T08:36:17.000000000",
+          "category": "Flag",
+          "flag": "DOUBLE YELLOW",
+          "scope": "Sector",
+          "sector": 7.0,
+          "status": null,
+          "lap": null,
+          "message": "DOUBLE YELLOW IN TRACK SECTOR 7"
+        },
+        {
+          "time": "2026-02-11T08:36:33.000000000",
+          "category": "Flag",
+          "flag": "YELLOW",
+          "scope": "Sector",
+          "sector": 7.0,
+          "status": null,
+          "lap": null,
+          "message": "YELLOW IN TRACK SECTOR 7"
+        },
+        {
+          "time": "2026-02-11T08:36:38.000000000",
+          "category": "Flag",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 6.0,
+          "status": null,
+          "lap": null,
+          "message": "CLEAR IN TRACK SECTOR 6"
+        },
+        {
+          "time": "2026-02-11T08:37:18.000000000",
+          "category": "Flag",
+          "flag": "RED",
+          "scope": "Track",
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "RED FLAG"
+        },
+        {
+          "time": "2026-02-11T08:37:18.000000000",
+          "category": "Flag",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 7.0,
+          "status": null,
+          "lap": null,
+          "message": "CLEAR IN TRACK SECTOR 7"
+        },
+        {
+          "time": "2026-02-11T08:38:41.000000000",
+          "category": "Flag",
+          "flag": "CLEAR",
+          "scope": "Track",
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "TRACK CLEAR"
+        },
+        {
+          "time": "2026-02-11T08:38:43.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "OVERTAKE ENABLED"
+        },
+        {
+          "time": "2026-02-11T08:42:15.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "SESSION WILL RESUME AT 11:43"
+        },
+        {
+          "time": "2026-02-11T08:43:00.000000000",
+          "category": "Flag",
+          "flag": "GREEN",
+          "scope": "Track",
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "GREEN LIGHT - PIT EXIT OPEN"
+        },
+        {
+          "time": "2026-02-11T08:57:08.000000000",
+          "category": "Flag",
+          "flag": "YELLOW",
+          "scope": "Sector",
+          "sector": 2.0,
+          "status": null,
+          "lap": null,
+          "message": "YELLOW IN TRACK SECTOR 2"
+        },
+        {
+          "time": "2026-02-11T08:57:10.000000000",
+          "category": "Flag",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 2.0,
+          "status": null,
+          "lap": null,
+          "message": "CLEAR IN TRACK SECTOR 2"
+        },
+        {
+          "time": "2026-02-11T09:03:10.000000000",
+          "category": "Flag",
+          "flag": "YELLOW",
+          "scope": "Sector",
+          "sector": 10.0,
+          "status": null,
+          "lap": null,
+          "message": "YELLOW IN TRACK SECTOR 10"
+        },
+        {
+          "time": "2026-02-11T09:03:14.000000000",
+          "category": "Flag",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 10.0,
+          "status": null,
+          "lap": null,
+          "message": "CLEAR IN TRACK SECTOR 10"
+        },
+        {
+          "time": "2026-02-11T09:14:28.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "YELLOW IN PIT LANE"
+        },
+        {
+          "time": "2026-02-11T09:18:41.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "PIT LANE ENTRY OPEN"
+        },
+        {
+          "time": "2026-02-11T11:00:18.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "FIRST CAR TO TAKE THE FLAG - CAR 63 (RUS)"
+        },
+        {
+          "time": "2026-02-11T11:03:21.000000000",
+          "category": "Flag",
+          "flag": "DOUBLE YELLOW",
+          "scope": "Sector",
+          "sector": 1.0,
+          "status": null,
+          "lap": null,
+          "message": "DOUBLE YELLOW IN TRACK SECTOR 1"
+        },
+        {
+          "time": "2026-02-11T11:03:26.000000000",
+          "category": "Flag",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 1.0,
+          "status": null,
+          "lap": null,
+          "message": "CLEAR IN TRACK SECTOR 1"
+        },
+        {
+          "time": "2026-02-11T12:00:00.000000000",
+          "category": "Flag",
+          "flag": "GREEN",
+          "scope": "Track",
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "GREEN LIGHT - PIT EXIT OPEN"
+        },
+        {
+          "time": "2026-02-11T12:35:17.000000000",
+          "category": "Flag",
+          "flag": "DOUBLE YELLOW",
+          "scope": "Sector",
+          "sector": 2.0,
+          "status": null,
+          "lap": null,
+          "message": "DOUBLE YELLOW IN TRACK SECTOR 2"
+        },
+        {
+          "time": "2026-02-11T12:35:18.000000000",
+          "category": "Flag",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 2.0,
+          "status": null,
+          "lap": null,
+          "message": "CLEAR IN TRACK SECTOR 2"
+        },
+        {
+          "time": "2026-02-11T13:30:41.000000000",
+          "category": "Flag",
+          "flag": "YELLOW",
+          "scope": "Sector",
+          "sector": 16.0,
+          "status": null,
+          "lap": null,
+          "message": "YELLOW IN TRACK SECTOR 16"
+        },
+        {
+          "time": "2026-02-11T13:31:43.000000000",
+          "category": "Flag",
+          "flag": "RED",
+          "scope": "Track",
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "RED FLAG"
+        },
+        {
+          "time": "2026-02-11T13:31:44.000000000",
+          "category": "Flag",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 16.0,
+          "status": null,
+          "lap": null,
+          "message": "CLEAR IN TRACK SECTOR 16"
+        },
+        {
+          "time": "2026-02-11T13:34:21.000000000",
+          "category": "Flag",
+          "flag": "CLEAR",
+          "scope": "Track",
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "TRACK CLEAR"
+        },
+        {
+          "time": "2026-02-11T13:34:24.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "OVERTAKE ENABLED"
+        },
+        {
+          "time": "2026-02-11T13:34:35.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "SESSION WILL RESUME AT 16:35"
+        },
+        {
+          "time": "2026-02-11T13:35:01.000000000",
+          "category": "Flag",
+          "flag": "GREEN",
+          "scope": "Track",
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "GREEN LIGHT - PIT EXIT OPEN"
+        },
+        {
+          "time": "2026-02-11T16:00:43.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "FIRST CAR TO TAKE THE FLAG - CAR 31 (OCO)"
+        },
+        {
+          "time": "2026-02-11T16:04:58.000000000",
+          "category": "SafetyCar",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": "DEPLOYED",
+          "lap": null,
+          "message": "VSC DEPLOYED"
+        },
+        {
+          "time": "2026-02-11T16:05:01.000000000",
+          "category": "Flag",
+          "flag": "DOUBLE YELLOW",
+          "scope": "Sector",
+          "sector": 18.0,
+          "status": null,
+          "lap": null,
+          "message": "DOUBLE YELLOW IN TRACK SECTOR 18"
+        },
+        {
+          "time": "2026-02-11T16:06:01.000000000",
+          "category": "Flag",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 18.0,
+          "status": null,
+          "lap": null,
+          "message": "CLEAR IN TRACK SECTOR 18"
+        },
+        {
+          "time": "2026-02-11T16:06:16.000000000",
+          "category": "Flag",
+          "flag": "DOUBLE YELLOW",
+          "scope": "Sector",
+          "sector": 18.0,
+          "status": null,
+          "lap": null,
+          "message": "DOUBLE YELLOW IN TRACK SECTOR 18"
+        },
+        {
+          "time": "2026-02-11T16:07:16.000000000",
+          "category": "Flag",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 18.0,
+          "status": null,
+          "lap": null,
+          "message": "CLEAR IN TRACK SECTOR 18"
+        },
+        {
+          "time": "2026-02-11T16:07:18.000000000",
+          "category": "SafetyCar",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": "ENDING",
+          "lap": null,
+          "message": "VSC ENDING"
+        },
+        {
+          "time": "2026-02-11T16:07:29.000000000",
+          "category": "Flag",
+          "flag": "CLEAR",
+          "scope": "Track",
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "TRACK CLEAR"
+        }
+      ]
+    }
+  }
+}
