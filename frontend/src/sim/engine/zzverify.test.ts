@@ -1,5 +1,5 @@
 /* TEMPORARY independent verification harness (verifier). Deleted after measurement. */
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, it } from "vitest";
 import type { CarState, TrackModel } from "../contract/types";
