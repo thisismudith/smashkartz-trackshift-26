@@ -27,6 +27,24 @@ CANONICAL = {
 def load(p):
     with p.open(encoding="utf-8") as f: return json.load(f)
 def unwrap(x,key): return x.get(key,x) if isinstance(x,dict) else x
+def numeric(v):
+    """Coerce to float, treating the source's sentinels as missing.
+
+    TracingInsights writes the literal string "None" for a missing sample, so a
+    raw `b >= a` comparison raises TypeError on the first one. That crashed the
+    audit on 11 files (2023 Qatar Sprint Shootout lap 2, whose first two distance
+    samples are missing) and reported them as malformed, which is misleading:
+    the JSON is fine and validation.py already rejects those laps correctly with
+    NONFINITE_DISTANCE. Same sentinel class as the laptimes.json fix.
+    """
+    if v is None or isinstance(v, bool) or v == "None":
+        return None
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return None
+
+
 def value_type(v):
     if v is None or v == "None": return "null"
     if isinstance(v,bool): return "bool"
@@ -44,9 +62,11 @@ def audit_tel(p):
         nums=[float(v) for v in non if isinstance(v,(int,float)) and not isinstance(v,bool)]
         result[name]={"present":True,"null_rate":(n-len(non))/n if n else None,"types":sorted({value_type(v) for v in values})}
         if nums: result[name].update(min=min(nums),max=max(nums))
-    d=tel.get("distance",[]); t=tel.get("time",[])
-    if len(d)>1: result["distance_monotonic"]=all(b>=a for a,b in zip(d,d[1:]) if a is not None and b is not None)
-    dt=[b-a for a,b in zip(t,t[1:]) if isinstance(a,(int,float)) and isinstance(b,(int,float)) and b>a]
+    d=[numeric(v) for v in tel.get("distance",[])]; t=[numeric(v) for v in tel.get("time",[])]
+    result["distance_nonnumeric_count"]=sum(1 for v in tel.get("distance",[]) if numeric(v) is None)
+    pairs=[(a,b) for a,b in zip(d,d[1:]) if a is not None and b is not None]
+    if pairs: result["distance_monotonic"]=all(b>=a for a,b in pairs)
+    dt=[b-a for a,b in zip(t,t[1:]) if a is not None and b is not None and b>a]
     if dt: result["time_step_s"]={"min":min(dt),"median":median(dt),"max":max(dt)}
     return result
 def load_prior(output, selected, fields, events, quality, summary, errors):
@@ -205,7 +225,7 @@ def main():
     (a.output/"schema_differences.json").write_text(json.dumps({"years_audited":covered,"partial_audit":covered!=sorted(YEARS),"by_file_and_field":rows},indent=2),encoding="utf-8")
     canonical={"phase":"2 proposal only","fields":[{"canonical_name":n,"raw_source_fields":[raw],"datatype":dtype,"unit":unit,"required":required,"supported_years":list(YEARS),"notes":"Retain raw values and expose absence/year-specific semantics."} for n,(raw,dtype,unit,required) in CANONICAL.items()]}
     (a.output/"canonical_schema.json").write_text(json.dumps(canonical,indent=2),encoding="utf-8")
-    cols=["year","event","session","driver","lap_file","rows","distance_monotonic","time_step_s","speed","throttle","brake","drs","DriverAhead","DistanceToDriverAhead","x","y","z"]
+    cols=["year","event","session","driver","lap_file","rows","distance_monotonic","distance_nonnumeric_count","time_step_s","speed","throttle","brake","drs","DriverAhead","DistanceToDriverAhead","x","y","z"]
     with (a.output/"data_quality_summary.csv").open("w",newline="",encoding="utf-8") as f:
         w=csv.DictWriter(f,fieldnames=cols); w.writeheader()
         for r in quality: w.writerow({k:json.dumps(r[k]) if isinstance(r.get(k),(dict,list)) else r.get(k) for k in cols})
