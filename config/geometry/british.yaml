@@ -1,14 +1,14 @@
 schema_version: 1
 geometry_version: british-geom-v1
 boundary_hash: 301ae6d79f8362ab
-generated_utc: '2026-09-12T12:57:53.626459+00:00'
+generated_utc: '2026-09-12T13:42:43.863528+00:00'
 circuit: british
 event_display: British Grand Prix
 event_config: british_grand_prix
 lap_length_m: 5811.0
 lap_length_source: config/rules/2026 lap_length_m (DERIVED_TELEMETRY)
 rotation_deg: 92.0
-corners_source: data/raw/tracinginsights/2026/British Grand Prix/Race/corners.json
+corners_source: data/raw/2026/British Grand Prix/Race/corners.json
 corner_count: 18
 reference_laps: 1670
 reference_sessions:
@@ -39,7 +39,7 @@ segments:
   start_distance_m: 0.0
   end_distance_m: 160.0
   segment_length_m: 160.0
-  kind: EXIT
+  kind: STRAIGHT
   corner_id: null
   corner_type: STRAIGHT
   corner_phase: null
@@ -52,7 +52,7 @@ segments:
   apex_speed_kmh: 252.9
   exit_speed_kmh: 287.9
   boundary_sources:
-  - throttle_return
+  - lap_start
 - segment_id: 2
   start_distance_m: 160.0
   end_distance_m: 463.1

@@ -40,12 +40,25 @@ LAKE = ROOT / "data" / "processed" / "telemetry_20m"
 GEOMETRY_DIR = ROOT / "config" / "geometry"
 RULES_DIR = ROOT / "config" / "rules" / "2026"
 RAW = ROOT / "data" / "raw" / "tracinginsights"
+RAW_FALLBACK = ROOT / "data" / "raw"
 
 
-def load_corners(event_display: str) -> list[dict]:
+def raw_root() -> Path:
+    """Locate the configured raw mirror without changing its layout.
+
+    The CP-04 handover uses ``data/raw/tracinginsights``.  The repository's
+    Phase-1 mirror convention is ``data/raw/<year>``.  Supporting both keeps
+    corner apexes available to the static-map derivation; silently missing them
+    collapses the map to sparse brake/throttle boundaries.
+    """
+    return RAW if RAW.is_dir() else RAW_FALLBACK
+
+
+def load_corners(event_display: str, source_root: Path | None = None) -> list[dict]:
     """corners.json for an event, from whichever session carries it."""
+    source_root = source_root or raw_root()
     for session in ("Race", "Qualifying", "Sprint", "Practice 1"):
-        path = RAW / "2026" / event_display / session / "corners.json"
+        path = source_root / "2026" / event_display / session / "corners.json"
         if not path.exists():
             continue
         try:
@@ -67,7 +80,11 @@ def load_corners(event_display: str) -> list[dict]:
                 continue
             seen.add(value)
             out.append({"CornerNumber": numbers[i], "Distance": value})
-        return sorted(out, key=lambda c: c["Distance"]), rotation, str(path.relative_to(ROOT)).replace("\\", "/")
+        try:
+            source = str(path.relative_to(ROOT))
+        except ValueError:
+            source = str(path)
+        return sorted(out, key=lambda c: c["Distance"]), rotation, source.replace("\\", "/")
     return [], None, None
 
 
