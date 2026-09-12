@@ -107,25 +107,72 @@ the scope. The Windows runbook takes `-Stages 4b,4c` for the same purpose.
 
 ## CP-05 — track segmentation
 
-**Read `CHECKPOINTS_TANVEER.md` CP-05 before starting.** It is marked critical
-path for a reason: `segment_id` is the join key for every downstream table, so
-changing it later invalidates baselines, pairwise features, opportunities and
-the DP's state grid all at once.
+**The code is written and tested. You only need to run it**, after the lake
+exists. It produces contract **C1**, which your own CP-03 and CP-04 consume.
 
-The contract it produces is **C1** in `MODELS.md` section 5.1. Your own CP-03
-and CP-04 consume it.
+### Two commands, in this order
 
-Two things that are easy to get wrong:
+```bash
+# 1. Derive the static segment map per circuit. Reads the lake, writes
+#    config/geometry/<circuit>.yaml. A minute or two for all circuits.
+python scripts/features/derive_track_geometry.py --all
 
-**Segment boundaries live in telemetry-distance coordinates**, not homologated
-circuit distance. Telemetry distance reads 0.6% to 2.6% short of the published
-lap length because it is integrated along the driven path. `config/rules/2026/`
-records both numbers per circuit; use `lap_length_m.value`, and treat
-`published_circuit_length_m` as a cross-check only.
+# 2. Apply those maps to every lap -> data/processed/segments/
+python scripts/features/build_segments.py --all
+```
 
-**`geometry_version` must change whenever boundaries change.** Every artifact
-that consumed the old segmentation records the version it used, so a bump is how
-a stale downstream table becomes detectable instead of silently wrong.
+Then `python -m pytest tests/test_segmentation.py -q` (68 tests) confirms the
+maps and the built table are internally consistent.
+
+Only circuits present in the lake get a map, so **run CP-04 first**. Circuits
+with no lake data are reported as skipped rather than failing the run.
+
+### What it produces, and what "good" looks like
+
+Already derived here from the four circuits currently in the lake:
+
+| Circuit | Segments | Reference laps |
+|---|---|---|
+| Silverstone | 33 | 1,670 |
+| Albert Park | 28 | 163 |
+| Barcelona | 28 | 72 |
+| Red Bull Ring | 24 | 375 |
+
+The target is 30-40 segments per lap. **A low-corner circuit legitimately comes
+in under it** -- the Red Bull Ring has 10 corners -- and the tests allow that
+rather than forcing a number.
+
+### The one thing that must not break
+
+`segment_id` must always mean the same piece of tarmac. The tests assert it:
+every id maps to exactly one distance range, and each table carries a single
+`boundary_hash`. A lap missing trailing segments is fine and expected -- about
+15% of laps have telemetry that ends early, so they simply have no rows in the
+final segments.
+
+**Do not re-run `derive_track_geometry.py` after downstream tables exist.**
+Re-deriving can move boundaries, which invalidates everything joined on
+`segment_id`. If boundaries genuinely need to change, bump the version:
+
+```bash
+python scripts/features/derive_track_geometry.py --all --version-suffix v2
+```
+
+Every artifact records the `geometry_version` and `boundary_hash` it consumed,
+so a stale table becomes detectable instead of silently wrong.
+
+### Two things worth knowing about the method
+
+**Boundaries are a property of the circuit, not of a lap.** They are derived
+once from a median profile over clean reference laps, then applied unchanged.
+Per-lap brake detection would make segment 22 a different piece of track on
+every lap, and every baseline meaningless.
+
+**Everything is in telemetry-distance coordinates**, not homologated circuit
+distance. Telemetry distance reads 0.6% to 2.7% short because it is integrated
+along the driven path. `config/rules/2026/` records both per circuit; the code
+uses `lap_length_m.value` and treats `published_circuit_length_m` as a
+cross-check only.
 
 ---
 
@@ -137,12 +184,17 @@ does not.
 | What | Path | Size |
 |---|---|---|
 | The lake | `data/processed/telemetry_20m/` | ~1.1 GB for 2026, ~5.5 GB for all seasons |
-| Segments | `data/processed/segments/` | smaller |
+| Segments | `data/processed/segments/` | ~50 MB |
+| Segment maps | `config/geometry/*.yaml` | tiny, **but these go by git, not pendrive** |
 | Manifests | `run_manifest.json`, `lap_manifest.csv`, `rejected_laps.csv`, `quality_summary.csv` | a few MB |
 
 **Copy the manifests too, not just the Parquet.** They carry the rejection
 reasons and the build configuration, and without them the lake cannot be audited
 or reproduced.
+
+`config/geometry/*.yaml` is code, not data: commit it so the map that produced
+the segments is reviewable and the `boundary_hash` can be checked against the
+table.
 
 Code changes go through git as normal:
 
