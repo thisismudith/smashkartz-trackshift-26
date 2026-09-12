@@ -35,13 +35,19 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from simdata.paths import data_root
+from simdata.glb_surface import (Fit, TriangleIndex, bake_surface, load_surface,
+                                 registry_entry, surface_block)
+from simdata.paths import ROOT as REPO_ROOT, data_root
 from simdata.rawio import MIN_SAMPLES, LapTable, SentinelIndex, load_lap
 from simdata.track import (build_ring, corner_stations, grid, pick_geometry_laps,
                             pit_lane, pit_lane_path, reference_speed_profile,
                             timing_lines, width_estimate)
 
-SCHEMA_VERSION = 1
+# 2 adds the optional `surface` block: a real circuit model's drive surface baked onto
+# this ring, for the circuits that have one. The bump is unconditional because a reader
+# must be able to tell "this build could have carried a surface" from "this build predates
+# the field"; a circuit without one is otherwise byte-for-byte what version 1 emitted.
+SCHEMA_VERSION = 2
 
 # Sessions that may define the circuit's geometry. Practice is deliberately NOT here:
 # a Practice lap 1 is an out-lap, so admitting Practice would buy a geometry gain at the
