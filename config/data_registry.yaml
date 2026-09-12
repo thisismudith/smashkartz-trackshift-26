@@ -60,9 +60,9 @@ datasets:
   - name: driver_segment_baselines
     description: Per-driver median reference per track segment (section 14).
     source: segments
-    schema_version: null
-    partitioning: track
-    primary_key: [track, segment_id, driver]
+    schema_version: c2_segment_baselines_v1
+    partitioning: circuit / year_group
+    primary_key: [circuit, year_group, segment_id, driver]
     producer: scripts/features/build_baselines.py
     consumers: [M06, M08, M10]
     live_status: OFFLINE_ONLY
@@ -70,14 +70,16 @@ datasets:
     notes: >-
       Contract C2. Built from normal_race_model_eligible rows only. Rows below
       the declared minimum sample count carry baseline_valid false rather than
-      being dropped, so a thin baseline is visible instead of missing.
+      being dropped, so a thin baseline is visible instead of missing. The
+      core producer excludes British GP by default and keeps 2026 separate from
+      the 2022–2025 DRS era; status remains planned pending all-year C1 input.
 
   - name: team_segment_baselines
     description: Per-team median reference per track segment (section 14).
     source: segments
-    schema_version: null
-    partitioning: track
-    primary_key: [track, segment_id, team]
+    schema_version: c2_segment_baselines_v1
+    partitioning: circuit / year_group
+    primary_key: [circuit, year_group, segment_id, team]
     producer: scripts/features/build_baselines.py
     consumers: [M06, M08, M10]
     live_status: OFFLINE_ONLY
@@ -86,9 +88,9 @@ datasets:
   - name: field_segment_baselines
     description: Whole-field median reference per track segment (section 14).
     source: segments
-    schema_version: null
-    partitioning: track
-    primary_key: [track, segment_id]
+    schema_version: c2_segment_baselines_v1
+    partitioning: circuit / year_group
+    primary_key: [circuit, year_group, segment_id]
     producer: scripts/features/build_baselines.py
     consumers: [M06, M08, M10]
     live_status: OFFLINE_ONLY
