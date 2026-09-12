@@ -1938,3 +1938,84 @@ features:
     unit: null
     availability_scope: partial
     interaction_group: [availability]
+
+  # -------------------------------------------------------- M20 / CP-10
+  - name: overtake_state
+    definition: 2026 deterministic Overtake state from configured lines and observed OVERTAKE race-control messages; null outside 2026 or when a required line is unavailable.
+    unit: null
+    source: config/rules/2026 event configuration plus artifacts/race_control/2026_*.json
+    derivation: scripts/rules/apply_overtake_state.py using trackshift.rules.state_machine
+    allowed_sessions: [Sprint, Race]
+    supported_years: [2026]
+    live_safe: true
+    provenance: RULE
+    availability_scope: partial
+    source_gated: false
+    decision_checkpoint: [DETECTION, ACTIVATION]
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: rules-2026-common-v1
+    regulation_source: config/rules/2026/common.yaml and event YAML
+    interaction_group: [overtake, rule]
+    consuming_models: [M20, M21, M07, M10]
+
+  - name: overtake_eligible
+    definition: True only while the 2026 deterministic Overtake state is ACTIVE; null whenever overtake_state is unavailable or outside 2026.
+    unit: null
+    source: overtake_state
+    derivation: state == ACTIVE
+    allowed_sessions: [Sprint, Race]
+    supported_years: [2026]
+    live_safe: true
+    provenance: RULE
+    availability_scope: partial
+    source_gated: false
+    decision_checkpoint: [ACTIVATION]
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: rules-2026-common-v1
+    regulation_source: config/rules/2026/common.yaml and event YAML
+    interaction_group: [overtake, rule]
+    consuming_models: [M20, M21, M07, M10]
+
+  - name: historical_drs_eligible
+    definition: "Historical 2022-2025 DRS-era covariate: observed raw DRS-active indication gated by observed DRS ENABLED/DISABLED race control; never a 2026 Overtake field."
+    unit: null
+    source: historical raw drs_open plus observed DRS race-control messages
+    derivation: scripts/rules/apply_overtake_state.py
+    allowed_sessions: [Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025]
+    live_safe: true
+    provenance: DERIVED
+    availability_scope: partial
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: false
+    regulation_version: historical_drs_era
+    regulation_source: observed DRS channel and race-control messages
+    interaction_group: [historical_drs]
+    consuming_models: [M07, M10, M13]
+
+  - name: historical_drs_open
+    definition: Historical 2022-2025 observed raw DRS-open covariate gated by observed DRS ENABLED/DISABLED race control; null in 2026.
+    unit: null
+    source: historical raw drs_open plus observed DRS race-control messages
+    derivation: scripts/rules/apply_overtake_state.py
+    allowed_sessions: [Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025]
+    live_safe: true
+    provenance: DERIVED
+    availability_scope: partial
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: false
+    regulation_version: historical_drs_era
+    regulation_source: observed DRS channel and race-control messages
+    interaction_group: [historical_drs]
+    consuming_models: [M07, M10, M13]

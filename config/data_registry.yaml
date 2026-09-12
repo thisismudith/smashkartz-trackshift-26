@@ -219,3 +219,19 @@ datasets:
       RULE provenance. Every key carries source and verified. Values with
       verified false are usable for modelling but must surface as unverified
       wherever displayed, and block any claim of legality by construction.
+
+  - name: overtake_state
+    description: Rule-derived 2026 Overtake state overlay at 20 m resolution, with a C1 segment-entry overlay and historical DRS-era covariates only for 2022-2025.
+    source: telemetry_20m, segments, event rules, observed race-control messages
+    schema_version: m20_overtake_state_v1
+    partitioning: year / event / session
+    primary_key: [year, event, session, driver, lap, distance_m]
+    producer: scripts/rules/apply_overtake_state.py
+    consumers: [M20, M21, M07, M10]
+    live_status: MIXED
+    status: planned
+    notes: >-
+      2026 values are RULE-derived only from configured Detection/Activation
+      lines and observed OVERTAKE ENABLED/DISABLED messages. A missing line is
+      unavailable rather than guessed. Historical DRS fields are covariates,
+      never named or consumed as 2026 Overtake state.
