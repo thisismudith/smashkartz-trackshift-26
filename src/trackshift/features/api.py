@@ -1,7 +1,18 @@
-"""Public Owner A boundary for future pairing, battles, and pairwise features.
+"""Public C8 boundary for pairing and battle-episode extraction."""
 
-Implementations arrive in Rishabh CP-03 and CP-04. Consumers must import only
-this module once those contracts are defined.
-"""
+from .battles import BattleBuildResult, build_battle_episodes
+from .pairing import (
+    CLOSE_FOLLOWING_CRITERION,
+    CLOSE_FOLLOWING_MAX_DISTANCE_M,
+    assign_immediate_ahead_pairs,
+    build_session_roster,
+)
 
-__all__: list[str] = []
+__all__ = [
+    "BattleBuildResult",
+    "CLOSE_FOLLOWING_CRITERION",
+    "CLOSE_FOLLOWING_MAX_DISTANCE_M",
+    "assign_immediate_ahead_pairs",
+    "build_session_roster",
+    "build_battle_episodes",
+]

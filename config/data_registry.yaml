@@ -140,17 +140,19 @@ datasets:
 
   - name: battle_episodes
     description: Continuous attacker/defender fights, the unit of leakage-safe splitting (section 18).
-    source: telemetry_20m, segments
-    schema_version: null
+    source: segments with C7 race-context fields, telemetry_20m static session roster
+    schema_version: c8_battle_episodes_v2
     partitioning: year / event / session
     primary_key: [battle_id]
     producer: scripts/features/build_battles.py
     consumers: [M07, M08, M09, M29]
     live_status: MIXED
-    status: planned
+    status: built
     notes: >-
       Contract C8, owned by Rishabh. An episode never spans a race-control or
-      pit-state transition; bounded_by records why it ended.
+      pit-state transition; bounded_by records why it ended. The companion
+      pairing audit retains ineligible, unresolved-ahead, and non-close rows;
+      only normal-race, distance-close immediate-ahead rows enter battles.
 
   - name: overtake_opportunities
     description: >-

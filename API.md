@@ -360,7 +360,8 @@ Query: `year`, `event`, `session` (all optional). Source: M05 battle episodes (C
       "attacker_team": "Ferrari", "defender_team": "Mercedes",
       "start_lap": 29, "end_lap": 33,
       "duration_segments": 148, "duration_s": 312.4,
-      "minimum_gap_s": 0.41, "maximum_closing_rate_mps": 3.2,
+      "minimum_distance_gap_m": 61.5, "minimum_time_gap_s": null,
+      "maximum_closing_rate_mps": 3.2,
       "detection_opportunities": 4, "pass_attempted": true, "pass_completed": true,
       "bounded_by": "PASS",
       "normal_race_only": true,
@@ -370,7 +371,13 @@ Query: `year`, `event`, `session` (all optional). Source: M05 battle episodes (C
 }
 ```
 
-`bounded_by` ∈ `PASS | PAIR_SWITCH | RACE_CONTROL_TRANSITION | PIT_TRANSITION | SESSION_END` says why the episode ended (§12: a race-control or pit transition is a hard boundary; no battle continues across it). `normal_race_only` is always true for battles in the model set; SC/VSC battles exist in the lake for audit but are not listed here.
+`minimum_distance_gap_m` and `minimum_time_gap_s` are distinct quantities:
+the time field is `null` unless an observed/derived C1 time-gap source exists;
+the builder never converts a distance using speed. `bounded_by` ∈ `PASS |
+PAIR_SWITCH | RACE_CONTROL_TRANSITION | PIT_TRANSITION | SESSION_END` says why
+the episode ended (§12: a race-control or pit transition is a hard boundary; no
+battle continues across it). `normal_race_only` is always true for battles in
+the model set; SC/VSC battles exist in the lake for audit but are not listed here.
 
 ### 5.5 `GET /battles/{battle_id}/timeline`
 

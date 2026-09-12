@@ -295,7 +295,7 @@ Causal: uses only telemetry at or before the window end (§12). Never labelled O
 
 **C8. Battle episodes and pairwise rows** — `data/processed/battle_episodes/`, `data/processed/pairwise_segment_features/`
 
-Battle key `battle_id` (format `YYYY_EVT_Session_ATT_DEF_BattleNN`), `attacker`, `defender`, `start_lap`, `end_lap`, `duration_segments`, `duration_s`, `minimum_gap`, `maximum_closing_rate`, `detection_opportunities`, `pass_attempted`, `pass_completed`, `bounded_by` (why the episode ended: PASS / PAIR_SWITCH / RACE_CONTROL_TRANSITION / PIT_TRANSITION / SESSION_END). Pairwise rows retain time and distance gap, relative speed, relative acceleration, and gap rate as separate causal fields. An episode never spans a race-control or pit-state transition, and no rolling feature is computed across one. Chain P builds M07 by joining opportunities onto these.
+Battle key `battle_id` (format `YYYY_EVT_Session_ATT_DEF_BattleNN`), `attacker`, `defender`, `start_lap`, `end_lap`, `duration_segments`, `duration_s`, `minimum_distance_gap_m`, optional `minimum_time_gap_s`, `maximum_closing_rate_mps`, `detection_opportunities`, `pass_attempted`, `pass_completed`, `bounded_by` (why the episode ended: PASS / PAIR_SWITCH / RACE_CONTROL_TRANSITION / PIT_TRANSITION / SESSION_END). Pairwise rows retain time and distance gap, relative speed, relative acceleration, and gap rate as separate causal fields. An episode never spans a race-control or pit-state transition, and no rolling feature is computed across one. Chain P builds M07 by joining opportunities onto these.
 
 **C9. Splitter** — `src/trackshift/data/splits.py`
 
