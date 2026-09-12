@@ -347,3 +347,25 @@ def test_propagation_preserves_one_coherent_parameter_set_per_draw():
 
     draws = np.array([[1.0, 2.0], [3.0, 4.0]])
     assert propagate(draws, lambda p: p[0] + p[1]) == [3.0, 7.0]
+
+
+def test_ice_power_reported_is_what_was_used_not_the_maximum():
+    """CP-19 integrates this to get fuel burned.
+
+    Reporting the engine's maximum on a part-throttle segment would burn fuel
+    the car never used, and the fuel curve would run dry before the flag.
+    """
+    cruising = segment_power(120.0, 0.0, PARAMS, rho_kgm3=RHO)
+    assert 0 < cruising.p_ice_est_kw < PARAMS.p_ice_max_kw
+
+    flat_out = segment_power(330.0, 3.0, PARAMS, rho_kgm3=RHO)
+    assert flat_out.p_ice_est_kw == pytest.approx(PARAMS.p_ice_max_kw)
+
+    braking = segment_power(300.0, -30.0, PARAMS, rho_kgm3=RHO)
+    assert braking.p_ice_est_kw == 0.0, "a braking car is not burning fuel for propulsion"
+
+
+def test_deployment_is_the_shortfall_after_the_engine():
+    result = segment_power(330.0, 3.0, PARAMS, rho_kgm3=RHO)
+    demand = result.p_wheel_kw / PARAMS.eta_drivetrain
+    assert result.p_ice_est_kw + result.ers_deploy_power_est_kw == pytest.approx(demand)
