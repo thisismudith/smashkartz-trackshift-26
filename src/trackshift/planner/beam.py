@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from typing import Any, Callable, Mapping, Sequence
 
 from trackshift.rules import api as c3
-from trackshift.value.dp import DPConfig, DPResult, solve_dp
+from trackshift.value.dp import DPConfig, DPResult, required_state_inputs, solve_dp
 from trackshift.value.state import STUB_RESPONSE, c3_candidate_actions, c3_excluded_actions, reject_stubs_for_final
 
 PLANNER_SCHEMA_VERSION = "m24_beam_development_v1"
@@ -30,8 +30,11 @@ class RiskSpec:
 
 
 def _state_key(dp: DPResult, state: Mapping[str, Any], segment: Mapping[str, Any]) -> str | None:
-    energy = state.get("energy_mj", (state.get("energy") or {}).get("ers_soc_est_mj", 0.0))
-    gap = state.get("gap_s", (state.get("gap") or {}).get("time_gap_s", 0.0))
+    inputs = required_state_inputs(state)
+    if not inputs["ok"]:
+        return None
+    energy = inputs["energy"]
+    gap = inputs["gap"]
     def value(x: Any, default: float) -> float:
         if isinstance(x, Mapping): x = x.get("value", x.get("mean", default))
         try: return float(x)
@@ -39,7 +42,7 @@ def _state_key(dp: DPResult, state: Mapping[str, Any], segment: Mapping[str, Any
     energy, gap = value(energy, 0.0), value(gap, 0.0)
     energy = min(dp.metadata["grid"]["energy_mj"], key=lambda item: abs(item - energy))
     gap = min(dp.metadata["grid"]["gap_s"], key=lambda item: abs(item - gap))
-    eligible = int(bool(state.get("eligibility", state.get("overtake_eligible", False))))
+    eligible = int(inputs["eligibility"])
     return f"0:{energy:.3f}:{gap:.3f}:{eligible}"
 
 
@@ -59,6 +62,11 @@ def plan(
     action_fn = legal_actions_fn or c3.legal_actions
     if not segments:
         return {"schema_version": PLANNER_SCHEMA_VERSION, "status": "UNAVAILABLE", "provenance": "DERIVED", "reason": "no horizon segments"}
+    inputs = required_state_inputs(state)
+    if not inputs["ok"]:
+        return {"schema_version": PLANNER_SCHEMA_VERSION, "status": "UNAVAILABLE", "provenance": "DERIVED", "reason": inputs["reason"], "legal_actions": [], "excluded_actions": []}
+    if not isinstance(event_rules, Mapping) or not event_rules:
+        return {"schema_version": PLANNER_SCHEMA_VERSION, "status": "UNAVAILABLE", "provenance": "RULE", "reason": "C3 event rules unavailable", "legal_actions": [], "excluded_actions": []}
     try:
         action_set = action_fn(state, event_rules)
     except Exception as exc:
@@ -77,9 +85,12 @@ def plan(
         "decision": {"dominant_mechanism": "UNKNOWN", "primary_constraint": "UNKNOWN", "decision_stability": None},
         "model_versions": dict(dp_result.metadata.get("model_versions", {})),
         "rule_configuration_version": dp_result.metadata.get("rule_configuration_version"),
+        "input_provenance": dp_result.metadata.get("input_provenance", {}),
     }
     if final_mode and dp_result.status == STUB_RESPONSE:
         reject_stubs_for_final(response)
+    if final_mode:
+        raise ValueError("final mode rejects development-only abstract utility; calibrated C4/C5 time objective is required")
     if dp_result.value is None:
         return response
     key = _state_key(dp_result, state, segments[0])

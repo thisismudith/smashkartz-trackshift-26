@@ -7,6 +7,7 @@ from typing import Any, Callable, Mapping, Sequence
 
 from trackshift.rules import api as c3
 from trackshift.value.state import STUB_RESPONSE, c3_candidate_actions, reject_stubs_for_final
+from trackshift.value.dp import required_state_inputs
 from .rival_policies import POLICIES, choose_policy_action
 
 SIMULATOR_SCHEMA_VERSION = "m26_simulator_development_v1"
@@ -19,7 +20,10 @@ def _number(value: Any, default: float = 0.0) -> float:
 
 
 def _ahead(state: Mapping[str, Any]) -> bool:
-    return _number(state.get("gap_s", (state.get("gap") or {}).get("time_gap_s", 0.0))) < 0.0
+    inputs = required_state_inputs(state)
+    if not inputs["ok"]:
+        raise ValueError(inputs["reason"] or "gap unavailable")
+    return float(inputs["gap"]) < 0.0
 
 
 def simulate(
@@ -45,6 +49,13 @@ def simulate(
         raise ValueError("n_episodes must be positive")
     if not segments:
         return {"schema_version": SIMULATOR_SCHEMA_VERSION, "status": "UNAVAILABLE", "provenance": "SIMULATED", "reason": "no segments"}
+    inputs = required_state_inputs(initial_state)
+    if not inputs["ok"]:
+        return {"schema_version": SIMULATOR_SCHEMA_VERSION, "status": "UNAVAILABLE", "provenance": "SIMULATED", "reason": inputs["reason"], "summary": {"n_episodes": n_episodes, "seed": seed, "rule_violations": 0}, "episodes": []}
+    if not isinstance(event_rules, Mapping) or not event_rules:
+        return {"schema_version": SIMULATOR_SCHEMA_VERSION, "status": "UNAVAILABLE", "provenance": "RULE", "reason": "C3 event rules unavailable", "summary": {"n_episodes": n_episodes, "seed": seed, "rule_violations": 0}, "episodes": []}
+    if final_mode:
+        raise ValueError("final mode requires calibrated C4/C5 public callbacks; development simulator cannot certify them")
     if rival_policy not in POLICIES:
         raise ValueError(f"unsupported rival policy {rival_policy!r}")
     if transition_fn is None or pass_fn is None:
@@ -80,19 +91,20 @@ def simulate(
             if not any(dict(candidate) == dict(ours) for candidate in legal):
                 violations += 1
             next_state = dict(transition_fn(context, ours, segment, environment))
+            next_inputs = required_state_inputs(next_state)
+            if not next_inputs["ok"]:
+                return {"schema_version": SIMULATOR_SCHEMA_VERSION, "status": "UNAVAILABLE", "provenance": "SIMULATED", "reason": next_inputs["reason"], "summary": {"n_episodes": n_episodes, "seed": seed, "rule_violations": violations}, "episodes": episodes}
             next_state["time_noise_s"] = environment["time_noise_s"]
             outcome = dict(pass_fn(context, ours, rival, segment, environment))
             if outcome.get("passed") is True and pass_lap is None:
                 pass_lap = segment.get("lap")
             if outcome.get("repassed") is True:
                 repassed = True
-            trace.append({"segment_id": segment.get("segment_id"), "gap_s": next_state.get("gap_s"), "energy_mj": next_state.get("energy_mj"), "action": dict(ours), "rival_action": dict(rival), "provenance": "SIMULATED"})
+            trace.append({"segment_id": segment.get("segment_id"), "gap_s": next_inputs["gap"], "energy_mj": next_inputs["energy"], "action": dict(ours), "rival_action": dict(rival), "provenance": "SIMULATED"})
             state.update(next_state)
         episodes.append({"episode": episode_index, "outcome": "AHEAD" if _ahead(state) else "BEHIND", "pass_lap": pass_lap, "repassed": repassed, "trace": trace, "environment_seed": environment["seed"]})
     ahead_count = sum(item["outcome"] == "AHEAD" for item in episodes)
     result = {"schema_version": SIMULATOR_SCHEMA_VERSION, "status": "COMPLETE", "provenance": "SIMULATED", "summary": {"p_ahead_at_horizon": ahead_count / len(episodes), "mean_final_energy_mj": sum(_number(item["trace"][-1].get("energy_mj")) for item in episodes if item["trace"]) / max(sum(bool(item["trace"]) for item in episodes), 1), "rule_violations": violations, "n_episodes": n_episodes, "seed": seed}, "episodes": episodes, "assumptions": ["rival policy is explicit and fixed, not a learned agent", "energy and pass transitions are supplied model outputs and tagged SIMULATED"], "model_versions": {"c3": "PUBLIC", "c4": "PUBLIC_CALLBACK", "c5": "PUBLIC_CALLBACK"}}
-    if final_mode and result["summary"]["rule_violations"] != 0:
-        raise RuntimeError("simulator produced a rule violation")
     return result
 
 
