@@ -1980,6 +1980,26 @@ features:
     interaction_group: [overtake, rule]
     consuming_models: [M20, M21, M07, M10]
 
+  - name: overtake_unavailable_reason
+    definition: Explicit reason when a 2026 Overtake state is null because a required configured rule input is unavailable.
+    unit: null
+    source: event rule configuration and CP-10 state materialisation
+    derivation: scripts/rules/apply_overtake_state.py fail-closed unavailable path
+    allowed_sessions: [Sprint, Race]
+    supported_years: [2026]
+    live_safe: true
+    provenance: RULE
+    availability_scope: partial
+    source_gated: false
+    decision_checkpoint: [DETECTION, ACTIVATION]
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: rules-2026-common-v1
+    regulation_source: config/rules/2026/common.yaml and event YAML
+    interaction_group: [overtake, availability]
+    consuming_models: [M20, M21, M07, M10]
+
   - name: historical_drs_eligible
     definition: "Historical 2022-2025 DRS-era covariate: observed raw DRS-active indication gated by observed DRS ENABLED/DISABLED race control; never a 2026 Overtake field."
     unit: null

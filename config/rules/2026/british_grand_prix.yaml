@@ -45,20 +45,30 @@ geometry:
 
 overtake:
   enabled: true
+  tier_c_proxy_exclusions:
+    - candidate_m: [4100.0, 4900.0]
+      reason: "historical DRS candidate crosses CP-05 brake-onset boundary at 4880.0 m"
   # Race control states WHETHER Overtake is available, never WHERE. Line
   # positions are not derivable from rcm.json and stay UNVERIFIED until an
   # FIA event note is found, or PROXY_HISTORICAL_DRS from derive_drs_zones.py.
   zones:
     - zone: 1
-      name: "TODO"
+      name: "Historical DRS active-zone proxy 1"
       detection_line_m:
         value: null
         value_source: UNVERIFIED
-        source: "TODO: FIA event notes 2026 British Grand Prix"
+        source: "No Detection Line is supplied by artifacts/drs_zones/british_grand_prix.json: scripts/data/derive_drs_zones.py derives only historical DRS active-zone starts and ends, not Detection Lines. No authoritative historical Detection-Line source is configured."
+        note: "Retained null: no fixed upstream offset, speed, segment, or heuristic may manufacture a 2026 Detection Line."
       activation_line_m:
-        value: null
-        value_source: UNVERIFIED
-        source: "TODO: FIA event notes 2026 British Grand Prix"
+        value: 1300.0
+        value_source: PROXY_HISTORICAL_DRS
+        source: "2022, 2023, 2024 and 2025 British Grand Prix Race historical DRS; scripts/data/derive_drs_zones.py --raw-root data/raw --all; MIN_LAP_SHARE=0.08, MIN_ZONE_LENGTH_M=300 m, BIN_M=20 m, consensus >=2 seasons; artifacts/drs_zones/british_grand_prix.json consensus zone 1300-1800 m."
+        note: "Tier-C development-only proxy for historical DRS active-zone start; not a 2026 FIA Overtake fact and rejected by strict_mode."
+      zone_end_m:
+        value: 1800.0
+        value_source: PROXY_HISTORICAL_DRS
+        source: "2022, 2023, 2024 and 2025 British Grand Prix Race historical DRS; scripts/data/derive_drs_zones.py --raw-root data/raw --all; MIN_LAP_SHARE=0.08, MIN_ZONE_LENGTH_M=300 m, BIN_M=20 m, consensus >=2 seasons; artifacts/drs_zones/british_grand_prix.json consensus zone 1300-1800 m."
+        note: "Tier-C development-only proxy for historical DRS active-zone end; not a 2026 FIA Overtake fact and rejected by strict_mode."
 
 race_control:
   overtake_windows_source: "artifacts/race_control/2026_british_grand_prix.json"

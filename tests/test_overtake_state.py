@@ -119,6 +119,27 @@ def test_builder_accepts_only_fia_or_documented_tier_c_lines():
     assert builder._usable_lines(rules(tier="UNVERIFIED")) is False
 
 
+def test_valid_documented_proxy_config_has_normal_cp10_behaviour():
+    """A supplied, documented Tier-C Detection line behaves like any other
+    input; this is distinct from inventing one in the builder."""
+    builder = _builder_module()
+    out, info = builder.apply_2026(_rows(), rules(tier="PROXY_HISTORICAL_DRS"), [{"kind": "enabled", "session_time_s": 0.0}])
+    assert info["line_available"] is True
+    assert out["overtake_state"].tolist() == [ARMED, ACTIVE]
+
+
+def test_unsupported_detection_line_is_null_with_an_explicit_reason():
+    builder = _builder_module()
+    unsupported = rules()
+    unsupported["overtake"]["zones"][0]["detection_line_m"]["value"] = None
+    unsupported["overtake"]["zones"][0]["detection_line_m"]["value_source"] = "UNVERIFIED"
+    out, info = builder.apply_2026(_rows(), unsupported, [{"kind": "enabled", "session_time_s": 0.0}])
+    assert info["line_available"] is False
+    assert out["overtake_state"].isna().all()
+    assert out["overtake_eligible"].isna().all()
+    assert out["overtake_unavailable_reason"].notna().all()
+
+
 def _rows(year: str = "2026") -> pd.DataFrame:
     return pd.DataFrame({
         "year": [year, year], "event": ["Test Grand Prix"] * 2, "session": ["Race"] * 2,

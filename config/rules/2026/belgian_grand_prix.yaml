@@ -54,11 +54,13 @@ overtake:
       detection_line_m:
         value: null
         value_source: UNVERIFIED
-        source: "TODO: FIA event notes 2026 Belgian Grand Prix"
+        source: "No Detection Line is configured: artifacts/drs_zones/belgian_grand_prix.json has no cross-year historical DRS consensus zone, and scripts/data/derive_drs_zones.py never derives Detection Lines."
+        note: "Retained null: no heuristic Detection-Line fallback is permitted."
       activation_line_m:
         value: null
         value_source: UNVERIFIED
-        source: "TODO: FIA event notes 2026 Belgian Grand Prix"
+        source: "No Activation proxy accepted: artifacts/drs_zones/belgian_grand_prix.json has no cross-year historical DRS consensus zone; no FIA 2026 line source is configured."
+        note: "Retained null pending FIA line documentation."
 
 race_control:
   overtake_windows_source: "artifacts/race_control/2026_belgian_grand_prix.json"

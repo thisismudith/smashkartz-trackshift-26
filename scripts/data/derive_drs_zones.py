@@ -31,9 +31,11 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from statistics import median
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
@@ -163,6 +165,77 @@ def zones_from_occupancy(counts: dict[int, int], laps: int) -> list[dict]:
     return out
 
 
+def _round_to_grid(value: float, grid_m: float = BIN_M) -> float:
+    """Round a positive distance to the telemetry grid, with half-up ties.
+
+    Python's built-in :func:`round` uses banker's rounding. That would make a
+    median exactly between two 20 m bins depend on an implementation detail,
+    so make the tie rule explicit.
+    """
+    return math.floor(value / grid_m + 0.5) * grid_m
+
+
+def consolidate_candidates(per_year: dict[str, dict], grid_m: float = BIN_M) -> list[dict]:
+    """Consolidate overlapping historical active intervals into one proxy zone.
+
+    The old 100 m bucket tally could split one physical historical DRS zone
+    into two candidates when its boundaries drifted across a bucket edge. A
+    candidate is instead an overlap-connected component of the actual
+    per-season intervals. Its representative is the median start and median
+    end, each rounded half-up to the existing 20 m occupancy grid. No new
+    distance tolerance is introduced.
+
+    A component still requires support from at least two distinct historical
+    seasons. The exact source intervals are retained for an auditable Tier-C
+    configuration update.
+    """
+    intervals: list[dict] = []
+    for year, data in per_year.items():
+        for zone in data.get("zones", []):
+            intervals.append({
+                "year": str(year),
+                "start_m": float(zone["start_m"]),
+                "end_m": float(zone["end_m"]),
+                "peak_lap_share": zone.get("peak_lap_share"),
+            })
+
+    intervals.sort(key=lambda item: (item["start_m"], item["end_m"], item["year"]))
+    clusters: list[list[dict]] = []
+    cluster_end: float | None = None
+    for interval in intervals:
+        # Connected overlapping intervals represent the same active zone. An
+        # endpoint touching the next interval is also one contiguous zone.
+        if clusters and cluster_end is not None and interval["start_m"] <= cluster_end:
+            clusters[-1].append(interval)
+            cluster_end = max(cluster_end, interval["end_m"])
+        else:
+            clusters.append([interval])
+            cluster_end = interval["end_m"]
+
+    consensus: list[dict] = []
+    for cluster in clusters:
+        years = sorted({item["year"] for item in cluster})
+        if len(years) < 2:
+            continue
+        start_m = float(_round_to_grid(float(median(item["start_m"] for item in cluster)), grid_m))
+        end_m = float(_round_to_grid(float(median(item["end_m"] for item in cluster)), grid_m))
+        # Every input interval has already passed the calibrated minimum-length
+        # test. This guard preserves the basic interval invariant after grid
+        # rounding without inventing a replacement value.
+        if end_m <= start_m:
+            continue
+        consensus.append({
+            "start_m": start_m,
+            "end_m": end_m,
+            "length_m": end_m - start_m,
+            "seen_in_years": years,
+            "support_count": len(cluster),
+            "source_intervals": cluster,
+            "value_source": "PROXY_HISTORICAL_DRS",
+        })
+    return consensus
+
+
 def median_lap_length(session_dir: Path, sample: int = 12) -> float | None:
     """Circuit fingerprint: the median lap distance over a few laps.
 
@@ -238,28 +311,10 @@ def derive_event(raw_root: Path, event: str) -> dict:
             "zones": zones,
         }
 
-    # Keep zones that appear in more than one season: a single season could
-    # reflect one race's conditions rather than the circuit's layout.
-    tally: dict[tuple, list[str]] = {}
-    for year, data in per_year.items():
-        for zone in data["zones"]:
-            key = (round(zone["start_m"] / 100), round(zone["end_m"] / 100))
-            tally.setdefault(key, []).append(year)
-
-    consensus = []
-    for (start_100, end_100), years in sorted(tally.items()):
-        if len(years) < 2:
-            continue
-        consensus.append({
-            "start_m": start_100 * 100.0,
-            "end_m": end_100 * 100.0,
-            "length_m": (end_100 - start_100) * 100.0,
-            "seen_in_years": sorted(years),
-            "value_source": "PROXY_HISTORICAL_DRS",
-        })
+    consensus = consolidate_candidates(per_year)
 
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "generated_utc": datetime.now(timezone.utc).isoformat(),
         "event": slug(event),
         "event_display": event,
@@ -277,7 +332,11 @@ def derive_event(raw_root: Path, event: str) -> dict:
             "min_lap_share": MIN_LAP_SHARE,
             "min_zone_length_m": MIN_ZONE_LENGTH_M,
             "bin_m": BIN_M,
-            "consensus_rule": "a zone must appear in at least two seasons",
+            "consensus_rule": "an overlap-connected active-zone cluster must appear in at least two seasons",
+            "candidate_consolidation": (
+                "overlap-connected source intervals; median start/end; half-up "
+                "rounding to the 20 m occupancy grid"
+            ),
         },
         "reference_lap_length_m": round(reference, 1) if reference else None,
         "reference_session": reference_session,
