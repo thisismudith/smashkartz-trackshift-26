@@ -186,6 +186,10 @@ function makeStandingStart(overrides: Partial<StandingStartBlock> = {}): Standin
     },
     lap1: {
       excessSecondsVsCleanLap: leaf(9.008838, { n: 167 }),
+      // Consistent with the identity mean = intercept + slope * (meanGridSlot - 1):
+      // 9.008838 = 5.607099 + 0.345004 * (10.86 - 1).
+      excessSecondsAtPole: leaf(5.607099, { se: 1.28, n: 145 }),
+      meanGridSlot: leaf(10.86, { n: 145 }),
       excessSecondsPerGridSlot: leaf(0.345004, { se: 0.029919, n: 145 }),
       penaltySplit: {
         launchLossSeconds: leaf(2.239367, { n: 234 }),
@@ -320,8 +324,8 @@ describe("runRace standing start", () => {
       const composed = b.sesT - b.lST;
       const p = start.byDriver.get(driver)!;
       const expected = composed * (p.lap1DistanceM / 5000)
-        + launchTimeLossS(p.launch)
-        + start.lap1.remainderSeconds
+        + p.launchLossSeconds
+        + start.lap1.remainderAtPoleSeconds
         + (p.slot - 1) * start.lap1.appliedPerGridSlotSeconds;
       expect(a.sesT - a.lST).toBeCloseTo(expected, 6);
       // the whole +9.009 s excessSecondsVsCleanLap is NOT added on top of the two parts
@@ -335,7 +339,11 @@ describe("runRace standing start", () => {
     for (const e of entries) {
       const a = withStart.entries.find((x) => x.driver === e.driver)!.laps;
       const b = without.entries.find((x) => x.driver === e.driver)!.laps;
-      expect((a[0].sesT - a[0].lST) - (b[0].sesT - b[0].lST)).toBeGreaterThan(5);
+      // Pole's total is exactly excessSecondsAtPole (5.607 s in this fixture); later
+      // slots add the per-slot slope on top, net of the geometric part already produced
+      // by advancing over lap1DistanceM. 2 s is a safe floor for ANY slot -- comfortably
+      // above zero/negligible, comfortably below the fixture's smallest real total.
+      expect((a[0].sesT - a[0].lST) - (b[0].sesT - b[0].lST)).toBeGreaterThan(2);
       for (let lap = 1; lap < a.length; lap++) {
         // Laps 2+ are not identical, and should not be: a longer lap 1 moves the field
         // apart, and composeLapTime's dirty-air term reads that gap. What must not appear

@@ -67,6 +67,12 @@ LAUNCH_MIN_R2 = 0.90             # below this it is not a constant-acceleration 
 LAUNCH_SPEED_DROP_KPH = 3.0      # dip tolerated inside the rise before the window closes
 AT_REST_KPH = 1.0                # "stationary in the box" at the lap-1 time origin
 
+# A grid slot's own mean excess is only worth comparing against the fitted line when
+# enough starts filled that box. The back rows empty out (2026's slot 22 was occupied at
+# one start out of seven), so a slot below this is still counted in the all-slots figure
+# but is kept out of the headline residual, where a single car would otherwise dominate.
+SLOT_MIN_ROWS = 5
+
 # A car sitting in its box is within a metre of the centreline the feed snaps it to; a
 # pit-lane box or a sentinel coordinate is not. 8 m is well outside any grid box and well
 # inside the pit-lane offsets (Silverstone's pit lane sits 31-104 m off the centreline).
@@ -487,6 +493,82 @@ def fit_pitch(along_desc, pitch_hint_m: float = 8.0):
     }
 
 
+def grid_slope_fit(rows):
+    """Lap-1 excess down the grid: the within-session slope, the intercept AT POLE, and
+    the sample's own mean grid rank. Dicts in, numbers out -- no file access.
+
+    `rows` carry excessS, gridRank and cluster; one cluster is one race start. The design
+    is session fixed effects plus (gridRank - 1), so the slope is a WITHIN-session
+    comparison and cannot be contaminated by one circuit simply being slower than another.
+
+    A fixed-effects design has no single intercept -- it has one per session -- so the
+    pole value is recovered from the identity that holds inside ONE sample:
+
+        mean(excess) = (n-weighted mean session effect) + slope * (mean(gridRank) - 1)
+
+    which makes `intercept` the expected lap-1 excess of a SLOT-1 car at an average start.
+    `level` and `meanGridSlot` are the two means that identity is built from, and both are
+    over THESE rows only. Combining a level taken over a different row set with this slope
+    breaks the identity silently, which is the double count this function exists to stop.
+    """
+    rr = [r for r in rows
+          if r.get("gridRank") and np.isfinite(r.get("excessS", float("nan")))]
+    if len(rr) < 10:
+        return None
+    keys = sorted({r["cluster"] for r in rr})
+    cols = [np.array([1.0 if r["cluster"] == k else 0.0 for r in rr]) for k in keys]
+    cols.append(np.array([float(r["gridRank"] - 1) for r in rr]))
+    X = np.column_stack(cols)
+    y = np.array([r["excessS"] for r in rr], dtype=np.float64)
+    beta, se, _resid, r2 = _ols_hc1(X, y)
+    slope = float(beta[-1])
+    kbar = float(np.mean([float(r["gridRank"]) for r in rr]))
+    level = float(y.mean())
+    return {"slope": slope, "slopeSe": float(se[-1]),
+            "intercept": level - slope * (kbar - 1),
+            "level": level, "meanGridSlot": kbar,
+            "n": len(rr), "nClusters": len(keys), "r2": float(r2)}
+
+
+def delete_one_cluster_se(rows, statistic, min_clusters: int = 3):
+    """(delete-one-CLUSTER jackknife SE, number of clusters) for any statistic of `rows`.
+
+    The clusters are race starts. This is the honest SE for a quantity built from BOTH a
+    level and a slope: the two are fitted on the SAME starts, so their covariance is real,
+    and a delta method would have to assume a value for it. Dropping a whole start and
+    refitting carries that covariance without anyone having to name it. Returns a null SE
+    rather than a number when there are too few starts, or when any refit refuses.
+    """
+    keys = sorted({r["cluster"] for r in rows})
+    if len(keys) < min_clusters:
+        return None, len(keys)
+    vals = []
+    for k in keys:
+        v = statistic([r for r in rows if r["cluster"] != k])
+        if v is None or not np.isfinite(v):
+            return None, len(keys)
+        vals.append(float(v))
+    a = np.array(vals, dtype=np.float64)
+    n = a.size
+    return float(math.sqrt((n - 1) / n * float(np.sum((a - a.mean()) ** 2)))), len(keys)
+
+
+def geometric_seconds_per_slot(pitch_m: float, line_speed_mps: float) -> float:
+    """Lap-1 seconds that one grid slot of extra DISTANCE costs, by itself.
+
+    Slot k must drive (k - 1) x pitch metres further than pole to complete lap 1 (see
+    lap1_distance_m). Those metres are appended at the END of the lap, where the car is
+    doing line_speed, so they turn into time at that speed -- d(lap-1 time) / d(lap-1
+    distance) = 1 / v at the crossing. Not the lap AVERAGE speed, which is 20-30% lower
+    and would overstate the geometric share by the same factor.
+    """
+    if not pitch_m > 0:
+        raise ValueError("pitch_m must be positive")
+    if not line_speed_mps > 0:
+        raise ValueError("line_speed_mps must be positive")
+    return pitch_m / line_speed_mps
+
+
 def regression_to_mean(grid_rank, end_rank):
     """OLS of places gained on grid rank, centred so the intercept is the field mean.
 
@@ -531,7 +613,7 @@ def timing_line_point(session_dir: Path, drivers, max_drivers: int = 14):
     t = 0.000 for every car in every 2026 session, and their spread about the median is
     the line's own measurement scatter, which is reported rather than assumed away.
     """
-    pts = []
+    pts, speeds = [], []
     for drv in list(drivers)[:max_drivers]:
         lap = load_lap(session_dir, drv, 2)
         if lap is None or lap.n == 0:
@@ -543,10 +625,18 @@ def timing_line_point(session_dir: Path, drivers, max_drivers: int = 14):
         if lap.t[i] > LINE_MAX_T_S:
             continue
         pts.append((lap.x[i], lap.y[i]))
+        # The speed at that SAME sample is the speed the car was doing as it completed
+        # the lap before, which is the rate at which extra lap-1 METRES become lap-1
+        # seconds -- the geometric part of the per-slot penalty. Only "actually moving"
+        # is gated; nothing here thresholds the answer, and the location is taken as a
+        # median because a car may cross under a neutralisation or with damage.
+        if np.isfinite(lap.speed[i]) and lap.speed[i] > AT_REST_KPH:
+            speeds.append(float(lap.speed[i]))
     if len(pts) < LINE_MIN_POINTS:
         return None
     P = np.array(pts, dtype=np.float64)
-    return {"point": np.median(P, axis=0), "n": int(P.shape[0]), "points": P}
+    return {"point": np.median(P, axis=0), "n": int(P.shape[0]), "points": P,
+            "speedsKph": speeds}
 
 
 def session_start(event: str, session: str) -> dict:
@@ -655,6 +745,13 @@ def session_start(event: str, session: str) -> dict:
     line = timing_line_point(sdir, [o["driver"] for o in obs])
     anchor = anchor_se = None
     line_se = None
+    line_v = line_v_se = None
+    line_v_n = 0
+    if line is not None and line.get("speedsKph"):
+        med_v, _sigma_v, se_v = robust_location_scale(line["speedsKph"])
+        line_v = float(med_v) if np.isfinite(med_v) else None
+        line_v_se = float(se_v) if np.isfinite(se_v) and se_v > 0 else None
+        line_v_n = len(line["speedsKph"])
     if line is not None:
         line_along = float(line["point"] @ u)
         anchor = fit["poleAlong"] - line_along
@@ -686,6 +783,8 @@ def session_start(event: str, session: str) -> dict:
         "slots": [int(s) for s in fit["slots"]],
         "lineN": line["n"] if line else 0,
         "lineSeM": line_se,
+        # speed OBSERVED at the line at the end of lap 1, from the first sample of lap 2
+        "lineSpeedKph": line_v, "lineSpeedSeKph": line_v_se, "lineSpeedN": line_v_n,
     }
     return out
 
@@ -1064,7 +1163,87 @@ def _launch_block(standing: dict) -> dict:
     }
 
 
-def _lap1_block(starts: dict, launch_block: dict) -> dict:
+GEOMETRY_DEFINITION = (
+    "slotPitchMetres divided by the speed a car is actually doing when it crosses the "
+    "timing line at the END of lap 1. Slot k drives (k - 1) x pitch metres further than "
+    "pole on lap 1 (see lap1_distance_m), and those metres are appended where the car is "
+    "at line speed, so 1 / that speed -- NOT 1 / the lap average speed, which is 20-30% "
+    "lower -- is the rate at which they become seconds. The crossing speed is OBSERVED "
+    "from the first telemetry sample of lap 2, which sits on the line the car has just "
+    "crossed; the per-session location is a median over its cars"
+)
+
+
+def _slot_geometry_block(starts: dict, grid_block: dict, slope_rows: list):
+    """(block, seconds per slot, se) for the PURE GEOMETRY part of the lap-1 grid slope.
+
+    The seconds are None, with the reason stated, whenever the feed cannot support them.
+    Only sessions that actually contribute a green lap-1 row to the slope are pooled: a
+    session with no such row is reported for completeness and said to be excluded, rather
+    than quietly averaged into a figure it does not belong to.
+    """
+    pitch_leaf = (grid_block or {}).get("slotPitchMetres") or {}
+    pitch, pitch_se = pitch_leaf.get("value"), pitch_leaf.get("se")
+    block = {"provenance": "DERIVED", "source": source_tel(),
+             "definition": GEOMETRY_DEFINITION}
+    if not pitch:
+        block["summary"] = leaf(
+            None, provenance="DERIVED",
+            note="unavailable: no grid pitch was measured, so the extra distance a slot "
+                 "drives has no length and its time cost cannot be stated")
+        return block, None, None
+
+    clusters = {r["cluster"] for r in slope_rows}
+    per_track, pooled = {}, []
+    for (event, session), st in sorted(starts.items()):
+        grid = st.get("grid") or {}
+        v_kph, v_se_kph = grid.get("lineSpeedKph"), grid.get("lineSpeedSeKph")
+        v_n = int(grid.get("lineSpeedN") or 0)
+        if not v_kph or v_n < 1:
+            continue
+        g = geometric_seconds_per_slot(pitch, v_kph / 3.6)
+        rel = [pitch_se / pitch] if pitch_se else []
+        if v_se_kph:
+            rel.append(v_se_kph / v_kph)
+        g_se = g * math.sqrt(sum(x * x for x in rel)) if rel else None
+        in_slope = f"{event}|{session}" in clusters
+        per_track[_key(event, session)] = leaf(
+            g, g_se, n=v_n, provenance="DERIVED", source=source_tel(),
+            note=f"crossing speed {v_kph:.1f} kph over {v_n} cars"
+                 + ("" if in_slope else "; contributes no green lap-1 row, so it is "
+                                        "reported but NOT pooled below"))
+        if in_slope:
+            pooled.append(g)
+
+    if not pooled:
+        block["summary"] = leaf(
+            None, provenance="DERIVED",
+            note="unavailable: no session in the lap-1 slope sample has a measured "
+                 "timing-line crossing speed, so the geometric share cannot be separated")
+        block["perTrack"] = per_track
+        return block, None, None
+
+    med, _sigma, med_se = robust_location_scale(pooled)
+    across = float(med_se) if med_se is not None and np.isfinite(med_se) else 0.0
+    from_pitch = med * (pitch_se / pitch) if pitch_se else 0.0
+    se = float(math.hypot(across, from_pitch)) or None
+    lo, hi = float(min(pooled)), float(max(pooled))
+    every = [v["value"] for v in per_track.values() if v.get("value")]
+    block["summary"] = leaf(
+        med, se, n=len(pooled), provenance="DERIVED", source=source_tel(),
+        note=f"median over the {len(pooled)} race starts the lap-1 slope is fitted on, "
+             f"which is the only sample it may be subtracted from. It is a PER-CIRCUIT "
+             f"fact, not a constant: {lo:.3f}-{hi:.3f} s per slot over those starts, and "
+             f"{min(every):.3f}-{max(every):.3f} s (a factor of "
+             f"{max(every) / min(every):.2f}) over all {len(every)} sessions with a "
+             f"measured crossing speed. A caller holding ONE circuit should read perTrack "
+             f"rather than this median. The SE combines the spread across the pooled "
+             f"starts with the pitch's own SE")
+    block["perTrack"] = per_track
+    return block, float(med), se
+
+
+def _lap1_block(starts: dict, launch_block: dict, grid_block: dict | None = None) -> dict:
     obs = lap1_observations(starts)
     rows = obs["rows"]
     if not rows:
@@ -1078,16 +1257,83 @@ def _lap1_block(starts: dict, launch_block: dict) -> dict:
                      for c in sorted(set(clusters))}
 
     slope_rows = [r for r in rows if r["gridRank"]]
-    lap1_slope = None
-    if len(slope_rows) >= 10:
-        keys = sorted({r["cluster"] for r in slope_rows})
-        cols = [np.array([1.0 if r["cluster"] == k else 0.0 for r in slope_rows])
-                for k in keys]
-        cols.append(np.array([float(r["gridRank"] - 1) for r in slope_rows]))
-        X = np.column_stack(cols)
-        y = np.array([r["excessS"] for r in slope_rows])
-        beta, se, _resid, _r2 = _ols_hc1(X, y)
-        lap1_slope = (float(beta[-1]), float(se[-1]), len(slope_rows), len(keys))
+    slope_fit = grid_slope_fit(slope_rows)
+    lap1_slope = ((slope_fit["slope"], slope_fit["slopeSe"], slope_fit["n"],
+                   slope_fit["nClusters"]) if slope_fit else None)
+
+    # The intercept is a function of BOTH the level and the slope, fitted on the SAME
+    # race starts, so its uncertainty is neither the mean's SE nor the slope's. The
+    # delete-one-start jackknife refits the whole thing without each start in turn and
+    # therefore carries their covariance; the delta method with that covariance assumed
+    # zero is reported beside it in the note as a cross-check, never as the shipped SE.
+    pole_se, pole_k, delta_se = None, 0, float("nan")
+    kbar_se = kbar_lo = kbar_hi = None
+    if slope_fit:
+        pole_se, pole_k = delete_one_cluster_se(
+            slope_rows, lambda rr: (grid_slope_fit(rr) or {}).get("intercept"))
+        cl = [r["cluster"] for r in slope_rows]
+        _lm, level_se, _ln, _lk = cluster_mean([r["excessS"] for r in slope_rows], cl)
+        if np.isfinite(level_se):
+            delta_se = math.hypot(
+                level_se, (slope_fit["meanGridSlot"] - 1) * slope_fit["slopeSe"])
+        ranks = [float(r["gridRank"]) for r in slope_rows]
+        _kb, kbar_se_raw, _kn, _kk = cluster_mean(ranks, cl)
+        kbar_se = float(kbar_se_raw) if np.isfinite(kbar_se_raw) else None
+        kbar_lo, kbar_hi = min(ranks), max(ranks)
+
+    geometry_block, geom_s, geom_se = _slot_geometry_block(starts, grid_block or {},
+                                                           slope_rows)
+
+    # Does the straight line actually reproduce the feed? The fit is a line through 145
+    # correlated rows; what a caller will USE it for is "the excess at slot k", so the
+    # residual that matters is per slot, and it ships rather than being asserted.
+    quality = {"provenance": "DERIVED",
+               "note": "unavailable: no grid slope was fitted, so there is nothing to "
+                       "check it against"}
+    if slope_fit:
+        by_slot = {}
+        for r in slope_rows:
+            by_slot.setdefault(int(r["gridRank"]), []).append(float(r["excessS"]))
+        a, b = slope_fit["intercept"], slope_fit["slope"]
+        resid = {k: float(np.mean(v)) - (a + b * (k - 1)) for k, v in by_slot.items()}
+        dense = {k: v for k, v in by_slot.items() if len(v) >= SLOT_MIN_ROWS}
+        rd = np.array([resid[k] for k in dense], dtype=np.float64)
+        ra = np.array(list(resid.values()), dtype=np.float64)
+        within = [float(np.std(v, ddof=1)) for v in dense.values() if len(v) > 1]
+        thin = sorted(k for k in by_slot if len(by_slot[k]) < SLOT_MIN_ROWS)
+        rms = float(np.sqrt(np.mean(rd ** 2))) if rd.size else None
+        sd = float(np.median(within)) if within else None
+        rms_all = float(np.sqrt(np.mean(ra ** 2))) if ra.size else None
+        quality = {
+            "provenance": "DERIVED", "source": source_laps(),
+            "slotMeanResidualRmsSeconds": round(rms, 4) if rms is not None else None,
+            "slotMeanResidualMaxAbsSeconds": (round(float(np.abs(rd).max()), 4)
+                                              if rd.size else None),
+            "withinSlotSdSeconds": round(sd, 4) if sd is not None else None,
+            "nSlots": len(dense),
+            "nSlotsAll": len(by_slot),
+            "minRowsPerSlot": SLOT_MIN_ROWS,
+            "allSlotResidualRmsSeconds": (round(rms_all, 4) if rms_all is not None
+                                          else None),
+            "r2": round(slope_fit["r2"], 4),
+            "note": (f"the shipped line, excessSecondsAtPole + excessSecondsPerGridSlot "
+                     f"* (k - 1), against the MEASURED mean excess at each grid slot. "
+                     + (f"Over the {len(dense)} slots filled at {SLOT_MIN_ROWS} or more "
+                        f"starts the residual RMS is {rms:.3f} s"
+                        + (f", well inside the {sd:.3f} s SD of a single slot's own rows,"
+                           f" so the line is not hiding a curve" if sd else "")
+                        + ". " if rms is not None else
+                        f"NO slot is filled at {SLOT_MIN_ROWS} or more starts, so the "
+                        f"headline residual is null rather than a figure resting on one "
+                        f"car. ")
+                     + (f"Including the thin back of the grid (slots "
+                        f"{', '.join(str(k) for k in thin)}, fewer than {SLOT_MIN_ROWS} "
+                        f"rows each) the RMS is {rms_all:.3f} s -- those slots are "
+                        f"REPORTED, not dropped, and their misses are the sampling noise "
+                        f"of one or two cars, not evidence against the line"
+                        if thin and rms_all is not None else
+                        "Every slot carries enough rows to be counted in that figure")),
+        }
 
     pos_rows = obs["placeRows"]
     reg = regression_to_mean([r["gridRank"] for r in pos_rows],
@@ -1133,6 +1379,16 @@ def _lap1_block(starts: dict, launch_block: dict) -> dict:
                      "separate those three"),
             "provenance": "DERIVED",
         }
+        if slope_fit:
+            split["remainderSecondsAtPole"] = leaf(
+                slope_fit["intercept"] - loss, pole_se, n=slope_fit["n"],
+                provenance="DERIVED", source=source_laps(),
+                note="the same subtraction at grid slot 1 instead of at the field mean. "
+                     "A caller that launches cars from their own slot stations and then "
+                     "adds nonGeometricSecondsPerGridSlot per slot must start from THIS "
+                     "number: remainderSeconds above still has the whole grid's average "
+                     "grid-position penalty inside it, and adding a per-slot term to it "
+                     "charges that penalty a second time")
 
     return {
         "excessSecondsVsCleanLap": leaf(
@@ -1148,18 +1404,85 @@ def _lap1_block(starts: dict, launch_block: dict) -> dict:
                     "these is what the cluster-robust SE above is built from",
             "perSession": {c.replace("|", " "): round(v, 4)
                            for c, v in session_means.items()}},
+        "excessSecondsAtPole": (
+            dict(leaf(slope_fit["intercept"], pole_se, n=slope_fit["n"],
+                      provenance="DERIVED", source=source_laps(),
+                      note=f"the INTERCEPT of the lap-1 penalty: what a SLOT-1 car loses, "
+                           f"with no grid-position term inside it. This -- never "
+                           f"excessSecondsVsCleanLap, which is a MEAN over the whole grid "
+                           f"-- is the number to pair with a per-slot slope. Using that "
+                           f"mean as the intercept and then adding a slope per slot "
+                           f"charges every car a further "
+                           f"{ex_mean - slope_fit['intercept']:.3f} s it never lost. "
+                           f"Derived from the identity that holds inside ONE sample, "
+                           f"mean = intercept + slope * (meanGridSlot - 1), so it equals "
+                           f"the n-weighted mean of the fitted session effects. "
+                           f"levelSeconds below is that mean over the same "
+                           f"{slope_fit['n']} ranked green rows the slope is fitted on, "
+                           f"NOT the {ex_n}-row grand mean {ex_mean:.4f} s: substituting "
+                           f"the grand mean would move this intercept by "
+                           f"{ex_mean - slope_fit['level']:+.3f} s, because the identity "
+                           f"is only true within one row set. The SE is a "
+                           f"delete-one-race-start jackknife over {pole_k} starts -- the "
+                           f"level and the slope come from the SAME starts, so their "
+                           f"covariance is real, and refitting without each start in turn "
+                           f"carries it; the delta method with that covariance assumed "
+                           f"zero gives {delta_se:.3f} s for comparison"),
+                 levelSeconds=round(slope_fit["level"], 6),
+                 nRaceStarts=slope_fit["nClusters"],
+                 seMethod="delete-one-race-start jackknife")
+            if slope_fit else leaf(
+                None, provenance="DERIVED",
+                note="unavailable: too few ranked green rows to separate a level from a "
+                     "slope, so there is no intercept and none is invented")),
+        "meanGridSlot": (
+            leaf(slope_fit["meanGridSlot"], kbar_se, n=slope_fit["n"],
+                 provenance="DERIVED", source=source_laps(),
+                 note=f"the mean grid rank of the rows the slope and the intercept are "
+                      f"built from: the pivot the identity mean = intercept + slope * "
+                      f"(meanGridSlot - 1) turns on. It ships so that the intercept is "
+                      f"reconstructible and so that nobody re-derives it against a "
+                      f"different sample. Ranks {kbar_lo:.0f} to {kbar_hi:.0f} over "
+                      f"{slope_fit['nClusters']} race starts; the SE is the spread of the "
+                      f"per-start mean rank, not of the {slope_fit['n']} correlated rows")
+            if slope_fit else leaf(
+                None, provenance="DERIVED",
+                note="unavailable: no ranked green rows, so the sample has no mean rank")),
+        "gridSlopeFitQuality": quality,
         "excessSecondsPerGridSlot": (
             leaf(lap1_slope[0], lap1_slope[1], n=lap1_slope[2], provenance="DERIVED",
                  source=source_laps(),
                  note=f"within-session slope down the grid, {lap1_slope[3]} session fixed "
-                      f"effects. Part of it is pure GEOMETRY -- slot k drives "
-                      f"(k - 1) x pitch further on lap 1 -- and the rest is traffic. A "
-                      f"caller that advances cars from their own slot stations (as "
-                      f"launch_state does) already reproduces the geometric part, so it "
-                      f"must subtract pitch / lapAverageSpeed per slot from this figure "
-                      f"rather than add the whole of it twice")
+                      f"effects. This is the TOTAL: part of it is pure GEOMETRY -- slot k "
+                      f"drives (k - 1) x pitch further on lap 1 -- and the rest is "
+                      f"traffic. A caller that advances cars from their own slot stations "
+                      f"(as launch_state does) already reproduces the geometric part, so "
+                      f"it must NOT add this figure. That subtraction has already been "
+                      f"done here: read geometricSecondsPerGridSlot for the part the "
+                      f"geometry supplies and nonGeometricSecondsPerGridSlot for the part "
+                      f"it does not, and add the second of the two")
             if lap1_slope else leaf(None, provenance="DERIVED",
                                     note="unavailable: too few ranked green rows")),
+        "geometricSecondsPerGridSlot": geometry_block,
+        "nonGeometricSecondsPerGridSlot": (
+            leaf(lap1_slope[0] - geom_s, math.hypot(lap1_slope[1], geom_se or 0.0),
+                 n=lap1_slope[2], provenance="DERIVED", source=source_laps(),
+                 note=f"THE per-slot number to add when cars are advanced from their own "
+                      f"slot stations: excessSecondsPerGridSlot minus "
+                      f"geometricSecondsPerGridSlot, i.e. the traffic and first-corner "
+                      f"part the geometry does not already produce. Measured, geometry is "
+                      f"{geom_s:.3f} s of the {lap1_slope[0]:.3f} s total "
+                      f"({100.0 * geom_s / lap1_slope[0]:.0f}%), so a caller that adds the "
+                      f"whole slope on top of its own slot stations charges each slot "
+                      f"{geom_s:.3f} s twice. The two terms are measured from different "
+                      f"channels -- lap times and the speed trace -- and are treated as "
+                      f"independent in this SE")
+            if (lap1_slope and geom_s is not None) else leaf(
+                None, provenance="DERIVED",
+                note="unavailable: " + ("no grid slope was fitted" if not lap1_slope else
+                                        "the geometric share could not be measured, so "
+                                        "the non-geometric remainder cannot be stated "
+                                        "and is not guessed"))),
         "penaltySplit": split,
         "excessSampleSpread": {
             "sd": round(float(np.std(ex, ddof=1)), 4),
@@ -1215,12 +1538,15 @@ def fit_standing_start(sessions=None) -> dict:
     refusals = {_key(e, s): v["refusals"] for (e, s), v in starts.items() if v["refusals"]}
 
     launch_block = _launch_block(standing)
+    grid_block = _grid_block(with_grid) if with_grid else {
+        "provenance": "DERIVED",
+        "note": "unavailable: no session in the feed has a usable stationary grid"}
     return {
-        "grid": _grid_block(with_grid) if with_grid else {
-            "provenance": "DERIVED",
-            "note": "unavailable: no session in the feed has a usable stationary grid"},
+        "grid": grid_block,
         "launch": launch_block,
-        "lap1": _lap1_block(starts, launch_block),
+        # the lap-1 block needs the measured pitch to separate the geometric part of the
+        # per-slot penalty from the traffic part, so the grid is built first and passed in
+        "lap1": _lap1_block(starts, launch_block, grid_block),
         "coverage": {
             "sessionsScanned": len(starts),
             "standingStartsInFeed": len(standing),

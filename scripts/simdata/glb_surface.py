@@ -85,6 +85,14 @@ REGISTRY_PATH = REPO_ROOT / "config" / "circuits.yaml"
 # The quality gate. Every profile must report these two numbers, and a bake below
 # either threshold is NOT shipped -- this is what stops a bad alignment shipping
 # floating cars. Do not loosen them to make a circuit pass.
+# Road-edge walk. Signed, because the ring is the RACING LINE and not the road centre:
+# measured at Silverstone the road centre runs -10.00 m to +9.75 m from the ring, and at
+# the grid the asphalt ends 1.75 m to the LEFT while running 17.5 m to the RIGHT. A
+# single symmetric half-width cannot describe that, which is why the grid was laid out
+# symmetrically about the ring and half the field ended up on the grass.
+EDGE_STEP_M = 0.5
+EDGE_MAX_M = 40.0
+
 GATE_MIN_COVERAGE = 0.99
 GATE_MAX_RESIDUAL_STD_M = 0.15
 
@@ -1184,7 +1192,9 @@ class SurfaceBake:
     camber_base_m: np.ndarray      # (n,) half-width the camber probe actually used
     valid: np.ndarray              # (n,) bool
     camber_valid: np.ndarray       # (n,) bool
-    residual_m: np.ndarray         # (n,) surface z - ring z, NaN if invalid
+    residual_m: np.ndarray
+    edge_left_m: np.ndarray
+    edge_right_m: np.ndarray         # (n,) surface z - ring z, NaN if invalid
     fit: Fit
     coverage: float
     road_coverage: float           # stations on a NAME-ACCEPTED surface, a stricter read
@@ -1326,6 +1336,35 @@ def bake_surface(index: TriangleIndex, ring: Ring, fit: Fit, *,
     slope = np.arctan(smooth_circular(dz_ds, smooth_window_m, ring.ds))
     slope[~centre.valid] = np.nan
 
+    # SIGNED road extent: how far the drivable surface reaches either side of the ring.
+    # Walked outward in EDGE_STEP_M steps and stopped at the first step that is not
+    # drivable, so the result is the CONTIGUOUS road under the car -- not the nearest
+    # patch of asphalt, which at a circuit with asphalt run-off would jump the kerb and
+    # report the run-off as road. Both sides are reported separately and either may be
+    # null: a station where the walk cannot even take its first step has no measured
+    # edge on that side, which is a fact worth keeping rather than a zero.
+    edge_left = np.full(n, np.nan)
+    edge_right = np.full(n, np.nan)
+    live_l = centre.valid.copy()
+    live_r = centre.valid.copy()
+    d = EDGE_STEP_M
+    while d <= EDGE_MAX_M and (live_l.any() or live_r.any()):
+        if live_l.any():
+            lx, ly = ring.x + d * ring.nx, ring.y + d * ring.ny
+            lwx, _, lwz = fit.to_world(lx, ly, ring.z)
+            hit = sample_with_hysteresis(index, lwx, lwz, wy_expected)
+            adv = live_l & hit.valid
+            edge_left[adv] = d
+            live_l &= adv
+        if live_r.any():
+            rx, ry = ring.x - d * ring.nx, ring.y - d * ring.ny
+            rwx, _, rwz = fit.to_world(rx, ry, ring.z)
+            hit = sample_with_hysteresis(index, rwx, rwz, wy_expected)
+            adv = live_r & hit.valid
+            edge_right[adv] = d
+            live_r &= adv
+        d += EDGE_STEP_M
+
     labels: dict[str, int] = {}
     for p in np.unique(centre.prim[centre.valid]):
         labels[index.surface.primitives[int(p)].label] = int((centre.prim == p).sum())
@@ -1340,7 +1379,8 @@ def bake_surface(index: TriangleIndex, ring: Ring, fit: Fit, *,
 
     return SurfaceBake(z_m=z_m, slope_rad=slope, camber_rad=camber,
                        camber_base_m=camber_base, valid=centre.valid,
-                       camber_valid=camber_valid, residual_m=residual, fit=fit,
+                       camber_valid=camber_valid, residual_m=residual,
+                       edge_left_m=edge_left, edge_right_m=edge_right, fit=fit,
                        coverage=coverage, road_coverage=road_coverage,
                        residual_std_m=resid_std,
                        residual_max_m=resid_max,
@@ -1368,6 +1408,13 @@ def surface_block(bake: SurfaceBake, profile: str) -> dict:
         "slopePermille": q(np.tan(bake.slope_rad), 1000),
         "camberPermille": q(np.tan(bake.camber_rad), 1000),
         "validMask": [int(v) for v in bake.valid],
+        # SIGNED road extent, centimetres, measured outward from the ring along its own
+        # left normal. null on a side the walk could not take a single step on. These
+        # are NOT a half-width: left and right differ by up to 20 m at Silverstone,
+        # because the ring is the racing line, so a consumer placing anything by width
+        # must use both and must not average them.
+        "edgeLeftCm": q(bake.edge_left_m, 100),
+        "edgeRightCm": q(bake.edge_right_m, 100),
         "residual": {"stdM": bake.residual_std_m, "maxM": bake.residual_max_m},
         "coverage": bake.coverage,
         "roadCoverage": bake.road_coverage,

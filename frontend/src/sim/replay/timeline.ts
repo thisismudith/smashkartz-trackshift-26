@@ -72,7 +72,9 @@ import type {
 } from "../contract/types";
 import { type DecodedLap, decodeLap, sampleLap } from "../data/codec";
 import type { RawDriverEntry, RawLapEntry, RawSessionManifest } from "../data/manifest";
-import { halfWidthAt, lapPositionFrame, trackPointAt } from "../data/manifest";
+import {
+  gridSlotsOf, halfWidthAt, lapPositionFrame, measuredLateralRoomM, trackPointAt,
+} from "../data/manifest";
 // The two-column grid stagger and the parked queue are PRESENTATION placements, so they
 // legitimately take the presentation layer's car width -- the same 2.0 m the renderer
 // actually draws. Nothing else in this file depends on the renderer.
@@ -206,17 +208,21 @@ function lapDistanceFraction(
 }
 
 /**
- * Where a two-column placement puts its columns, as a fraction of the road's own
- * MEASURED half-width: each column's centre sits midway between the racing line and the
- * edge of the tarmac, so the two columns are separated by one half-width.
+ * Where a two-column placement puts its columns, as a fraction of the half-width of the
+ * road it is being drawn on: each column's centre sits midway between the ring and the
+ * edge, so the two columns are separated by one half-width.
  *
- * Not a chosen distance. The feed carries no lateral at all on the grid (audit:
- * observedLateralStd 0.07 m -- every car snapped to the centreline), so the stagger is a
- * labelled RULE placement, and the only honest thing to scale it by is the width the
- * track model actually measured at that station. Measured over the 13 built track
- * models, half-width at the grid slots runs 6.02-7.50 m, so the columns land at
- * +/-3.01..3.75 m and are 6.02-7.50 m apart -- against the flat +/-1.8 m (3.6 m apart)
- * this replaced, which read as a single file on screen.
+ * Not a chosen distance, but NOT a measured one either -- the fraction is applied to
+ * whatever half-width the circuit's drawn road has, and on the 12 procedural circuits
+ * that half-width is itself a RULE scale (see measuredLateralRoomM). The feed carries
+ * no lateral at all on the grid (audit: observedLateralStd 0.07 m -- every car snapped
+ * to the centreline), so the whole stagger is a labelled RULE placement.
+ *
+ * On the ribbon circuits, half-width at the grid slots runs 6.02-7.50 m, so the columns
+ * land at +/-3.01..3.75 m and are 6.02-7.50 m apart -- against the flat +/-1.8 m
+ * (3.6 m apart) this replaced, which read as a single file on screen. On a circuit
+ * drawn from a real model this fraction has nothing measured to multiply and the
+ * columns collapse; that is the honest answer, not a regression. See columnLateral.
  */
 const GRID_COLUMN_FRACTION = 0.5;
 
@@ -226,20 +232,54 @@ const GRID_COLUMN_FRACTION = 0.5;
 const GRID_LATERAL_FALLBACK_M = 1.8;
 
 /**
- * Signed lateral offset for `slot` of a two-column placement at `stationM`, metres.
- * Even slots sit on one side, odd on the other, as a real starting grid does.
+ * Signed lateral offset for a two-column placement at `stationM`, metres, on the side
+ * `sign` (-1 or +1). Even slots sit on one side, odd on the other, as a real starting
+ * grid does.
  *
  * Clamped so the car always FITS: the outer edge of a CAR_RENDER_WIDTH_M car may not
- * pass the measured edge of the road. On a narrow road that pulls the columns in, and on
- * a road narrower than a car it collapses to a single file (0) rather than drawing cars
- * off the tarmac.
+ * pass the edge of the road. On a narrow road that pulls the columns in, and on a road
+ * narrower than a car it collapses to a single file (0) rather than drawing cars off
+ * the tarmac.
+ *
+ * WHICH ROAD IS BEING FITTED IS THE WHOLE POINT (see measuredLateralRoomM):
+ *
+ *  - drawn as the procedural ribbon (12 of the 13 shipped circuits): the ribbon IS
+ *    `halfWidthAt`, so fitting the columns inside it puts them on the road the viewer
+ *    is looking at. Unchanged.
+ *  - drawn from a real circuit model (british-grand-prix today): the ribbon is not what
+ *    is on screen, and `halfWidthAt` is a RULE scale that the artifact itself says is
+ *    not a measurement of track width. The bake measures ONE point per station -- the
+ *    ring -- so zero lateral road is measured and none may be claimed.
+ *
+ * Measured, before this rule existed, at the 2026 British GP: the 21 grid slots were
+ * placed at +/-3.17..3.52 m while the shipped GLB's asphalt at the front of the grid
+ * ends 1.75-2.00 m to the LEFT of the ring (and 15.0-17.5 m to the right, because the
+ * ring is the racing line out of Club, 6.5 m off the road centre). Ten of the 21 cars
+ * therefore stood 1.2-1.8 m out on the grass, and the eleven that did not were jammed
+ * against the left edge -- the field "strung out parallel to the road rather than on
+ * it" that the screenshot shows.
  */
-function columnLateral(track: TrackModel, stationM: number, slot: number): number {
-  const sign = slot % 2 === 0 ? -1 : 1;
-  const half = halfWidthAt(track, stationM);
-  if (!Number.isFinite(half) || half <= 0) return sign * GRID_LATERAL_FALLBACK_M;
+function columnLateral(
+  track: TrackModel, stationM: number, sign: number,
+): number {
+  const measured = measuredLateralRoomM(track);
+  const half = measured !== null ? measured : halfWidthAt(track, stationM);
+  // Only the ribbon path has a degenerate case: a model with no usable half-width at
+  // all. A MEASURED zero is not degenerate, it is the answer.
+  if (measured === null && (!Number.isFinite(half) || half <= 0)) {
+    return sign * GRID_LATERAL_FALLBACK_M;
+  }
   const fits = half - CAR_RENDER_WIDTH_M / 2;
-  return sign * Math.max(0, Math.min(half * GRID_COLUMN_FRACTION, fits));
+  const offset = Math.max(0, Math.min(half * GRID_COLUMN_FRACTION, fits));
+  // `sign * 0` is -0 for sign -1, which is a different value from 0 under Object.is and
+  // would publish two distinct "on the centreline" laterals. There is one centreline.
+  return offset === 0 ? 0 : sign * offset;
+}
+
+/** Alternating sides, the fallback rule for a placement the producer never published
+ * (the parked queue, and any driver missing from `grid.slots`). */
+function paritySign(slot: number): number {
+  return slot % 2 === 0 ? -1 : 1;
 }
 
 
@@ -316,6 +356,10 @@ export class ReplayTimeline implements RaceTimeline {
   private retiredSet = new Set<string>();
   /** Drivers whose lap 1 carries a pit-exit time: they really did start from the lane. */
   private pitStarters = new Set<string>();
+  /** driver -> the side of the ring the PRODUCER published for that driver's grid slot
+   * (grid.slots[].lateralSign). Absent for a driver the producer did not place, and for
+   * a model that carries no slots at all, in which case `paritySign` decides. */
+  private slotSign = new Map<string, number>();
 
   constructor(manifest: RawSessionManifest, track: TrackModel, bin: ArrayBuffer) {
     this.runId = `obs:${manifest.trackSlug}/${manifest.session.toLowerCase()}`;
@@ -389,6 +433,12 @@ export class ReplayTimeline implements RaceTimeline {
 
     this.gridOrder.forEach((d, i) => this.gridIndex.set(d, i));
     this.gridUnplaced = new Set(this.track.grid.unplaced ?? []);
+    // The side of the ring each slot sits on is the PRODUCER's to state, and it states
+    // it per driver. Re-deriving it from slot parity here put every one of the 232
+    // published slots on the opposite side from the placement the artifact carries.
+    for (const slot of gridSlotsOf(this.track)) {
+      if (slot.driver !== null) this.slotSign.set(slot.driver, slot.lateralSign);
+    }
 
     finishes.sort((a, b) => a.t - b.t);
     this.finishOrder = finishes.map((f) => f.driver);
@@ -421,7 +471,9 @@ export class ReplayTimeline implements RaceTimeline {
    * beside the queue they are supposed to be sitting in. */
   private parkedLateral(driver: string): number {
     const idx = this.parkIndex.get(driver) ?? 0;
-    return columnLateral(this.track, this.parkedStation(driver), idx);
+    // The parked queue is this file's own presentation placement, not one the producer
+    // publishes, so its side comes from the fallback rule rather than grid.slots.
+    return columnLateral(this.track, this.parkedStation(driver), paritySign(idx));
   }
 
   /** The last real sample of a lap: used for the brief, effectively-instantaneous
@@ -501,13 +553,18 @@ export class ReplayTimeline implements RaceTimeline {
       // A real starting grid is two staggered columns, not a single file on the
       // centreline. The audit found the raw data gives a usable grid ORDER and ~8 m
       // spacing but no lateral at all (every car is snapped to one line), so the
-      // left/right stagger is a labelled RULE-style presentation choice, scaled by the
-      // road's own measured half-width at that slot.
+      // left/right stagger is a labelled RULE-style presentation choice: the SIDE is
+      // the producer's (grid.slots[].lateralSign), and the distance is whatever the
+      // drawn road has been measured to support at that slot -- which on a circuit
+      // drawn from a real model is nothing at all. See columnLateral.
       return {
         lapsDone: 0, lapProgress: 0, rankProgress: slotFraction(safeSlot),
         stationM: slotStation,
         lapEntry: first ?? null, kind: "grid",
-        lateralOverride: columnLateral(this.track, slotStation, safeSlot),
+        lateralOverride: columnLateral(
+          this.track, slotStation,
+          this.slotSign.get(dl.entry.driver) ?? paritySign(safeSlot),
+        ),
         posProvenance: "RULE", officialPos: null, positionFrame: null,
       };
     }
@@ -585,7 +642,10 @@ export class ReplayTimeline implements RaceTimeline {
         lapsDone: 0, lapProgress: 0, rankProgress: slotFraction(stationarySlot),
         stationM: slotStation,
         lapEntry: lap, kind: "grid",
-        lateralOverride: columnLateral(this.track, slotStation, stationarySlot),
+        lateralOverride: columnLateral(
+          this.track, slotStation,
+          this.slotSign.get(dl.entry.driver) ?? paritySign(stationarySlot),
+        ),
         posProvenance: "RULE", positionFrame: null,
         // lap 1 is in progress and nothing has been classified yet
         officialPos: lastCompletedOfficial(dl.laps, idx, t),

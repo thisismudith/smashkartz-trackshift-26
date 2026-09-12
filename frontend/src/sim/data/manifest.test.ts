@@ -3,8 +3,9 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it, vi } from "vitest";
 import type { TrackModel } from "../contract/types";
 import {
-  halfWidthAt, lapPositionDropped, lapPositionFrame, lapPositionsMeasured,
-  parseCorners, parseTrackModel, ringDsMetres, surfaceAt, trackPointAt,
+  gridSlotsOf, halfWidthAt, lapPositionDropped, lapPositionFrame, lapPositionsMeasured,
+  measuredLateralRoomM, parseCorners, parseGridSlots, parseTrackModel, ringDsMetres,
+  surfaceAt, trackPointAt,
   type RawSessionManifest, type RawTrackModel, type RawTrackSurface,
 } from "./manifest";
 
@@ -670,6 +671,110 @@ describe.skipIf(shippedWithSurface.length === 0)("a shipped baked surface", () =
       expect(surface.assetSha256, slug).toMatch(/^[0-9a-f]{64}$/);
       // the URL's hash is the first 10 of the published bytes' sha256
       expect(surface.assetUrl!.split(".")[1], slug).toBe(surface.assetSha256!.slice(0, 10));
+    }
+  });
+});
+
+// ===========================================================================
+// The grid slots the producer publishes, and the road a placement may claim
+// ===========================================================================
+
+function gridRaw(slots: RawTrackModel["grid"]["slots"]): RawTrackModel {
+  return makeRaw({ grid: { order: ["AAA", "BBB", "CCC"], pitchMetres: 8, slots } });
+}
+
+describe("grid slots: the side of the ring is the producer's to state", () => {
+  it("parses the published station, driver and lateralSign", () => {
+    const slots = parseGridSlots(gridRaw([
+      { position: 1, driver: "AAA", station: 5817.741073021581, lateralSign: 1 },
+      { position: 2, driver: "BBB", station: 5809.741073021581, lateralSign: -1 },
+    ]));
+    expect(slots).toHaveLength(2);
+    expect(slots[0]).toEqual({
+      position: 1, driver: "AAA", station: 5817.741073021581, lateralSign: 1,
+    });
+    expect(slots[1].lateralSign).toBe(-1);
+  });
+
+  it("drops a slot whose side or station is not stated, rather than defaulting it", () => {
+    // A sign of 0 is not "the middle": it is a slot this file knows nothing about, and
+    // a caller that sees no slot falls back to its own rule instead of drawing a car
+    // on a side the producer never named. Absence is null (AGENTS.md 42.5).
+    const slots = parseGridSlots(gridRaw([
+      { position: 1, driver: "AAA", station: 10, lateralSign: 0 },
+      { position: 2, driver: "BBB", station: Number.NaN, lateralSign: 1 },
+      { position: 3, driver: null, station: 30, lateralSign: -1 },
+    ]));
+    expect(slots.map((s) => s.position)).toEqual([3]);
+    expect(slots[0].driver).toBeNull();
+  });
+
+  it("reports no slots at all rather than inventing them", () => {
+    expect(parseGridSlots(gridRaw(null))).toEqual([]);
+    expect(parseGridSlots(makeRaw())).toEqual([]);
+    // and a model that never came through parseTrackModel (a fixture, the generated
+    // engine) answers the same way through the accessor
+    expect(gridSlotsOf({ } as unknown as TrackModel)).toEqual([]);
+  });
+
+  it("carries the slots through parseTrackModel", () => {
+    const model = parseTrackModel(gridRaw([
+      { position: 1, driver: "AAA", station: 1, lateralSign: -1 },
+    ]));
+    expect(model.gridSlots).toHaveLength(1);
+    expect(gridSlotsOf(model)[0].lateralSign).toBe(-1);
+  });
+});
+
+describe.skipIf(!shipped)("grid slots on every shipped artifact", () => {
+  it("publishes a +-1 side per slot, and a station the pitch derivation reproduces", () => {
+    const lines: string[] = [];
+    let slots = 0, worstStationErrM = 0;
+    for (const { slug, raw } of parseableModels()) {
+      const published = parseGridSlots(raw);
+      const L = raw.ring.lengthMetres;
+      const pitch = raw.grid.pitchMetres;
+      let worst = 0;
+      for (const slot of published) {
+        slots++;
+        expect(Math.abs(slot.lateralSign), `${slug} P${slot.position} sign`).toBe(1);
+        // The frontend derives a slot station from the pitch alone. That derivation is
+        // sound -- this pins it against the producer's own number on every shipped
+        // slot, which is why only the SIDE had to be taken from grid.slots.
+        const derived = (((slot.position) * -pitch) % L + L) % L;
+        let d = Math.abs(derived - ((slot.station % L) + L) % L);
+        if (d > L / 2) d = L - d;
+        worst = Math.max(worst, d);
+      }
+      worstStationErrM = Math.max(worstStationErrM, worst);
+      lines.push(`${slug}: ${published.length} slots, worst station error ${worst.toFixed(4)} m`);
+    }
+    console.log(`published grid slots (${slots} total):\n  ${lines.join("\n  ")}`);
+    expect(slots).toBeGreaterThan(200);
+    expect(worstStationErrM).toBeLessThan(0.01);
+  });
+});
+
+describe("measuredLateralRoomM: what the artifact has measured either side of the ring", () => {
+  it("answers null on a circuit drawn as the procedural ribbon", () => {
+    // Not 0 and not the RULE half-width: the question does not arise, because the road
+    // the viewer sees IS the ribbon and halfWidthAt describes it exactly.
+    const model = parseTrackModel(makeRaw());
+    expect(model.surface).toBeNull();
+    expect(measuredLateralRoomM(model)).toBeNull();
+  });
+
+  it("answers 0 once a real model is drawn, because the bake probes only the ring", () => {
+    const model = parseTrackModel(makeRaw({ surface: makeSurfaceRaw() }));
+    expect(model.surface).not.toBeNull();
+    expect(measuredLateralRoomM(model)).toBe(0);
+  });
+
+  it("says the same thing about the one shipped circuit that has a real model", () => {
+    for (const { slug, raw } of parseableModels()) {
+      const model = parseTrackModel(raw);
+      const room = measuredLateralRoomM(model);
+      expect(room, slug).toBe(raw.surface ? 0 : null);
     }
   });
 });

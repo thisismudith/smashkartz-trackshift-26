@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import type { TrackModel } from "../contract/types";
 import { halfWidthAt, parseTrackModel, type RawTrackModel } from "../data/manifest";
 import { buildF1CarGeometry } from "./carGeometry";
-import { carInstanceY, CAR_GROUND_CLEARANCE_M } from "./presentation";
+import { carInstanceY, CAR_GROUND_CLEARANCE_M, CAR_VISUAL_SCALE } from "./presentation";
 import {
   applyShadowPriceOverlay, buildPitLaneMesh, buildTrackMesh, carOrientation, fromRenderFrame,
   PIT_DRAPE_MAX_M, PIT_LANE_WIDTH_M, PIT_SURFACE_DEPTH_M, PIT_TAPER_FRACTION,
@@ -168,13 +168,21 @@ describe("car ride height", () => {
     const geom = buildF1CarGeometry();
     geom.computeBoundingBox();
     const minY = geom.boundingBox!.min.y;
+    // The TRUE-size build is what the retired box constant was sized against; the car is
+    // DRAWN at CAR_VISUAL_SCALE, so the measured extremes scale with it and the lift,
+    // which is measured from this same geometry, has to follow.
+    const trueGeom = buildF1CarGeometry(1);
+    trueGeom.computeBoundingBox();
     // the built geometry, measured: wheels at the bottom, wheels at the top too
-    expect(minY).toBeCloseTo(-0.3, 4);
-    expect(geom.boundingBox!.max.y).toBeCloseTo(0.41, 4);
+    expect(trueGeom.boundingBox!.min.y).toBeCloseTo(-0.3, 4);
+    expect(trueGeom.boundingBox!.max.y).toBeCloseTo(0.41, 4);
+    expect(minY).toBeCloseTo(trueGeom.boundingBox!.min.y * CAR_VISUAL_SCALE, 6);
+    expect(geom.boundingBox!.max.y)
+      .toBeCloseTo(trueGeom.boundingBox!.max.y * CAR_VISUAL_SCALE, 6);
 
-    // what the retired CAR_RENDER_HEIGHT_M = 0.9 box constant produced
+    // what the retired CAR_RENDER_HEIGHT_M = 0.9 box constant produced on the true car
     const staleLift = 0.9 / 2 + 0.05;
-    expect(staleLift + minY).toBeCloseTo(0.2, 6);
+    expect(staleLift + trueGeom.boundingBox!.min.y).toBeCloseTo(0.2, 6);
 
     const surfaceY = 123.45;
     const drawn = carInstanceY(surfaceY, minY);

@@ -1,24 +1,32 @@
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import * as THREE from "three";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import type { TrackModel, TrackSurface, TrackSurfaceTransform } from "../contract/types";
 import { CAR } from "@/components/loader/physics/constants";
-import { parseTrackModel, trackPointAt, type RawTrackModel } from "../data/manifest";
+import { parseTrackModel, surfaceAt, trackPointAt, type RawTrackModel } from "../data/manifest";
 import { POSE_FLOATS_PER_CAR, POSE_STATUS } from "../worker/protocol";
 import { buildF1CarGeometry } from "./carGeometry";
 import {
   applyEnvironmentMaterials, ENVIRONMENTS, environmentFor, environmentForTrack,
   environmentPlacement, GATE_MAX_RESIDUAL_STD_M, GATE_MIN_COVERAGE, measurementPasses,
+  sameEnvironment,
   type EnvironmentPlacement,
 } from "./environments";
 import {
-  CAR_GROUND_CLEARANCE_M, FOCUS_OUTLINE_SCALE, carInstanceY, focusGhostY, PRESENTATION_SCALE,
+  CAR_GROUND_CLEARANCE_M, CAR_VISUAL_SCALE, FOCUS_OUTLINE_SCALE, carInstanceY, focusGhostY,
+  PRESENTATION_SCALE,
 } from "./presentation";
 import {
-  carRenderPos, chaseCameraPose, declutterLanes, disposeRenderObject, disposeTrackLayers,
-  environmentGlbCached, installTrackLayers, loadEnvironmentGlb, orbitEye, orbitPanBasis,
-  setRibbonOverEnvironment,
+  CAMERA_CONTROL_HELP, CAMERA_KEY_CODES, KEY_BOOST, MAX_RIG_ELEVATION,
+  MIN_EYE_ABOVE_GROUND_M, MIN_MOVE_MPS, MIN_RIG_ELEVATION, MOVE_PER_DISTANCE_HZ,
+  cameraMoveSpeed, carRenderPos, chaseCameraPose, chaseRigGeometry, clampEyeAboveGround,
+  clampRigElevation, dampFactor, declutterLanes, disposeRenderObject, disposeTrackLayers,
+  environmentGlbCached, groundHeightAt, installTrackLayers, keyBoost, keyLabel,
+  keyMoveVector, loadEnvironmentGlb, makeCameraRig, nearestRingIndex, orbitEye,
+  orbitFromEye, orbitPanBasis, resetRig, rigIsNeutral, setRibbonOverEnvironment,
+  viewToRigPan,
+  type OrbitState,
 } from "./scene";
 import { renderForward, toRenderFrame } from "./trackMesh";
 
@@ -69,18 +77,26 @@ function makePose(stations: number[], laterals: number[], status: number = POSE_
   return pose;
 }
 
-const carMinY = (() => {
-  const g = buildF1CarGeometry();
+const measuredMinY = (visualScale?: number) => {
+  const g = buildF1CarGeometry(visualScale);
   g.computeBoundingBox();
   return g.boundingBox!.min.y;
-})();
+};
+/** The car as DRAWN (CAR_VISUAL_SCALE applied), which is what the ride height lifts. */
+const carMinY = measuredMinY();
+/** The same car at TRUE size, which is what the retired box constant was sized against. */
+const trueCarMinY = measuredMinY(1);
 
 describe("carRenderPos: the draw loop and the camera share ONE projection", () => {
   it("measures the car geometry rather than trusting the retired box constant", () => {
-    // the built geometry, measured here rather than retyped: the wheels set both extremes
-    expect(carMinY).toBeCloseTo(-0.3, 4);
-    // what CAR_RENDER_HEIGHT_M = 0.9 produced: 0.9/2 + 0.05 + (-0.30) = +0.200 m of air
-    expect(0.9 / 2 + 0.05 + carMinY).toBeCloseTo(0.2, 6);
+    // the built geometry, measured here rather than retyped: the wheels set both extremes.
+    // TRUE size is -0.300 m; the car is DRAWN at CAR_VISUAL_SCALE, so the lowest drawn
+    // point scales with it (-0.390 m at 1.3) and the lift below must follow.
+    expect(trueCarMinY).toBeCloseTo(-0.3, 4);
+    expect(carMinY).toBeCloseTo(trueCarMinY * CAR_VISUAL_SCALE, 6);
+    // what CAR_RENDER_HEIGHT_M = 0.9 produced on the true-size car:
+    // 0.9/2 + 0.05 + (-0.30) = +0.200 m of air
+    expect(0.9 / 2 + 0.05 + trueCarMinY).toBeCloseTo(0.2, 6);
 
     const track = makeRing();
     const out = new THREE.Vector3();
@@ -303,9 +319,13 @@ describe("the focused car's ghost outline", () => {
     expect(ghostUnderside).toBeCloseTo(carContactPatch, 9);
     expect(carContactPatch - surfaceY).toBeCloseTo(CAR_GROUND_CLEARANCE_M, 9);
 
-    // without the lift it sank by exactly -minY * (scale - 1)
+    // without the lift it sank by exactly -minY * (scale - 1). Derived from the MEASURED
+    // minY rather than retyped, so it follows CAR_VISUAL_SCALE: 0.021 m at the true-size
+    // -0.300 m, 0.027 m at the drawn -0.390 m.
     const uncompensated = carY + carMinY * FOCUS_OUTLINE_SCALE;
-    expect(carContactPatch - uncompensated).toBeCloseTo(0.021, 4);
+    expect(carContactPatch - uncompensated)
+      .toBeCloseTo(-carMinY * (FOCUS_OUTLINE_SCALE - 1), 9);
+    expect(-trueCarMinY * (FOCUS_OUTLINE_SCALE - 1)).toBeCloseTo(0.021, 4);
     expect(uncompensated).toBeLessThan(surfaceY); // i.e. below the road
   });
 
@@ -915,5 +935,687 @@ describe("loadEnvironmentGlb: one fetch per URL, for the life of the page", () =
     // procedural ribbon in place.
     first.catch(() => {});
     second.catch(() => {});
+  });
+});
+
+describe("sameEnvironment: the rule that makes a re-roll cost nothing", () => {
+  const surface = makeSurface();
+  const a = environmentForTrack(makeRing({ slug: "british-grand-prix", surface }))!;
+
+  it("recognises the identical resolution a re-roll recomputes", () => {
+    // NewRaceCanvas re-calls setTrack on the SAME renderer for every re-roll, so this
+    // is the comparison that stops a second 158 MB fetch and a second model in the
+    // scene. environmentForTrack is called again on the same artifact, so it must
+    // compare equal by value, not by reference.
+    const again = environmentForTrack(makeRing({ slug: "british-grand-prix", surface }))!;
+    expect(again).not.toBe(a);
+    expect(sameEnvironment(a, again)).toBe(true);
+  });
+
+  it("treats a moved model as a change even when the file has not changed", () => {
+    // a sharper re-fit against the same published bytes: the URL matches and the
+    // placement does not, and keeping the old position would stand the cars off the road
+    const moved = environmentForTrack(makeRing({
+      slug: "british-grand-prix",
+      surface: makeSurface({ transform: { ...surface.transform, tyM: -200 } }),
+    }))!;
+    expect(moved.assetUrl).toBe(a.assetUrl);
+    expect(sameEnvironment(a, moved)).toBe(false);
+  });
+
+  it("never calls null the same as anything, including another null", () => {
+    // going to or from the ribbon always has work attached: after a re-roll the ribbon
+    // is a NEW object whose visibility has to be applied again
+    expect(sameEnvironment(null, null)).toBe(false);
+    expect(sameEnvironment(a, null)).toBe(false);
+    expect(sameEnvironment(null, a)).toBe(false);
+  });
+});
+
+/** The Python registry this file mirrors. Repo-relative, and present in the repo (it is
+ * the config, not the gitignored asset), so this check runs everywhere. */
+const CIRCUITS_YAML = fileURLToPath(new URL("../../../../config/circuits.yaml", import.meta.url));
+
+describe.skipIf(!existsSync(CIRCUITS_YAML))("the registry mirror does not drift", () => {
+  it("carries the same measured numbers as config/circuits.yaml", () => {
+    // environments.ts is a MIRROR. Python owns these numbers -- they are the output of
+    // a fit against the telemetry ring -- and a mirror that has quietly fallen behind
+    // would place a circuit model using last week's alignment. Each value is checked as
+    // the literal text the YAML carries, which needs no YAML parser and fails loudly the
+    // moment either side is edited alone.
+    const yaml = readFileSync(CIRCUITS_YAML, "utf8");
+    for (const [slug, def] of Object.entries(ENVIRONMENTS)) {
+      expect(yaml, slug).toContain(`${slug}:`);
+      expect(yaml, `${slug} sha256`).toContain(def.sourceSha256);
+      expect(yaml, `${slug} glb`).toContain(def.sourceGlb);
+      expect(yaml, `${slug} profile`).toContain(`profile: ${def.profile}`);
+      for (const [key, value] of [
+        ["scale", def.fit.scale], ["yawDeg", def.fit.yawDeg], ["mirror", def.fit.mirror],
+        ["txM", def.fit.txM], ["tzM", def.fit.tzM], ["tyM", def.fit.tyM],
+        ["roadCoverage", def.measured.roadCoverage],
+        ["residualStdM", def.measured.residualStdM],
+        ["residualMaxM", def.measured.residualMaxM],
+        ["stations", def.measured.stations],
+      ] as [string, number][]) {
+        // either spelling the producer uses: the number as written, or its fixed
+        // six-decimal form (Python writes coverages as 0.000000 / 1.000000)
+        const written = `${key}: ${value}`;
+        const padded = `${key}: ${value.toFixed(6)}`;
+        expect(
+          yaml.includes(written) || yaml.includes(padded),
+          `${slug}.${key}: neither "${written}" nor "${padded}" is in config/circuits.yaml`,
+        ).toBe(true);
+      }
+      // the gate verdict itself, spelled as Python spells it
+      expect(yaml, `${slug} gate`).toContain(`gate: ${def.gate === "pass" ? "pass" : "FAIL"}`);
+    }
+  });
+
+  it("restates the same two gate limits Python enforces", () => {
+    const yaml = readFileSync(CIRCUITS_YAML, "utf8");
+    expect(yaml).toContain(`minCoverage: ${GATE_MIN_COVERAGE}`);
+    expect(yaml).toContain(`maxResidualStdM: ${GATE_MAX_RESIDUAL_STD_M}`);
+  });
+});
+
+/* ===========================================================================
+ * CAMERA CONTROLS
+ *
+ * The rig maths is pure and lives in scene.ts; SimRenderer builds a WebGLRenderer in
+ * its constructor and cannot be constructed under vitest, so everything a user can
+ * actually feel -- where a drag puts the eye, how far a key moves it, whether the
+ * camera can be driven into the road -- is tested through those functions.
+ * ======================================================================== */
+
+const CHASE_MODES = ["broadcast", "onboard", "helicopter"] as const;
+
+/** The one circuit that ships a baked surface. Null wherever no build exists, exactly
+ * like `suzuka` above. */
+const silverstone = loadShippedTrack("british-grand-prix");
+
+/** The rig arithmetic that shipped before the camera became drivable: eye = focus
+ * displaced back along renderForward and up in world Y. Kept here, in the test, as the
+ * thing the polar form has to reproduce. */
+function legacyChasePose(
+  mode: (typeof CHASE_MODES)[number], focus: THREE.Vector3, heading: number,
+): { eye: THREE.Vector3; lookAt: THREE.Vector3 } {
+  if (mode === "helicopter") {
+    return {
+      eye: new THREE.Vector3(focus.x, focus.y + 45, focus.z + 0.01),
+      lookAt: focus.clone(),
+    };
+  }
+  const rig = mode === "onboard"
+    ? { backM: 9, upM: 3.2, aheadM: 20 }
+    : { backM: 15, upM: 6, aheadM: 0 };
+  const fwd = renderForward(heading);
+  const eye = focus.clone().addScaledVector(fwd, -rig.backM);
+  eye.y += rig.upM;
+  const lookAt = focus.clone();
+  if (rig.aheadM !== 0) lookAt.addScaledVector(fwd, rig.aheadM);
+  return { eye, lookAt };
+}
+
+/** The camera the viewer actually gets for a rig pose, and its own world axes --
+ * screen right, screen up, and screen back. A pan or a look has to move along THESE,
+ * not along something re-derived by hand. */
+function poseAxes(eye: THREE.Vector3, lookAt: THREE.Vector3) {
+  const cam = new THREE.PerspectiveCamera(55, 1.6, 1, 20000);
+  cam.position.copy(eye);
+  cam.lookAt(lookAt);
+  cam.updateMatrixWorld(true);
+  const xAxis = new THREE.Vector3(), yAxis = new THREE.Vector3(), zAxis = new THREE.Vector3();
+  cam.matrixWorld.extractBasis(xAxis, yAxis, zAxis);
+  return { cam, xAxis, yAxis, zAxis };
+}
+
+/** Height of the eye above the anchor, as an angle -- the quantity rig.pitch moves. */
+function eyeElevation(eye: THREE.Vector3, anchor: THREE.Vector3): number {
+  return Math.asin((eye.y - anchor.y) / eye.distanceTo(anchor));
+}
+
+describe("a neutral rig is exactly the shot the camera always took", () => {
+  it("reproduces the shipped back/up arithmetic in both ground modes, to 1e-9 m", () => {
+    const focus = new THREE.Vector3(120, 3, -40);
+    const eye = new THREE.Vector3(), lookAt = new THREE.Vector3();
+    for (const heading of [0, 0.7, 2.4, -1.1, Math.PI]) {
+      for (const mode of ["broadcast", "onboard"] as const) {
+        chaseCameraPose(mode, focus, heading, eye, lookAt);
+        const want = legacyChasePose(mode, focus, heading);
+        expect(eye.distanceTo(want.eye), `${mode} eye @ ${heading}`).toBeLessThan(1e-9);
+        expect(lookAt.distanceTo(want.lookAt), `${mode} look @ ${heading}`).toBeLessThan(1e-9);
+      }
+    }
+  });
+
+  it("keeps the helicopter's measured 45 m, and its anti-degeneracy nudge is still 1 cm", () => {
+    const focus = new THREE.Vector3(120, 3, -40);
+    const eye = new THREE.Vector3(), lookAt = new THREE.Vector3();
+    for (const heading of [0, 0.7, -1.1]) {
+      chaseCameraPose("helicopter", focus, heading, eye, lookAt);
+      expect(eye.y - focus.y).toBeCloseTo(45, 9);
+      expect(lookAt.distanceTo(focus)).toBe(0);
+      // The nudge that keeps the view matrix solvable moved from world +Z to "1 cm
+      // behind", so it now comes through renderForward like everything else. Same
+      // magnitude, same purpose, and the view is still not degenerate.
+      const horizontal = Math.hypot(eye.x - focus.x, eye.z - focus.z);
+      expect(horizontal).toBeCloseTo(0.01, 9);
+      const { xAxis, yAxis, zAxis } = poseAxes(eye, lookAt);
+      for (const a of [xAxis, yAxis, zAxis]) expect(a.length()).toBeCloseTo(1, 9);
+      expect(Math.abs(xAxis.dot(yAxis))).toBeLessThan(1e-9);
+    }
+  });
+
+  it("reports a neutral rig as neutral, and a touched one as touched", () => {
+    const rig = makeCameraRig();
+    expect(rigIsNeutral(rig)).toBe(true);
+    rig.pan.set(0, 0.5, 0);
+    expect(rigIsNeutral(rig)).toBe(false);
+    expect(rigIsNeutral(resetRig(rig))).toBe(true);
+    rig.zoom = 1.4;
+    expect(rigIsNeutral(rig)).toBe(false);
+  });
+});
+
+describe("driving a chase camera", () => {
+  const focus = new THREE.Vector3(120, 3, -40);
+
+  it("yaw swings the eye about the car, toward the camera's OWN screen right", () => {
+    const eye = new THREE.Vector3(), lookAt = new THREE.Vector3();
+    for (const mode of CHASE_MODES) {
+      for (const heading of [0, 1.2, -2.5]) {
+        const rig = makeCameraRig();
+        chaseCameraPose(mode, focus, heading, eye, lookAt, undefined, rig);
+        const before = eye.clone();
+        const { xAxis } = poseAxes(eye, lookAt);
+
+        rig.yaw = 0.01;
+        chaseCameraPose(mode, focus, heading, eye, lookAt, undefined, rig);
+        // the rig swings: same distance from the car, moved along screen right
+        expect(eye.distanceTo(focus), `${mode} dist`).toBeCloseTo(before.distanceTo(focus), 9);
+        const moved = eye.clone().sub(before).normalize();
+        expect(moved.dot(xAxis), `${mode} @ ${heading}`).toBeGreaterThan(0.999);
+      }
+    }
+  });
+
+  it("pan slides the WHOLE rig -- eye and look-at by the same vector -- in the car's own frame", () => {
+    const e0 = new THREE.Vector3(), l0 = new THREE.Vector3();
+    const e1 = new THREE.Vector3(), l1 = new THREE.Vector3();
+    for (const mode of CHASE_MODES) {
+      for (const heading of [0, 1.2, -2.5]) {
+        const rig = makeCameraRig();
+        chaseCameraPose(mode, focus, heading, e0, l0, undefined, rig);
+        rig.pan.set(7, 3, -4);
+        chaseCameraPose(mode, focus, heading, e1, l1, undefined, rig);
+
+        const dEye = e1.clone().sub(e0);
+        const dLook = l1.clone().sub(l0);
+        expect(dEye.distanceTo(dLook), `${mode} rigid`).toBeLessThan(1e-9);
+
+        // and that vector is (right, up, forward) in the rig's own basis, which is
+        // built from renderForward and nothing else
+        const geom = chaseRigGeometry(mode);
+        const fwd = renderForward(geom.headingRelative ? heading : 0);
+        const right = fwd.clone().cross(new THREE.Vector3(0, 1, 0));
+        const want = right.multiplyScalar(7)
+          .add(new THREE.Vector3(0, 3, 0))
+          .addScaledVector(fwd, -4);
+        expect(dEye.distanceTo(want), `${mode} basis`).toBeLessThan(1e-9);
+      }
+    }
+  });
+
+  it("keeps a panned chase camera FOLLOWING the car: the offset is the same at every corner", () => {
+    // this is the whole point of storing the pan in the rig frame. A pan held in world
+    // metres would sit on the same patch of grass all lap; this one rides with the car.
+    const e0 = new THREE.Vector3(), l0 = new THREE.Vector3();
+    const e1 = new THREE.Vector3(), l1 = new THREE.Vector3();
+    const rig = makeCameraRig();
+    rig.pan.set(25, 0, 0); // 25 m to the right of the car
+    const farAway = new THREE.Vector3(-900, 11, 640);
+    chaseCameraPose("broadcast", focus, 0.4, e0, l0, undefined, rig);
+    chaseCameraPose("broadcast", farAway, 2.9, e1, l1, undefined, rig);
+    // the camera is still exactly as far from its car as before, at both places
+    expect(e0.distanceTo(l0)).toBeCloseTo(e1.distanceTo(l1), 9);
+    expect(l0.distanceTo(focus)).toBeCloseTo(25, 9);
+    expect(l1.distanceTo(farAway)).toBeCloseTo(25, 9);
+    // and the offset turned with the car rather than pointing the same way in the world
+    const o0 = l0.clone().sub(focus).normalize();
+    const o1 = l1.clone().sub(farAway).normalize();
+    expect(o0.dot(o1)).toBeLessThan(0.9);
+  });
+
+  it("zoom scales the distance and leaves the look-at alone", () => {
+    const eye = new THREE.Vector3(), lookAt = new THREE.Vector3();
+    for (const mode of CHASE_MODES) {
+      const rig = makeCameraRig();
+      chaseCameraPose(mode, focus, 0.8, eye, lookAt, undefined, rig);
+      const d0 = eye.distanceTo(focus);
+      const look0 = lookAt.clone();
+      expect(d0).toBeCloseTo(chaseRigGeometry(mode).distM, 9);
+
+      rig.zoom = 2.5;
+      chaseCameraPose(mode, focus, 0.8, eye, lookAt, undefined, rig);
+      expect(eye.distanceTo(focus), mode).toBeCloseTo(d0 * 2.5, 9);
+      expect(lookAt.distanceTo(look0), mode).toBeLessThan(1e-9);
+    }
+  });
+
+  it("pitch raises the eye, and the TOTAL elevation is clamped at both ends", () => {
+    const eye = new THREE.Vector3(), lookAt = new THREE.Vector3();
+    for (const mode of CHASE_MODES) {
+      const base = chaseRigGeometry(mode).elevation;
+      const rig = makeCameraRig();
+
+      rig.pitch = -0.2;
+      chaseCameraPose(mode, focus, 0.8, eye, lookAt, undefined, rig);
+      expect(eyeElevation(eye, focus), `${mode} down`).toBeCloseTo(
+        clampRigElevation(base - 0.2), 6);
+
+      // driven past the floor and the ceiling, the rig stops at them rather than
+      // rolling the camera over or burying it
+      rig.pitch = -50;
+      chaseCameraPose(mode, focus, 0.8, eye, lookAt, undefined, rig);
+      expect(eyeElevation(eye, focus), `${mode} floor`).toBeCloseTo(MIN_RIG_ELEVATION, 6);
+      expect(eye.y).toBeGreaterThan(focus.y);
+
+      rig.pitch = 50;
+      chaseCameraPose(mode, focus, 0.8, eye, lookAt, undefined, rig);
+      expect(eyeElevation(eye, focus), `${mode} ceiling`).toBeCloseTo(MAX_RIG_ELEVATION, 6);
+      // still solvable: straight down would leave the view matrix without a basis
+      const { xAxis, yAxis } = poseAxes(eye, lookAt);
+      expect(xAxis.length(), `${mode} basis`).toBeCloseTo(1, 6);
+      expect(Math.abs(xAxis.dot(yAxis))).toBeLessThan(1e-6);
+    }
+  });
+
+  it("HELICOPTER is drivable, and stays world-fixed while the ground rigs turn", () => {
+    const e0 = new THREE.Vector3(), l0 = new THREE.Vector3();
+    const e1 = new THREE.Vector3(), l1 = new THREE.Vector3();
+    const rig = makeCameraRig();
+    chaseCameraPose("helicopter", focus, 0.9, e0, l0, undefined, rig);
+    expect(e0.y - focus.y).toBeCloseTo(45, 6); // the fixed post it used to be
+
+    // mouse-look down, push out, and slide the view -- none of which it accepted before
+    rig.pitch = -0.9;
+    rig.zoom = 2;
+    rig.pan.set(0, 0, 60);
+    chaseCameraPose("helicopter", focus, 0.9, e1, l1, undefined, rig);
+    expect(e1.distanceTo(l1)).toBeCloseTo(90, 4);          // pushed out
+    expect(eyeElevation(e1, l1)).toBeLessThan(1);          // tilted off vertical
+    expect(l1.distanceTo(focus)).toBeCloseTo(60, 6);       // and moved off the car
+
+    // world-fixed: the same rig at a different car heading is the same picture, so the
+    // map does not spin under the viewer every time the car turns
+    const e2 = new THREE.Vector3(), l2 = new THREE.Vector3();
+    chaseCameraPose("helicopter", focus, -2.0, e2, l2, undefined, rig);
+    expect(e2.distanceTo(e1)).toBeLessThan(1e-12);
+
+    // the ground rigs do the opposite, on purpose
+    chaseCameraPose("broadcast", focus, 0.9, e1, l1, undefined, rig);
+    chaseCameraPose("broadcast", focus, -2.0, e2, l2, undefined, rig);
+    expect(e2.distanceTo(e1)).toBeGreaterThan(1);
+  });
+
+  it("allocates nothing per frame, rig or no rig", () => {
+    const eye = new THREE.Vector3(), lookAt = new THREE.Vector3(), fwd = new THREE.Vector3();
+    const rig = makeCameraRig();
+    rig.yaw = 0.3;
+    rig.pan.set(1, 2, 3);
+    expect(chaseCameraPose("onboard", focus, 0.3, eye, lookAt, fwd, rig)).toBeUndefined();
+    const out = new THREE.Vector3();
+    expect(viewToRigPan(0.4, 1, 2, 3, out)).toBe(out);
+    expect(keyMoveVector(new Set(["KeyW"]), out)).toBe(out);
+  });
+});
+
+describe("viewToRigPan: a screen-axis request, in rig coordinates", () => {
+  const focus = new THREE.Vector3(-60, 2, 310);
+
+  it("moves the rig along the camera's own screen axes, at every yaw", () => {
+    const eye = new THREE.Vector3(), lookAt = new THREE.Vector3();
+    const eye2 = new THREE.Vector3(), look2 = new THREE.Vector3();
+    const out = new THREE.Vector3();
+    for (const heading of [0, 0.9, -2.2]) {
+      for (const yaw of [0, 0.6, -1.9, 3.0]) {
+        const rig = makeCameraRig();
+        rig.yaw = yaw;
+        chaseCameraPose("broadcast", focus, heading, eye, lookAt, undefined, rig);
+        const { xAxis, zAxis } = poseAxes(eye, lookAt);
+        const screenFwd = new THREE.Vector3(-zAxis.x, 0, -zAxis.z).normalize();
+
+        const cases: [number, number, number, THREE.Vector3][] = [
+          [10, 0, 0, xAxis],
+          [0, 10, 0, new THREE.Vector3(0, 1, 0)],
+          [0, 0, 10, screenFwd],
+        ];
+        for (const [r, u, f, axis] of cases) {
+          viewToRigPan(yaw, r, u, f, out);
+          rig.pan.copy(out);
+          chaseCameraPose("broadcast", focus, heading, eye2, look2, undefined, rig);
+          const moved = eye2.clone().sub(eye);
+          expect(moved.length(), `${heading}/${yaw}`).toBeCloseTo(10, 6);
+          expect(moved.normalize().dot(axis), `${heading}/${yaw}`).toBeCloseTo(1, 6);
+        }
+      }
+    }
+  });
+
+  it("is the identity at yaw 0 -- an unswung camera pans along the car's own axes", () => {
+    const out = new THREE.Vector3();
+    viewToRigPan(0, 3, -4, 5, out);
+    expect([out.x, out.y, out.z]).toEqual([3, -4, 5]);
+  });
+});
+
+describe("smoothing: dampFactor", () => {
+  it("is frame-rate independent, which a fixed lerp weight is not", () => {
+    const k = 14, goal = 100;
+    let fast = 0;
+    for (let i = 0; i < 100; i++) fast += (goal - fast) * dampFactor(0.001, k);
+    let slow = 0;
+    slow += (goal - slow) * dampFactor(0.1, k);
+    expect(fast).toBeCloseTo(slow, 9);
+
+    // A constant per-frame weight cannot: tune w at 60 fps and the SAME 0.1 s of wall
+    // clock lands somewhere else at 240 fps, which is the camera settling at a speed
+    // set by the machine rather than by the camera.
+    const fixedW = dampFactor(1 / 60, k);
+    let at60 = 0;
+    for (let i = 0; i < 6; i++) at60 += (goal - at60) * fixedW;
+    let at240 = 0;
+    for (let i = 0; i < 24; i++) at240 += (goal - at240) * fixedW;
+    expect(Math.abs(at240 - at60)).toBeGreaterThan(16); // a sixth of the whole gap
+
+    // the damped pair, over the same two frame rates, agree to a hair
+    let damp60 = 0;
+    for (let i = 0; i < 6; i++) damp60 += (goal - damp60) * dampFactor(1 / 60, k);
+    let damp240 = 0;
+    for (let i = 0; i < 24; i++) damp240 += (goal - damp240) * dampFactor(1 / 240, k);
+    expect(Math.abs(damp240 - damp60)).toBeLessThan(1e-9);
+  });
+
+  it("covers more of the gap for a longer frame, and stays inside [0, 1]", () => {
+    expect(dampFactor(0.016, 14)).toBeLessThan(dampFactor(0.05, 14));
+    expect(dampFactor(0, 14)).toBe(0);
+    expect(dampFactor(-1, 14)).toBe(0);
+    expect(dampFactor(0.016, 0)).toBe(0);
+    expect(dampFactor(1e6, 14)).toBeLessThanOrEqual(1);
+    expect(dampFactor(1e6, 14)).toBeCloseTo(1, 12);
+  });
+});
+
+describe("keyboard", () => {
+  it("maps the WASD block and the arrows to the same directions", () => {
+    const out = new THREE.Vector3();
+    const dir = (...codes: string[]) => keyMoveVector(new Set(codes), out).clone();
+    expect(dir("KeyW")).toEqual(new THREE.Vector3(0, 0, 1));
+    expect(dir("ArrowUp")).toEqual(dir("KeyW"));
+    expect(dir("KeyS")).toEqual(new THREE.Vector3(0, 0, -1));
+    expect(dir("ArrowDown")).toEqual(dir("KeyS"));
+    expect(dir("KeyD")).toEqual(new THREE.Vector3(1, 0, 0));
+    expect(dir("ArrowRight")).toEqual(dir("KeyD"));
+    expect(dir("KeyA")).toEqual(new THREE.Vector3(-1, 0, 0));
+    expect(dir("KeyE")).toEqual(new THREE.Vector3(0, 1, 0));
+    expect(dir("KeyR")).toEqual(dir("KeyE"));
+    expect(dir("PageUp")).toEqual(dir("KeyE"));
+    expect(dir("KeyQ")).toEqual(new THREE.Vector3(0, -1, 0));
+    expect(dir("KeyF")).toEqual(dir("KeyQ"));
+  });
+
+  it("normalises diagonals and cancels opposites, so the camera cannot be fooled", () => {
+    const out = new THREE.Vector3();
+    keyMoveVector(new Set(["KeyW", "KeyD"]), out);
+    expect(out.length()).toBeCloseTo(1, 12); // not 1.41
+    expect(out.x).toBeCloseTo(Math.SQRT1_2, 12);
+    keyMoveVector(new Set(["KeyW", "KeyS"]), out);
+    expect(out.length()).toBe(0);
+    keyMoveVector(new Set(["KeyW", "KeyA", "KeyS", "KeyD", "KeyQ", "KeyE"]), out);
+    expect(out.length()).toBe(0);
+    keyMoveVector(new Set(["Space"]), out);
+    expect(out.length()).toBe(0); // a key the camera does not bind moves nothing
+  });
+
+  it("shift is the only speed multiplier, and it is 4x", () => {
+    expect(keyBoost(new Set(["KeyW"]))).toBe(1);
+    expect(keyBoost(new Set(["ShiftLeft"]))).toBe(KEY_BOOST);
+    expect(keyBoost(new Set(["ShiftRight", "KeyW"]))).toBe(KEY_BOOST);
+    expect(KEY_BOOST).toBe(4);
+  });
+
+  it("flies at a speed proportional to how far out the camera is, with a floor", () => {
+    // the same key has to feel right 9 m off a car and 2 km above the circuit
+    expect(cameraMoveSpeed(16.16, 1)).toBeCloseTo(16.16 * MOVE_PER_DISTANCE_HZ, 9);
+    expect(cameraMoveSpeed(2000, 1)).toBeCloseTo(1400, 9);
+    expect(cameraMoveSpeed(0.5, 1)).toBe(MIN_MOVE_MPS);   // never grinds to nothing
+    expect(cameraMoveSpeed(100, KEY_BOOST)).toBeCloseTo(cameraMoveSpeed(100, 1) * 4, 9);
+  });
+
+  it("the printed controls name every key the camera binds", () => {
+    const printed = CAMERA_CONTROL_HELP.map((h) => h.keys).join("  ");
+    for (const code of CAMERA_KEY_CODES) {
+      expect(printed, `${code} is bound but not printed`).toContain(keyLabel(code));
+    }
+    for (const entry of CAMERA_CONTROL_HELP) {
+      expect(entry.action.length).toBeGreaterThan(3);
+    }
+    // the mouse gestures are discoverable too, not just the keys
+    expect(printed).toContain("scroll");
+    expect(printed).toContain("right-drag");
+  });
+});
+
+describe("the camera cannot be driven into the road", () => {
+  /** A ring with real elevation, and optionally a baked surface a fixed distance above
+   * the ring's own z -- so a test can tell which of the two a reading came from. */
+  function elevatedRing(opts: { surfaceLift?: number | null; invalidAt?: number } = {}) {
+    const track = makeRing();
+    for (let i = 0; i < track.z.length; i++) track.z[i] = 10 + 5 * Math.sin((i / RING_N) * 2 * Math.PI);
+    if (opts.surfaceLift == null) return track;
+    const n = track.x.length;
+    const zM = new Float32Array(n);
+    const valid = new Uint8Array(n).fill(1);
+    for (let i = 0; i < n; i++) zM[i] = track.z[i] + opts.surfaceLift;
+    if (opts.invalidAt !== undefined) valid[opts.invalidAt] = 0;
+    return makeRing({
+      z: track.z,
+      surface: makeSurface({
+        zM, valid, slope: new Float32Array(n), camber: new Float32Array(n),
+        dsMetres: track.lengthMetres / n,
+      }),
+    });
+  }
+
+  it("reads the BAKED surface where the circuit carries one, and the ring where it does not", () => {
+    const plain = elevatedRing();
+    const baked = elevatedRing({ surfaceLift: 0.4 });
+    for (const i of [0, 37, 199, 399]) {
+      const [x, , z] = toRenderFrame(plain.x[i], plain.y[i], plain.z[i]);
+      const eyeY = plain.z[i] + 10;
+      expect(groundHeightAt(plain, x, z, eyeY), `ring @ ${i}`).toBeCloseTo(plain.z[i], 5);
+      expect(groundHeightAt(baked, x, z, eyeY), `baked @ ${i}`).toBeCloseTo(plain.z[i] + 0.4, 5);
+    }
+  });
+
+  it("falls back to the ring at a station the raycast missed -- absence is not zero", () => {
+    const gappy = elevatedRing({ surfaceLift: 0.4, invalidAt: 37 });
+    const [x, , z] = toRenderFrame(gappy.x[37], gappy.y[37], gappy.z[37]);
+    const eyeY = gappy.z[37] + 10;
+    expect(groundHeightAt(gappy, x, z, eyeY)).toBeCloseTo(gappy.z[37], 5);
+    expect(groundHeightAt(gappy, x, z, eyeY)).not.toBe(0);
+  });
+
+  it("lifts an eye driven under the tarmac, and leaves one above it alone", () => {
+    const track = elevatedRing({ surfaceLift: 0.4 });
+    const i = 120;
+    const [x, , z] = toRenderFrame(track.x[i], track.y[i], track.z[i]);
+    const ground = groundHeightAt(track, x, z, track.z[i] + 10);
+
+    const buried = new THREE.Vector3(x, ground - 5, z);
+    expect(clampEyeAboveGround(buried, ground)).toBe(true);
+    expect(buried.y).toBeCloseTo(ground + MIN_EYE_ABOVE_GROUND_M, 9);
+    expect(buried.x).toBe(x);   // only the height is touched
+    expect(buried.z).toBe(z);
+
+    const flying = new THREE.Vector3(x, ground + 40, z);
+    expect(clampEyeAboveGround(flying, ground)).toBe(false);
+    expect(flying.y).toBe(ground + 40);
+
+    // idempotent: clamping an already-clamped eye is a no-op, so the camera rests on
+    // the floor instead of fighting it every frame
+    expect(clampEyeAboveGround(buried, ground)).toBe(false);
+  });
+
+  it("gives a camera UNDER a bridge the road under it, not the deck over it", () => {
+    // A ring is a closed loop and can pass over itself: Suzuka does, twice a lap. This
+    // one is crafted -- vertex 300 is moved to sit 8 m from vertex 100 in plan and 6 m
+    // above it -- because the property has to hold for any such ring, not just Suzuka's.
+    const track = makeRing();
+    track.z[100] = 0;
+    track.x[300] = track.x[100] + 8;
+    track.y[300] = track.y[100];
+    track.z[300] = 6;
+    const [lowX, , lowZ] = toRenderFrame(track.x[100], track.y[100], 0);
+    const [upX, , upZ] = toRenderFrame(track.x[300], track.y[300], 0);
+
+    // an onboard camera 3.2 m over the lower road: the deck is the NEAREST vertex in
+    // plan at 8 m, and taking it would have shoved the camera up by 3.4 m
+    expect(nearestRingIndex(track, upX, upZ)).toBe(300);
+    expect(groundHeightAt(track, upX, upZ, 3.2)).toBeCloseTo(0, 6);
+    expect(groundHeightAt(track, lowX, lowZ, 3.2)).toBeCloseTo(0, 6);
+
+    // over the deck, the deck is the ground
+    expect(groundHeightAt(track, upX, upZ, 9.2)).toBeCloseTo(6, 6);
+
+    // and below everything -- the case the clamp exists for -- it still reports a real
+    // road rather than nothing
+    const under = groundHeightAt(track, lowX, lowZ, -5);
+    expect([0, 6]).toContain(under);
+  });
+
+  it("nearestRingIndex really finds the nearest vertex, in the RENDER frame", () => {
+    const track = elevatedRing();
+    for (const i of [0, 5, 137, 399]) {
+      const [x, , z] = toRenderFrame(track.x[i], track.y[i], track.z[i]);
+      expect(nearestRingIndex(track, x, z)).toBe(i);
+      // a point nudged a little way along the ring still resolves to a neighbour, not
+      // to a vertex on the far side of the circuit (which a frame mix-up would give)
+      const near = nearestRingIndex(track, x + 2, z - 2);
+      expect(Math.min(Math.abs(near - i), RING_N - Math.abs(near - i))).toBeLessThanOrEqual(2);
+    }
+  });
+});
+
+describe("orbitFromEye: taking the free camera over without a jump", () => {
+  it("is the exact inverse of orbitEye", () => {
+    const centre = new THREE.Vector3(-300, 12, 480);
+    const eye = new THREE.Vector3(), back = new THREE.Vector3();
+    const state: OrbitState = { yaw: 0, pitch: 0, dist: 0 };
+    for (const yaw of [0, 0.9, 2.7, -1.4]) {
+      for (const pitch of [0.05, 0.6, 1.4]) {
+        for (const dist of [40, 400, 8000]) {
+          orbitEye(centre, yaw, pitch, dist, eye);
+          orbitFromEye(eye, centre, state);
+          expect(state.dist).toBeCloseTo(dist, 6);
+          expect(state.pitch).toBeCloseTo(pitch, 9);
+          expect(Math.cos(state.yaw - yaw)).toBeCloseTo(1, 9); // same angle, mod 2pi
+          orbitEye(centre, state.yaw, state.pitch, state.dist, back);
+          expect(back.distanceTo(eye)).toBeLessThan(1e-6);
+        }
+      }
+    }
+  });
+
+  it("hands the free camera the picture the chase camera was already showing", () => {
+    // this is what unlocking does: centre on the look-at, read the angles off the live
+    // eye. Rebuilding the eye from them must land back on the same pixel.
+    const focus = new THREE.Vector3(120, 3, -40);
+    const eye = new THREE.Vector3(), lookAt = new THREE.Vector3(), back = new THREE.Vector3();
+    const state: OrbitState = { yaw: 0, pitch: 0, dist: 0 };
+    for (const mode of CHASE_MODES) {
+      for (const heading of [0, 1.2, -2.5]) {
+        chaseCameraPose(mode, focus, heading, eye, lookAt);
+        orbitFromEye(eye, lookAt, state);
+        expect(state.dist).toBeGreaterThan(0);
+        orbitEye(lookAt, state.yaw, state.pitch, state.dist, back);
+        expect(back.distanceTo(eye), `${mode} @ ${heading}`).toBeLessThan(1e-6);
+      }
+    }
+    // degenerate input reports something usable rather than NaN
+    orbitFromEye(new THREE.Vector3(1, 2, 3), new THREE.Vector3(1, 2, 3), state);
+    expect(state.dist).toBe(0);
+    expect(Number.isFinite(state.yaw) && Number.isFinite(state.pitch)).toBe(true);
+  });
+});
+
+describe.skipIf(!suzuka)("the ground clamp at the shipped Japanese GP crossover", () => {
+  it("picks the road the camera is on where Suzuka crosses itself", () => {
+    const track = suzuka!;
+    const n = track.x.length;
+    const ds = track.lengthMetres / n;
+    // find the crossing pair: two vertices close in plan but far apart along the lap
+    let a = -1, b = -1, bestPlan = Infinity;
+    for (let i = 0; i < n; i += 4) {
+      for (let j = i + 4; j < n; j += 4) {
+        const sep = Math.min(j - i, n - (j - i)) * ds;
+        if (sep < 150) continue;
+        const d = Math.hypot(track.x[i] - track.x[j], track.y[i] - track.y[j]);
+        if (d < bestPlan) { bestPlan = d; a = i; b = j; }
+      }
+    }
+    expect(bestPlan).toBeLessThan(20);                        // they really do overlap
+    const dz = Math.abs(track.z[a] - track.z[b]);
+    expect(dz).toBeGreaterThan(2);                            // at different heights
+    const [lowI, highI] = track.z[a] < track.z[b] ? [a, b] : [b, a];
+
+    // a camera 3.2 m over the LOWER road (an onboard rig) must be given the lower road
+    const [x, , z] = toRenderFrame(track.x[lowI], track.y[lowI], track.z[lowI]);
+    const eyeY = track.z[lowI] + 3.2;
+    const ground = groundHeightAt(track, x, z, eyeY);
+    expect(ground).toBeCloseTo(track.z[lowI], 1);
+    expect(Math.abs(ground - track.z[highI])).toBeGreaterThan(2);
+    // so the clamp leaves it exactly where it was, instead of lifting it onto the deck
+    const eye = new THREE.Vector3(x, eyeY, z);
+    expect(clampEyeAboveGround(eye, ground)).toBe(false);
+    expect(eye.y).toBe(eyeY);
+  });
+});
+
+describe.skipIf(!silverstone)("the ground clamp against the shipped British GP surface", () => {
+  it("keeps the eye above the BAKED road, not above the ribbon's own z", () => {
+    const track = silverstone!;
+    expect(track.surface).toBeTruthy();
+    const ds = track.lengthMetres / track.x.length;
+    let checked = 0, worstDelta = 0;
+    for (let i = 0; i < track.x.length; i += 401) {
+      const sample = surfaceAt(track, i * ds);
+      if (!sample) continue;
+      const [x, , z] = toRenderFrame(track.x[i], track.y[i], track.z[i]);
+      const ground = groundHeightAt(track, x, z, sample.zM + 10);
+      expect(ground).toBeCloseTo(sample.zM, 4);
+      worstDelta = Math.max(worstDelta, Math.abs(sample.zM - track.z[i]));
+      const eye = new THREE.Vector3(x, ground - 3, z);
+      clampEyeAboveGround(eye, ground);
+      expect(eye.y - sample.zM).toBeCloseTo(MIN_EYE_ABOVE_GROUND_M, 9);
+      checked++;
+    }
+    expect(checked).toBeGreaterThan(5);
+    // how far the baked road sits from the ribbon's own z, reported rather than
+    // assumed: it is the size of the mistake reading track.z here would make
+     
+    console.log(`baked surface vs ring z: worst |dz| = ${worstDelta.toFixed(4)} m over ${checked} stations`);
+    expect(Number.isFinite(worstDelta)).toBe(true);
+  });
+
+  it("costs little enough to run every frame", () => {
+    const track = silverstone!;
+    const t0 = performance.now();
+    const N = 2000;
+    for (let i = 0; i < N; i++) groundHeightAt(track, (i % 400) * 3, (i % 317) * 4, 20);
+    const perCall = (performance.now() - t0) / N;
+     
+    console.log(`groundHeightAt: ${perCall.toFixed(4)} ms/call over ${track.x.length} vertices`);
+    expect(perCall).toBeLessThan(0.5);
   });
 });

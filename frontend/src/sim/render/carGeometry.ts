@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { CAR } from "@/components/loader/physics/constants";
-import { CAR_RENDER_LENGTH_M, CAR_RENDER_WIDTH_M } from "./presentation";
+import { CAR_RENDER_LENGTH_M, CAR_RENDER_WIDTH_M, CAR_VISUAL_SCALE } from "./presentation";
 
 /**
  * A recognisable F1 car silhouette, built procedurally and merged into ONE geometry
@@ -18,6 +18,14 @@ import { CAR_RENDER_LENGTH_M, CAR_RENDER_WIDTH_M } from "./presentation";
  * Local frame matches the box it replaces: +X is forward (nose), +Y up, +Z to the
  * side, and the model is centred on the origin so the existing placement maths and
  * the focus outline need no changes.
+ *
+ * SIZE: the parts below are laid out at the car's TRUE size (5.6 m x 2.0 m), then the
+ * whole thing is multiplied by CAR_VISUAL_SCALE on the way out. That multiply is the
+ * only place the drawn size and the true size diverge; CAR_RENDER_LENGTH_M and
+ * CAR_RENDER_WIDTH_M keep meaning real metres for everything that reasons about space
+ * (see the note on CAR_VISUAL_SCALE in presentation.ts). Because the scale lives in the
+ * vertices, every consumer that MEASURES the geometry -- the ride-height lift in
+ * carInstanceY, the focus ghost, the instanced frustum sphere -- follows it for free.
  */
 
 const L = CAR_RENDER_LENGTH_M;          // 5.6 m
@@ -76,9 +84,17 @@ function buildParts(): Part[] {
   ];
 }
 
-/** Concatenates the parts by hand (rather than pulling in a merge addon), writing a
- * per-vertex colour for each so tyres stay dark while bodywork takes the team hue. */
-export function buildF1CarGeometry(): THREE.BufferGeometry {
+/**
+ * Concatenates the parts by hand (rather than pulling in a merge addon), writing a
+ * per-vertex colour for each so tyres stay dark while bodywork takes the team hue.
+ *
+ * `visualScale` multiplies the finished vertex positions about the model origin, and
+ * defaults to CAR_VISUAL_SCALE. Pass 1 for the true-size car (the tests measure both, so
+ * the scaling can be checked rather than trusted). Normals are left alone: a UNIFORM
+ * scale does not rotate them and they stay unit-length, so lighting is unaffected.
+ * Colours are likewise untouched.
+ */
+export function buildF1CarGeometry(visualScale: number = CAR_VISUAL_SCALE): THREE.BufferGeometry {
   const parts = buildParts().map((p) => ({ ...p, geom: p.geom.toNonIndexed() }));
 
   let total = 0;
@@ -103,6 +119,13 @@ export function buildF1CarGeometry(): THREE.BufferGeometry {
     o += n;
     p.geom.dispose();
   }
+
+  // The one place drawn size leaves true size. Scaling the merged positions (rather than
+  // each part, or the mesh) keeps the model origin fixed, so the car still rotates about
+  // its own centre and minY -- the ride-height lift -- scales with the body: at 1.3 the
+  // wheels sit at -0.390 m instead of -0.300 m and carInstanceY lifts by exactly that
+  // much more.
+  if (visualScale !== 1) for (let i = 0; i < position.length; i++) position[i] *= visualScale;
 
   const geom = new THREE.BufferGeometry();
   geom.setAttribute("position", new THREE.BufferAttribute(position, 3));

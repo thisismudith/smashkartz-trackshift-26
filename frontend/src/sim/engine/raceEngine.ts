@@ -94,7 +94,18 @@ export interface StandingStartBlock {
     validToSpeedKph: NumericLeaf;
   };
   lap1: {
+    /** MEAN over the whole grid (n=167), NOT the value at pole. Read for display only:
+     * using it as the slot-1 intercept and then adding the full per-slot slope on top is
+     * the double count `excessSecondsAtPole` exists to end. */
     excessSecondsVsCleanLap: NumericLeaf;
+    /** The intercept: the excess at grid slot 1, i.e. excessSecondsVsCleanLap minus
+     * excessSecondsPerGridSlot * (meanGridSlot - 1). Produced by scripts/simdata, never
+     * re-derived here -- this side has no access to the sample's mean grid rank and
+     * would have to invent one. */
+    excessSecondsAtPole?: NumericLeaf;
+    /** The mean grid rank of the excess sample, which is what makes the intercept above
+     * meaningful. Carried for display; nothing here computes with it. */
+    meanGridSlot?: NumericLeaf;
     excessSecondsPerGridSlot: NumericLeaf;
     penaltySplit: { launchLossSeconds: NumericLeaf; remainderSeconds: NumericLeaf };
   };
@@ -155,15 +166,37 @@ export interface StandingStart {
     note: string;
   };
   lap1: {
-    /** standingStart.lap1.penaltySplit.remainderSeconds -- the part the launch does NOT
-     * reproduce, so the only part added to lap 1. */
-    remainderSeconds: number;
+    /** standingStart.lap1.excessSecondsAtPole, as shipped: the lap-1 excess at grid slot
+     * 1. THE INTERCEPT OF THE SHIPPED LINEAR MODEL, and the reason this block exists --
+     * the engine used to use the whole-grid MEAN (9.009 s) here and then add the full
+     * per-slot slope on top of it, handing every car in every race about +3.4 s it had
+     * already been charged once. */
+    excessAtPoleSeconds: number;
+    /** standingStart.lap1.meanGridSlot: the mean grid rank the intercept above was
+     * shifted from. Null when the artifact carries none; nothing computes with it. */
+    meanGridSlot: number | null;
+    /** standingStart.lap1.penaltySplit.launchLossSeconds, as shipped -- the POOLED launch
+     * loss that is already inside the intercept above. */
+    pooledLaunchLossSeconds: number;
+    /** excessAtPoleSeconds - pooledLaunchLossSeconds: what is left of the pole car's
+     * excess once the launch is accounted for (first-corner congestion, cold tyres, a
+     * full fuel load). This is the part added to lap 1, because each car's OWN fitted
+     * launch loss is added separately -- the artifact's pooled figure would throw away
+     * the per-driver launch the same block ships. */
+    remainderAtPoleSeconds: number;
+    /** standingStart.lap1.penaltySplit.remainderSeconds, as shipped. Carried for display
+     * so a reader can see it is the remainder at the sample's MEAN grid slot, not at
+     * pole, and therefore is not what gets applied. */
+    shippedRemainderSeconds: number;
     /** standingStart.lap1.excessSecondsPerGridSlot, as shipped. */
     excessPerGridSlotSeconds: number;
     /** pitch / lapAverageSpeed: the part of the above the engine already produces by
      * driving each car its own lap-1 distance. */
     geometricPerGridSlotSeconds: number;
-    /** What is actually applied per slot: the shipped slope minus the geometric term. */
+    /** What is actually applied per slot: the shipped slope minus the geometric term.
+     * NOT clamped at zero: if the circuit's geometry alone exceeded the measured slope
+     * that would be a real disagreement between two measurements, and clamping it would
+     * turn it into a silent "no penalty". */
     appliedPerGridSlotSeconds: number;
   };
 }
@@ -310,16 +343,55 @@ export function buildStandingStart(
     };
   });
 
-  const remainderSeconds = leafNumber(block.lap1?.penaltySplit?.remainderSeconds) ?? 0;
-  const excessPerGridSlotSeconds = leafNumber(block.lap1?.excessSecondsPerGridSlot) ?? 0;
+  // Every one of these is required, and every one REFUSES rather than falling back: a
+  // `?? 0` here does not mean "no measurement", it means "no lap-1 penalty", which is a
+  // plausible-looking answer to a question the artifact did not answer. AGENTS.md 42.5.
+  const excessAtPoleSeconds = leafNumber(block.lap1?.excessSecondsAtPole);
+  if (excessAtPoleSeconds === null) {
+    return {
+      start: null,
+      refusal: "standingStart.lap1.excessSecondsAtPole is unavailable, so the lap-1 excess "
+        + "has no intercept at grid slot 1. It is NOT substituted with "
+        + "excessSecondsVsCleanLap, which is the mean over the whole grid and would be "
+        + "charged again by the per-slot slope. Rebuild the sim artifacts "
+        + "(scripts/build_sim_data.py) against a scripts/simdata that ships it",
+    };
+  }
+  const pooledLaunchLossSeconds = leafNumber(block.lap1?.penaltySplit?.launchLossSeconds);
+  if (pooledLaunchLossSeconds === null) {
+    return {
+      start: null,
+      refusal: "standingStart.lap1.penaltySplit.launchLossSeconds is unavailable, so the "
+        + "part of the pole car's excess that its own launch already accounts for cannot "
+        + "be separated from the part that must be added",
+    };
+  }
+  const shippedRemainderSeconds = leafNumber(block.lap1?.penaltySplit?.remainderSeconds);
+  if (shippedRemainderSeconds === null) {
+    return {
+      start: null,
+      refusal: "standingStart.lap1.penaltySplit.remainderSeconds is unavailable, so the "
+        + "shipped penalty split is incomplete",
+    };
+  }
+  const excessPerGridSlotSeconds = leafNumber(block.lap1?.excessSecondsPerGridSlot);
+  if (excessPerGridSlotSeconds === null) {
+    return {
+      start: null,
+      refusal: "standingStart.lap1.excessSecondsPerGridSlot is unavailable, so how much "
+        + "lap 1 costs further down the grid is not measured and no slope is applied",
+    };
+  }
   // The shipped slope contains a purely geometric part -- slot k drives (k-1) * pitch
   // further -- which this engine already produces by advancing each car over its own
   // lap-1 distance. The artifact's own note says to subtract it rather than pay it twice.
   const lapAverageSpeed = L / Math.max(1e-6, trackBaseSeconds);
   const geometricPerGridSlotSeconds = pitchMetres / lapAverageSpeed;
-  const appliedPerGridSlotSeconds = Math.max(
-    0, excessPerGridSlotSeconds - geometricPerGridSlotSeconds,
-  );
+  const appliedPerGridSlotSeconds = excessPerGridSlotSeconds - geometricPerGridSlotSeconds;
+  // The intercept carries the POOLED launch loss inside it; each car's OWN launch loss is
+  // added separately in standingLapOneTime, so the pooled one comes back out here. What
+  // is left is the pole car's congestion/cold-tyre/fuel excess.
+  const remainderAtPoleSeconds = excessAtPoleSeconds - pooledLaunchLossSeconds;
 
   return {
     start: {
@@ -346,7 +418,11 @@ export function buildStandingStart(
           + "the feed and ships as null",
       },
       lap1: {
-        remainderSeconds,
+        excessAtPoleSeconds,
+        meanGridSlot: leafNumber(block.lap1?.meanGridSlot),
+        pooledLaunchLossSeconds,
+        remainderAtPoleSeconds,
+        shippedRemainderSeconds,
         excessPerGridSlotSeconds,
         geometricPerGridSlotSeconds,
         appliedPerGridSlotSeconds,
@@ -484,13 +560,29 @@ export function runRace(config: RaceConfig): GeneratedRaceResult {
  * + launch loss                                    (reaction + v / 2a; the engine runs
  *                                                   the launch, so this is the time the
  *                                                   running of it actually costs)
- * + lap1.penaltySplit.remainderSeconds             (first-corner congestion, cold tyres,
- *                                                   fuel -- the part the launch does not
- *                                                   reproduce)
+ * + (excessSecondsAtPole - penaltySplit.launchLossSeconds)
+ *                                                  (the POLE car's first-corner
+ *                                                   congestion, cold tyres and fuel: the
+ *                                                   shipped intercept with the pooled
+ *                                                   launch loss taken back out, because
+ *                                                   the line above already charged this
+ *                                                   car's own)
  * + (slot - 1) * (excessSecondsPerGridSlot - pitch / lapAverageSpeed)
  *
- * The whole +9.009 s excessSecondsVsCleanLap is deliberately NOT added: it is the SUM of
- * the first two terms, and adding it as well would charge the launch twice.
+ * TWO double counts are being avoided here, and both were real.
+ *
+ * THE LEVEL. The intercept is `excessSecondsAtPole`, the shipped excess AT GRID SLOT 1.
+ * It is emphatically not `excessSecondsVsCleanLap` (9.009 s), which is the mean over the
+ * whole grid, n=167, at a mean grid rank of about 10.9 -- so using it as the slot-1
+ * intercept and then adding the full slope on top charged every car in the field the
+ * slope's whole run down the grid a second time, about +3.4 s each. The correction is
+ * mean - slope * (meanGridSlot - 1), and it is made in scripts/simdata, not here: this
+ * side never saw the sample and cannot know its mean grid rank.
+ *
+ * THE GEOMETRY. The slope's own note says it plainly -- part of it is that slot k simply
+ * drives (k - 1) x pitch further on lap 1. An engine that advances cars from their own
+ * slot stations, as the first line above does, already produces that part, so it is
+ * subtracted rather than paid twice.
  */
 function standingLapOneTime(
   composed: number, start: StandingStart, driver: string, lengthMetres: number,
@@ -499,7 +591,7 @@ function standingLapOneTime(
   if (!p) return composed;
   return composed * (p.lap1DistanceM / lengthMetres)
     + p.launchLossSeconds
-    + start.lap1.remainderSeconds
+    + start.lap1.remainderAtPoleSeconds
     + (p.slot - 1) * start.lap1.appliedPerGridSlotSeconds;
 }
 

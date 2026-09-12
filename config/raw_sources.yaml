@@ -1,0 +1,46 @@
+# Where the raw TracingInsights season mirrors live (AGENTS.md sections 5, 6, 7).
+#
+# AGENTS.md section 7 states the TARGET layout as data/raw/tracinginsights/<season>/.
+# It also states the migration into that layout happens only AFTER the local-data
+# audit, so on a real development machine a season mirror may still sit somewhere
+# else, or in a directory whose name is not its season. A single `--raw-root` flag
+# cannot express that, which is why the historical spine resolves a season through
+# this file instead of hard-coding one parent directory.
+#
+# Nothing here is machine-specific: every entry is either repo-relative or an
+# environment variable, per section 5. A machine with its mirrors elsewhere sets
+# TRACKSHIFT_RAW_ROOT or passes --raw-source on the command line; it never edits
+# this file.
+
+schema_version: 1
+
+# Searched in order. `<season>` expands to the four-digit season being resolved.
+#
+# The trailing `*` entries exist so that a mirror whose DIRECTORY NAME does not
+# match the season it holds is still FOUND, and therefore reported, instead of
+# silently missing from the audit. A candidate only counts for a season when the
+# mirror's own metadata declares that season (see resolve_season_mirrors), so the
+# wildcard cannot pull an unrelated directory into scope.
+search:
+  - "${TRACKSHIFT_RAW_ROOT}/<season>"
+  - "${TRACKSHIFT_RAW_ROOT}/*"
+  - "data/raw/tracinginsights/<season>"
+  - "data/raw/<season>"
+  - "data/<season>"
+  - "data/raw/tracinginsights/*"
+  - "data/raw/*"
+  - "data/*"
+
+# Directory names under a searched parent that are never a season mirror. Keeps
+# the wildcard entries from stat-ing the caches and the processed lake.
+ignore_directories:
+  - processed
+  - raw
+  - tracinginsights
+  - tracks
+  - fia
+  - external
+  - cache
+  - cache_joblib
+  - cache_preseason
+  - fastf1_cache

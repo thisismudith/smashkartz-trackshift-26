@@ -508,6 +508,7 @@ def _fake_bake(coverage, std):
     return SurfaceBake(z_m=np.zeros(n), slope_rad=np.zeros(n), camber_rad=np.zeros(n),
                        camber_base_m=np.full(n, 2.0), valid=valid, camber_valid=valid,
                        residual_m=np.zeros(n),
+                       edge_left_m=np.full(n, 8.0), edge_right_m=np.full(n, 6.5),
                        fit=Fit(1.0, 0.0, -1, 0.0, 0.0, 0.0), coverage=coverage,
                        road_coverage=coverage, residual_std_m=std, residual_max_m=std * 3,
                        largest_gap_stations=0, ds_m=1.0, source="", sha256="",

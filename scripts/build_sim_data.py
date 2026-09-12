@@ -87,6 +87,76 @@ def build_rules() -> dict:
     return event_rules_to_mapping(default_event_rules())
 
 
+BUILD_CACHE = "build-cache.json"
+
+
+def _pipeline_fingerprint() -> str:
+    """Hash of every pipeline source file that can change an artifact's CONTENT.
+
+    Without this an incremental build would happily reuse artifacts built by older,
+    buggier code -- which is exactly how a fix silently fails to reach the app. A change
+    to any of these invalidates every cached event.
+    """
+    h = hashlib.sha256()
+    here = Path(__file__).resolve().parent
+    for f in sorted((here / "simdata").glob("*.py")) + [Path(__file__).resolve()]:
+        if f.name.startswith("test_"):
+            continue                      # tests cannot change an artifact
+        h.update(f.name.encode())
+        h.update(f.read_bytes())
+    return h.hexdigest()[:16]
+
+
+def _inputs_fingerprint(event: str, sessions: list[str]) -> str:
+    """Hash of the raw inputs for one event: every file's path, size and mtime.
+
+    stat-only, so it is fast over a 2.2 GB mirror. It errs toward rebuilding -- a git
+    checkout that rewrites mtimes forces a rebuild that was not strictly needed, which
+    is the safe direction to be wrong in.
+    """
+    h = hashlib.sha256()
+    root = data_root()
+    for session in sorted(sessions):
+        sdir = root / event / session
+        if not sdir.is_dir():
+            continue
+        for f in sorted(sdir.rglob("*")):
+            if f.is_file():
+                st = f.stat()
+                h.update(str(f.relative_to(root)).encode())
+                h.update(f"{st.st_size}:{st.st_mtime_ns}".encode())
+    return h.hexdigest()[:16]
+
+
+def _load_cache() -> dict:
+    p = OUT_DIR / BUILD_CACHE
+    if not p.exists():
+        return {}
+    try:
+        return json.loads(p.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def _cache_hit(cache: dict, event: str, key: str, sessions: list[str]) -> dict | None:
+    """A hit only counts if every artifact it names is still ON DISK.
+
+    A cache that points at a file someone deleted or pruned is worse than no cache: the
+    index would list an artifact the browser then 404s on.
+    """
+    entry = cache.get(event)
+    if not entry or entry.get("key") != key:
+        return None
+    if not (OUT_DIR / entry.get("track", "")).exists():
+        return None
+    for session, files in (entry.get("sessions") or {}).items():
+        if session not in sessions:
+            continue
+        if not all((OUT_DIR / files[k]).exists() for k in ("manifest", "bin")):
+            return None
+    return entry
+
+
 def discover_events(sessions: list[str]) -> list[str]:
     """Event directories that actually hold a buildable session.
 
@@ -236,6 +306,9 @@ def main():
                           "references (superseded rebuilds of the same circuit, and old "
                           "index files). Only ever removes files already unreachable "
                           "from index.json")
+    ap.add_argument("--force", action="store_true",
+                    help="rebuild every selected event even if its inputs and the "
+                          "pipeline are unchanged (bypasses the incremental cache)")
     ap.add_argument("--fresh", action="store_true",
                     help="start the index from empty instead of merging into the existing "
                           "one; use when removing an event, never for a routine subset build")
@@ -322,6 +395,34 @@ def main():
 
     started = time.time()
     results = []
+
+    # INCREMENTAL. An event is rebuilt only when its raw inputs or the pipeline source
+    # have changed, or when an artifact it needs is missing. Everything else is reused
+    # by name -- the artifacts are content-addressed, so reusing a name is reusing the
+    # exact bytes. --force rebuilds regardless.
+    cache = {} if args.force else _load_cache()
+    pipeline = _pipeline_fingerprint()
+    fresh_cache: dict = dict(cache)
+    skipped = []
+    if not args.force:
+        todo = []
+        for event in events:
+            key = f"{pipeline}:{active_year()}:{_inputs_fingerprint(event, list(args.sessions))}"
+            hit = _cache_hit(cache, event, key, list(args.sessions))
+            if hit:
+                skipped.append(event)
+                results.append({"event": event, "slug": hit["slug"], "track": hit["track"],
+                                "ring": hit.get("ring", 0.0), "sessions": hit["sessions"],
+                                "errors": [], "reused": True})
+            else:
+                todo.append(event)
+        if skipped:
+            print(f"unchanged, reusing {len(skipped)} event(s): "
+                  f"{', '.join(e.replace(' Grand Prix', '') for e in skipped)}", flush=True)
+        events = todo
+    if not events:
+        print("nothing to rebuild", flush=True)
+
     if jobs == 1:
         for event in events:
             print(f"== {event} ==", flush=True)
@@ -356,14 +457,35 @@ def main():
             manifest["sessions"].setdefault(r["slug"], {})[session] = {
                 "manifest": files["manifest"], "bin": files["bin"],
             }
-        sess = ", ".join(f"{s} {files['bytes'] // 1024} KB"
-                         for s, files in sorted(r["sessions"].items())) or "no sessions"
+        sess = ", ".join(
+            f"{s} {files['bytes'] // 1024} KB" if files.get("bytes") else f"{s} reused"
+            for s, files in sorted(r["sessions"].items())) or "no sessions"
         print(f"  {r['slug']:<24} ring={r['ring']:>7.0f} m  {sess}")
         for err in r["errors"]:
             print(f"    ERROR {err}")
 
     print("")
     print(f"{len(results)} event(s) in {time.time() - started:.0f}s on {jobs} process(es)")
+
+    # Record what was built so the next run can skip it. Reused entries are carried
+    # through unchanged; only freshly built events get a new fingerprint.
+    for r in results:
+        if r.get("reused"):
+            continue
+        fresh_cache[r["event"]] = {
+            "key": f"{pipeline}:{active_year()}:"
+                   f"{_inputs_fingerprint(r['event'], list(args.sessions))}",
+            "slug": r["slug"], "track": r["track"], "ring": r.get("ring", 0.0),
+            # `bytes` travels with the entry: the summary line below prints it, and a
+            # reused event takes this dict verbatim. Dropping it made every fully-cached
+            # run die with KeyError: 'bytes' after the artifacts were written but before
+            # the index was, leaving index.json pointing at the previous build.
+            "sessions": {k: {"manifest": v["manifest"], "bin": v["bin"],
+                              "bytes": v.get("bytes", 0)}
+                          for k, v in r["sessions"].items()},
+        }
+    (OUT_DIR / BUILD_CACHE).write_text(
+        json.dumps(fresh_cache, indent=1, sort_keys=True), encoding="utf-8")
 
     index_name = write_json(manifest, OUT_DIR, "index")
     # a stable, un-hashed pointer so the app always knows where to start

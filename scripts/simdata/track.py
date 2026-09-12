@@ -649,6 +649,13 @@ GRID_DUP_STATION_M = 0.05
 GRID_MAX_LATERAL_M = 25.0
 
 
+# The real grid pitch, pooled over 14 grids and 285 cars by simdata/launch.py:
+# 8.041 m +/- 0.034. Used only to sanity-check a per-session lattice fit, never as the
+# fitted value itself.
+POOLED_PITCH_M = 8.041
+PITCH_TOLERANCE_M = 1.2
+
+
 def grid(session_dir, table: LapTable, ring: Ring, sf_station: float, pitch_m=8.0):
     """Grid ORDER is derived; the anchor and stagger are RULE values.
 
@@ -722,6 +729,53 @@ def grid(session_dir, table: LapTable, ring: Ring, sf_station: float, pitch_m=8.
     placed.sort(key=lambda o: -o["rel"])
     order = [o["driver"] for o in placed]
 
+    # The ANCHOR is measured, not assumed. This function's docstring used to say the
+    # feed "contains neither an anchor nor a lateral stagger", and for the stagger that
+    # is still true -- stationary cars are snapped to the centreline. But the anchor is
+    # right there in the lap-1 stations: the front box's distance past the timing line.
+    # It is emphatically NOT a constant. Measured across the 2026 grids it spans -32.8 m
+    # (Canada) to +291.2 m (Monza), 324 m of spread, and Silverstone's is +117.1 +/- 1.6.
+    # Placing pole a fixed 8 m BEHIND the line -- which is what the renderer did while
+    # this was unavailable -- put the British grid 125 m from its real boxes.
+    anchor_m = anchor_se = None
+    anchor_note = "not attempted"
+    try:
+        # Imported HERE, not at module scope: launch.py imports GRID_DUP_STATION_M from
+        # this module, so a top-level import either way round is circular.
+        from .launch import fit_pitch
+        rel_desc = np.array(sorted((o["rel"] for o in placed), reverse=True))
+        got = fit_pitch(rel_desc, pitch_m)
+        if got is None:
+            anchor_note = "too few placed cars to fit a lattice"
+        elif not (POOLED_PITCH_M - PITCH_TOLERANCE_M
+                  <= got["pitchM"] <= POOLED_PITCH_M + PITCH_TOLERANCE_M):
+            # Coherence alone is not enough. A session whose cars do not really sit on
+            # boxes still produces a peak, and that peak lands on a HARMONIC: measured,
+            # Australia fits 4.995 m and Canada 6.459 m against a real grid pitch of
+            # 8.041 +/- 0.034 m (pooled over 14 grids, 285 cars). A pitch that far from
+            # the pooled value means the lattice found is an artefact, so the anchor
+            # built on it would be too.
+            anchor_note = (f"fitted pitch {got['pitchM']:.3f} m is not the grid pitch "
+                           f"({POOLED_PITCH_M:.3f} m +/- {PITCH_TOLERANCE_M:.1f}): the "
+                           "lattice found is a harmonic, not these cars' boxes")
+        elif got["coherence"] <= got["noiseFloor"]:
+            # The cars do not sit on a box lattice at all, so "the front box" is not
+            # something this session can locate, and its apparent peak is an artefact.
+            anchor_note = (f"lattice coherence {got['coherence']:.3f} is at the "
+                           f"{got['noiseFloor']:.3f} noise floor: these cars do not "
+                           "resolve their boxes")
+        else:
+            # poleAlong is in `rel`'s frame (relative to the median car), so lift it back
+            # onto the ring and measure from the timing line, along travel.
+            a = float((med + got["poleAlong"] - sf_station) % L)
+            anchor_m = a - L if a > L / 2 else a     # signed; negative = short of the line
+            anchor_se = float(got["poleAlongSe"])
+            anchor_note = (f"fitted box lattice, pitch {got['pitchM']:.3f} m, coherence "
+                           f"{got['coherence']:.3f} vs {got['noiseFloor']:.3f} floor, "
+                           f"n={got['n']}, within-box scatter {got['boxScatterM']:.2f} m")
+    except Exception as exc:               # noqa: BLE001 - absence is reported, not raised
+        anchor_note = f"anchor fit failed: {type(exc).__name__}"
+
     slots = [{"position": i + 1, "driver": drv,
               "station": (sf_station - (i + 1) * pitch_m) % L,
               "lateralSign": 1 if i % 2 == 0 else -1}
@@ -729,7 +783,9 @@ def grid(session_dir, table: LapTable, ring: Ring, sf_station: float, pitch_m=8.
     rels = sorted(o["rel"] for o in placed)
     spacing = np.diff(rels) if len(rels) > 1 else np.array([])
     prov = ("order DERIVED from lap-1 stations; pit starters OBSERVED from the lap-1 "
-            "pout row; anchor and stagger RULE (absent from the feed)")
+            "pout row; anchor DERIVED from the fitted box lattice (null when the cars "
+            "do not resolve one); stagger RULE (the feed snaps stationary cars to the "
+            "centreline, so it carries no lateral)")
     if unplaced:
         prov += (f"; {len(unplaced)} driver(s) unplaced: their lap-1 position is a "
                  "shared placeholder coordinate, not a measurement")
@@ -740,6 +796,12 @@ def grid(session_dir, table: LapTable, ring: Ring, sf_station: float, pitch_m=8.
         "observedSpacingMedian": float(np.median(np.abs(spacing))) if spacing.size else None,
         # np.std of an empty slice is NaN, which is not representable in JSON
         "observedLateralStd": _finite_or_none(np.std([o["rawLateral"] for o in placed])),
+        # Signed distance from the timing line to the FRONT BOX along travel. null when
+        # this session's cars do not resolve a box lattice -- a null here is the honest
+        # answer and the consumer must fall back, never treat it as zero.
+        "anchorMetres": anchor_m,
+        "anchorSeMetres": anchor_se,
+        "anchorNote": anchor_note,
         "provenance": prov,
     }
 

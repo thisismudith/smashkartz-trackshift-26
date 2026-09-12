@@ -237,8 +237,18 @@ def build_params() -> dict:
     t = build_tidy_table()
     mask = clean_mask(t)
     race = t["session"] == "Race"
-    dutch_rain = (t["event"] == "Dutch Grand Prix") & t["wR"]
-    mask_dry = mask & race & ~dutch_rain
+    # Rain laps run on SLICKS, wherever they happen. clean_mask already drops wet
+    # COMPOUNDS, so these are the laps it cannot see: dry rubber on a wet track, which
+    # is not dry pace and must not fit the dry model.
+    #
+    # This used to name the 2026 Dutch Grand Prix. Naming an event silently made the
+    # exclusion a no-op for every other season -- measured on 2024, where 447 clean
+    # rain-flagged slick laps (Sao Paulo 259, British 170, Spanish 18) all entered the
+    # dry fit. For 2026 the two rules are IDENTICAL (all 142 of that season's
+    # rain-flagged clean laps are at the Dutch GP), so the shipped 2026 parameters do
+    # not move: verified by rebuilding to the same params hash.
+    rain_on_slicks = t["wR"]
+    mask_dry = mask & race & ~rain_on_slicks
 
     track_fits = {}
     for ev in sorted(set(t["event"][mask_dry])):
@@ -249,8 +259,8 @@ def build_params() -> dict:
     deg = track_degradation_index(track_fits)
     da = dirty_air(t, track_fits)
 
-    drv_off, drv_r2, drv_n = driver_team_offsets(t, mask & ~dutch_rain, "drv")
-    team_off, team_r2, team_n = driver_team_offsets(t, mask & ~dutch_rain, "team")
+    drv_off, drv_r2, drv_n = driver_team_offsets(t, mask & ~rain_on_slicks, "drv")
+    team_off, team_r2, team_n = driver_team_offsets(t, mask & ~rain_on_slicks, "team")
 
     all_resid = np.concatenate([f["residual_full"] for f in track_fits.values() if f is not None])
     all_drv = np.concatenate([f["drv_full"] for f in track_fits.values() if f is not None])
@@ -301,9 +311,11 @@ def build_params() -> dict:
         "fieldAndTyre": facts,
         "wetWeather": {
             "provenance": "DEFAULT",
-            "note": "there is no wet running anywhere in 2026 (the Dutch rain race was "
-                    "run entirely on slicks; fitted rain effect was not significant); "
-                    "wet pace, the compound crossover and INTERMEDIATE/WET degradation "
+            "note": "no wet-COMPOUND running is present in the seasons built so far "
+                    "(2026's only rain race, the Dutch GP, was run entirely on slicks "
+                    "and its fitted rain effect was not significant); rain laps on "
+                    "slicks are excluded from the dry fit rather than modelled. Wet "
+                    "pace, the compound crossover and INTERMEDIATE/WET degradation "
                     "must ship as documented, user-visible defaults",
         },
         # Deliberately NOT emitted: a wall-clock duration inside a

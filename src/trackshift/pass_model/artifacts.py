@@ -37,6 +37,11 @@ _TRACKED_PACKAGES = (
 )
 
 
+#: Repo root, derived from this file's own location rather than the working
+#: directory, so every default resolves the same way whatever the caller's cwd.
+PACKAGE_ROOT = Path(__file__).resolve().parents[3]
+
+
 def git_commit(root: Path | None = None) -> str | None:
     """The HEAD commit, or ``None`` outside a repository.
 
@@ -47,7 +52,7 @@ def git_commit(root: Path | None = None) -> str | None:
     try:
         return subprocess.check_output(
             ["git", "rev-parse", "HEAD"],
-            cwd=str(root) if root else None,
+            cwd=str(root if root is not None else PACKAGE_ROOT),
             text=True,
             stderr=subprocess.DEVNULL,
         ).strip()

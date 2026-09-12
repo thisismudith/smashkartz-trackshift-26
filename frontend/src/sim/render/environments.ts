@@ -274,6 +274,31 @@ export function environmentForTrack(
   return { def, assetUrl: surface.assetUrl, assetSha256: surface.assetSha256, placement };
 }
 
+/**
+ * Whether two resolutions name the same model, standing in the same place.
+ *
+ * This is what makes installing an environment IDEMPOTENT: NewRaceCanvas re-calls
+ * setTrack on the same renderer for every re-roll, and re-installing would mean a second
+ * fetch, a second model in the scene, or both.
+ *
+ * Two nulls are NOT "the same". Going to or from the ribbon has work attached either way
+ * -- the ribbon is a brand-new object after a re-roll and its visibility has to be
+ * re-applied -- so null always takes the full path.
+ *
+ * The placement is compared as well as the URL. A re-bake can move the model without
+ * changing the published bytes (a sharper fit against the same asset), and the renderer
+ * must not keep the old position just because the file name matches.
+ */
+export function sameEnvironment(
+  a: ResolvedEnvironment | null, b: ResolvedEnvironment | null,
+): boolean {
+  if (!a || !b) return false;
+  return a.assetUrl === b.assetUrl
+    && a.placement.rotationY === b.placement.rotationY
+    && a.placement.scale === b.placement.scale
+    && a.placement.position.every((v, i) => v === b.placement.position[i]);
+}
+
 /** Texture slots that get the anisotropy bump. Colour slots additionally get sRGB. */
 const ANISO_SLOTS = ["map", "emissiveMap", "normalMap", "roughnessMap", "metalnessMap"] as const;
 const SRGB_SLOTS = ["map", "emissiveMap"] as const;

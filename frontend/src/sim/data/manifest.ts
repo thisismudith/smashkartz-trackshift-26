@@ -32,6 +32,11 @@ export interface RawTrackModel {
      * separates these from `order` and from `pitStarters`; parsing it here is what
      * stops the frontend inventing a slot for them. */
     unplaced?: string[] | null;
+    /** The PLACEMENT Python actually published for each slot. Optional only because
+     * an artifact built before it existed has none; every shipped model carries it
+     * (12 of 13 with a full field, monaco-grand-prix with 2 and
+     * chinese-grand-prix with 0, which is that pack's broken lap-1 positions). */
+    slots?: RawGridSlot[] | null;
   };
   /** zCm may be null per vertex once Python stops shipping the held pit-lane elevation
    * as if it were measured; parseTrackModel turns that into NaN and the renderer takes
@@ -80,6 +85,61 @@ export interface RawTrackSurface {
   assetUrl?: string | null;
   assetSha256?: string | null;
   provenance?: string | null;
+}
+
+/** One starting-grid slot exactly as scripts/simdata/track.py writes it. */
+export interface RawGridSlot {
+  position: number;
+  driver: string | null;
+  station: number;
+  /** +1 or -1: which side of the ring Python put this slot on. A RULE, like the
+   * anchor and the pitch (grid.provenance: "anchor and stagger RULE (absent from the
+   * feed)") -- but it is the PRODUCER'S rule, and this is the only copy of it. */
+  lateralSign: number;
+}
+
+/** A parsed grid slot. Same shape, with anything unusable dropped rather than guessed. */
+export interface GridSlot {
+  /** 1-based grid position, as published. */
+  position: number;
+  driver: string | null;
+  station: number;
+  /** -1 or +1. Never 0: a slot whose sign the producer did not state is dropped. */
+  lateralSign: -1 | 1;
+}
+
+/**
+ * The grid slots the producer published, or [] when the artifact carries none.
+ *
+ * Why this is parsed at all, when the frontend already derives a slot station from
+ * `grid.pitchMetres`: the derivation was MEASURED against every shipped model and the
+ * two agree to 5 mm or better on all 232 published slots, so the station is not the
+ * problem. `lateralSign` is. The frontend had no copy of it and invented its own from
+ * slot parity (`slot % 2 === 0 ? -1 : +1`), which is the OPPOSITE of Python's on every
+ * one of those 232 slots -- i.e. the whole grid was drawn mirrored about the ring
+ * relative to the placement the producer published. One producer per contract
+ * (AGENTS.md 38): the side comes from here now, and parity is only the fallback for a
+ * driver the producer did not place.
+ */
+export function parseGridSlots(raw: RawTrackModel): GridSlot[] {
+  const slots = raw.grid?.slots;
+  if (!Array.isArray(slots)) return [];
+  const out: GridSlot[] = [];
+  for (const s of slots) {
+    const position = finiteOrNull(s?.position);
+    const station = finiteOrNull(s?.station);
+    const sign = finiteOrNull(s?.lateralSign);
+    // A slot with no side stated is not a slot with side 0; it is a slot this file
+    // knows nothing about, and the caller falls back to its own rule for it.
+    if (position === null || station === null || (sign !== 1 && sign !== -1)) continue;
+    out.push({
+      position,
+      driver: typeof s.driver === "string" && s.driver ? s.driver : null,
+      station,
+      lateralSign: sign,
+    });
+  }
+  return out;
 }
 
 export interface RawCorners {
@@ -353,7 +413,72 @@ export interface RawSessionManifest {
   };
 }
 
-export function parseTrackModel(raw: RawTrackModel): TrackModel {
+/**
+ * A parsed track model, plus the producer-published grid slots.
+ *
+ * `gridSlots` rides alongside the shared TrackModel rather than inside it because
+ * `TrackModel` lives in contract/types.ts and is owned elsewhere; widening a shared
+ * contract silently is exactly what AGENTS.md 0.1 forbids. Read it through
+ * `gridSlotsOf()`, which works on a bare TrackModel and answers [] when the model came
+ * from somewhere that carries none (the generated-race engine, a test fixture).
+ */
+export type ParsedTrackModel = TrackModel & { gridSlots: GridSlot[] };
+
+/** The producer's published grid slots for a model, or [] when it carries none. */
+export function gridSlotsOf(track: TrackModel): GridSlot[] {
+  const slots = (track as Partial<ParsedTrackModel>).gridSlots;
+  return Array.isArray(slots) ? slots : [];
+}
+
+/**
+ * How many metres of drivable road either side of the ring the ARTIFACT has MEASURED
+ * at `stationM` -- or null when this circuit is drawn as the procedural ribbon, where
+ * the question does not arise.
+ *
+ * THIS IS NOT halfWidthAt(). The two answer different questions and only one of them
+ * is a measurement:
+ *
+ *   halfWidthAt()  is the RIBBON's half-width. The artifact states its own provenance:
+ *                  the SHAPE is "DERIVED from per-station lateral extremes and corner
+ *                  markers" but the SCALE is "RULE: HALF_WIDTH_MIN_M..HALF_WIDTH_MAX_M
+ *                  (6.0-7.5 m), a stated constant ... The position feed does not
+ *                  measure track width." On a circuit drawn as the ribbon that is
+ *                  self-consistent -- the road the viewer sees IS that half-width, so a
+ *                  car placed inside it is on the road it is drawn on.
+ *
+ *   this function  is about the road a REAL CIRCUIT MODEL has. Once a `surface` block
+ *                  is present the viewer is looking at the GLB, not the ribbon, and the
+ *                  RULE half-width says nothing about it. Measured at Silverstone by
+ *                  raycasting the shipped GLB along the ring's own left normal, in
+ *                  0.25 m steps, with the same scorer the bake uses: at the front of
+ *                  the grid (stations 5770-5818 m) the asphalt ends 1.75-2.00 m to the
+ *                  LEFT of the ring and runs 15.0-17.5 m to the RIGHT. The ring there
+ *                  is the RACING LINE out of Club, not the road centre -- the road
+ *                  centre is a measured 6.5 m to the right of it -- while the RULE
+ *                  half-width claims a symmetric 6.33-7.04 m. The feed's own telemetry
+ *                  agrees: over 1,108,923 position samples from the two British packs,
+ *                  the largest lateral ever recorded anywhere in that 168 m stretch is
+ *                  +2.79 m.
+ *
+ * So the answer today is 0 for every surfaced circuit, and that is a measurement, not a
+ * placeholder: `surface_block()` in scripts/simdata/glb_surface.py bakes exactly ONE
+ * probe per station -- the ring itself -- and emits height, slope and camber. No
+ * lateral extent is measured, therefore none may be claimed. (`camberPermille` is the
+ * nearest thing to a width and it is not one: it is non-null wherever probes at one of
+ * 2.0/1.5/1.0 m landed, and which baseline won is not published.)
+ *
+ * What would make this return a real number: the bake emitting a per-station SIGNED
+ * road extent -- left and right separately, because the ring is the racing line and a
+ * single symmetric half-width cannot express the 6.5 m offset measured above. That is
+ * also when this grows a `stationM` argument; it has none today precisely because the
+ * artifact carries nothing that varies along the lap. See the handoff.
+ */
+export function measuredLateralRoomM(track: Pick<TrackModel, "surface">): number | null {
+  if (!track.surface) return null;
+  return 0;
+}
+
+export function parseTrackModel(raw: RawTrackModel): ParsedTrackModel {
   const n = raw.ring.xCm.length;
   const x = new Float32Array(n), y = new Float32Array(n), z = new Float32Array(n);
   for (let i = 0; i < n; i++) {
@@ -408,6 +533,7 @@ export function parseTrackModel(raw: RawTrackModel): TrackModel {
     // null for 12 of 13 circuits and for every pre-schemaVersion-2 artifact. That is
     // the normal case, not a failure: those circuits keep the procedural ribbon.
     surface: parseTrackSurface(raw),
+    gridSlots: parseGridSlots(raw),
   };
 }
 

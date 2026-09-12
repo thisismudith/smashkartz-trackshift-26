@@ -3,7 +3,8 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { SAMPLE_BYTES } from "../data/codec";
 import type { RawLapEntry, RawSessionManifest, RawTrackModel } from "../data/manifest";
-import { halfWidthAt, parseTrackModel } from "../data/manifest";
+import type { GridSlot } from "../data/manifest";
+import { gridSlotsOf, halfWidthAt, parseTrackModel } from "../data/manifest";
 import type { CarState, TrackModel } from "../contract/types";
 import { CAR_RENDER_WIDTH_M } from "../render/presentation";
 import { ReplayTimeline } from "./timeline";
@@ -1075,5 +1076,187 @@ describe.skipIf(allPacks.length === 0)("placement and frame on every real 2026 p
     console.log(`frame-B car-instants across ${allPacks.length} packs: A ${aTotal}, B ${bTotal}\n  `
       + (lines.join("\n  ") || "(no frame-B laps on disk)"));
     expect(aTotal).toBeGreaterThan(100000);
+  }, 300_000);
+});
+
+// ===========================================================================
+// A RULE placement may only claim road the artifact has MEASURED
+// ===========================================================================
+
+/** The same synthetic race track, but drawn from a real circuit model: it carries a
+ * baked `surface`, so the ribbon's RULE half-width is no longer what the viewer sees.
+ * Heights are flat and valid everywhere -- nothing here depends on them; what matters
+ * is that the bake, like every real bake, measures ONE point per station (the ring) and
+ * therefore measures no lateral extent at all. */
+function surfacedTrack(): TrackModel {
+  const base = raceTrack();
+  const n = base.x.length;
+  return {
+    ...base,
+    surface: {
+      dsMetres: base.lengthMetres / n,
+      source: "test.glb", sourceSha256: null, profile: "test",
+      transform: { scale: 1, yawDeg: 0, mirror: -1, txM: 0, tzM: 0, tyM: 0 },
+      zM: new Float32Array(n), slope: new Float32Array(n), camber: new Float32Array(n),
+      valid: new Uint8Array(n).fill(1),
+      residual: { stdM: 0.05, maxM: 0.17 },
+      coverage: 1, roadCoverage: 0.9985,
+      assetUrl: "/sim/glb/test.glb", assetSha256: null,
+      provenance: "DERIVED", provenanceNote: "DERIVED (test fixture)",
+    },
+  };
+}
+
+describe("a placement claims only the road that has been measured", () => {
+  const { manifest, bin } = buildRaceManifest();
+
+  it("keeps the two columns on a circuit drawn as the procedural ribbon", () => {
+    // Positive control. The ribbon IS halfWidthAt, so a car placed inside it is on the
+    // road it is drawn on, and nothing about this path changes.
+    const track = raceTrack();
+    const grid = [...new ReplayTimeline(manifest, track, bin).sampleAt(2).values()]
+      .filter((c) => c.status === "grid");
+    expect(grid.length).toBeGreaterThan(4);
+    for (const car of grid) {
+      expect(Math.abs(car.lateralM), car.driver).toBeCloseTo(3, 6); // half of 6 m
+      expect(roadFits(track, car.stationM, car.lateralM)).toBe(true);
+    }
+  });
+
+  it("collapses the columns once the drawn road is a real model", () => {
+    // THE FIX. surface_block() bakes one probe per station -- the ring itself -- so the
+    // artifact measures no lateral road whatsoever, and a RULE stagger has nothing to
+    // stand on. Measured on the real british-grand-prix model before this rule existed:
+    // the placement claimed +/-3.17..3.52 m while the GLB asphalt at the front of the
+    // grid ends 1.75-2.00 m to the LEFT of the ring, putting ten of the 21 cars
+    // 1.2-1.8 m out on the grass.
+    const track = surfacedTrack();
+    const tl = new ReplayTimeline(manifest, track, bin);
+    let placed = 0;
+    for (let t = 0; t <= tl.duration; t += 0.5) {
+      for (const car of tl.sampleAt(t, false).values()) {
+        if (car.positionProvenance !== "RULE" || car.status === "pit") continue;
+        placed++;
+        expect(car.lateralM, `${car.driver} @${t} (${car.status})`).toBe(0);
+      }
+    }
+    expect(placed).toBeGreaterThan(500);
+  });
+
+  it("still refuses to paint a placed car with the telemetry lateral", () => {
+    // The collapse must not be achieved by letting telemetry win: a placed car's
+    // lateral is still OWNED by the placement, it is just now zero.
+    const tl = new ReplayTimeline(manifest, surfacedTrack(), bin);
+    const grid = [...tl.sampleAt(2, false).values()].filter((c) => c.status === "grid");
+    expect(grid.length).toBeGreaterThan(4);
+    for (const car of grid) expect(car.lateralM).toBe(0);
+  });
+});
+
+// ===========================================================================
+// The side of a grid slot belongs to the producer
+// ===========================================================================
+
+/** `raceTrack()` plus the grid slots an artifact publishes, pole on the LEFT (+1) --
+ * which is the opposite of the parity rule this file used to apply. */
+function slottedTrack(signs: number[]): TrackModel & { gridSlots: GridSlot[] } {
+  return {
+    ...raceTrack(),
+    gridSlots: signs.map((lateralSign, i) => ({
+      position: i + 1,
+      driver: RACE_DRIVERS[i],
+      station: TRACK_LENGTH - (i + 1) * 8,
+      lateralSign: lateralSign as -1 | 1,
+    })),
+  };
+}
+
+describe("grid slot side comes from the producer, not from slot parity", () => {
+  const { manifest, bin } = buildRaceManifest();
+
+  it("puts each car on the side the artifact published", () => {
+    // Every shipped artifact publishes pole on +1 and alternates from there; the parity
+    // rule here was `slot % 2 === 0 ? -1 : +1`, i.e. the mirror image, on all 232
+    // published slots across the 13 shipped models.
+    const signs = RACE_DRIVERS.map((_, i) => (i % 2 === 0 ? 1 : -1));
+    const track = slottedTrack(signs);
+    const grid = [...new ReplayTimeline(manifest, track, bin).sampleAt(2).values()]
+      .filter((c) => c.status === "grid");
+    expect(grid.length).toBeGreaterThan(4);
+    for (const car of grid) {
+      const slot = RACE_DRIVERS.indexOf(car.driver);
+      expect(Math.sign(car.lateralM), `${car.driver} slot ${slot}`).toBe(signs[slot]);
+    }
+  });
+
+  it("falls back to alternating sides only for a driver the producer did not place", () => {
+    // Monaco publishes 2 slots for a 22-car field and China 0; the rest of the field
+    // still has to go somewhere, and a made-up side is the honest fallback -- but only
+    // where there is no published one to honour.
+    const track = slottedTrack([1, -1]); // D01, D02 only
+    const grid = [...new ReplayTimeline(manifest, track, bin).sampleAt(2).values()]
+      .filter((c) => c.status === "grid");
+    const side = (d: string) => Math.sign(grid.find((c) => c.driver === d)!.lateralM);
+    expect(side("D01")).toBe(1);
+    expect(side("D02")).toBe(-1);
+    expect(side("D03")).toBe(-1);  // slot 2, parity
+    expect(side("D04")).toBe(1);   // slot 3, parity
+  });
+});
+
+describe.skipIf(allPacks.length === 0)("placements against the real 2026 packs", () => {
+  it("stands every placed car on the side the producer published, ribbon circuits", () => {
+    const lines: string[] = [];
+    let checked = 0, agreed = 0;
+    for (const pack of allPacks) {
+      if (pack.track.surface) continue;      // no side is claimed at all there
+      const slots = new Map(gridSlotsOf(pack.track)
+        .filter((s) => s.driver !== null).map((s) => [s.driver as string, s.lateralSign]));
+      if (slots.size === 0) continue;
+      const tl = new ReplayTimeline(pack.manifest, pack.track, pack.bin);
+      let n = 0, ok = 0;
+      for (let t = 0; t <= 4; t += 0.05) {
+        for (const car of tl.sampleAt(t, false).values()) {
+          const want = slots.get(car.driver);
+          if (car.status !== "grid" || want === undefined) continue;
+          n++;
+          if (Math.sign(car.lateralM) === want) ok++;
+        }
+      }
+      checked += n;
+      agreed += ok;
+      lines.push(`${pack.slug}/${pack.session}: ${ok}/${n} grid car-instants on the published side`);
+      expect(ok, `${pack.slug}/${pack.session}`).toBe(n);
+    }
+    console.log(`published grid side honoured (${agreed}/${checked}):\n  ${lines.join("\n  ")}`);
+    expect(checked).toBeGreaterThan(500);
+  }, 300_000);
+
+  it("claims no lateral road on the circuit that is drawn from a real model", () => {
+    // british-grand-prix is the only shipped circuit with a baked surface. Measured by
+    // raycasting the shipped GLB along the ring's left normal in 0.25 m steps with the
+    // bake's own scorer: at grid stations 5769.7-5817.7 m the asphalt ends +1.75..+2.00 m
+    // from the ring, so the old +/-3.17..3.52 m placement stood ten of 21 cars on the
+    // grass. The feed agrees -- the largest lateral in 1,108,923 position samples
+    // anywhere in that 168 m stretch is +2.79 m.
+    const surfaced = allPacks.filter((p) => p.track.surface);
+    expect(surfaced.length).toBeGreaterThan(0);
+    for (const pack of surfaced) {
+      const tl = new ReplayTimeline(pack.manifest, pack.track, pack.bin);
+      let placed = 0;
+      const check = (car: CarState, where: string) => {
+        if (car.positionProvenance !== "RULE" || car.status === "pit") return;
+        placed++;
+        expect(car.lateralM, `${pack.slug}/${pack.session} ${car.driver} (${where})`).toBe(0);
+      };
+      for (let t = 0; t <= 60; t += 0.25) {
+        for (const car of tl.sampleAt(t, false).values()) check(car, car.status);
+      }
+      for (let t = Math.max(0, tl.duration - 120); t <= tl.duration; t += 1) {
+        for (const car of tl.sampleAt(t, false).values()) check(car, "parked");
+      }
+      console.log(`${pack.slug}/${pack.session}: ${placed} placed car-instants, all at lateral 0`);
+      expect(placed).toBeGreaterThan(100);
+    }
   }, 300_000);
 });

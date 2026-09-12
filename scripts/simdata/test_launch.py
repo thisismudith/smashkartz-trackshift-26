@@ -26,9 +26,11 @@ import pytest
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
 from simdata.launch import (LAUNCH_FIT_CEILING_KPH,
-                            PITCH_MIN_COHERENCE_RATIO, LaunchParams,
-                            assign_slots, cluster_mean, fit_constant_acceleration,
-                            fit_pitch, fit_standing_start, lap1_distance_m,
+                            PITCH_MIN_COHERENCE_RATIO, SLOT_MIN_ROWS, LaunchParams,
+                            assign_slots, cluster_mean, delete_one_cluster_se,
+                            fit_constant_acceleration,
+                            fit_pitch, fit_standing_start,
+                            geometric_seconds_per_slot, grid_slope_fit, lap1_distance_m,
                             lattice_noise_floor, lattice_period, launch_profile,
                             launch_state, launch_time_loss_s, pooled_lattice_period,
                             principal_axis, race_sessions, regression_to_mean,
@@ -350,6 +352,127 @@ def test_assign_slots_leaves_a_hole_where_a_box_was_empty():
 
 
 # ======================================================================================
+# CONTRACT: lap 1 is charged ONCE
+#
+# The defect these pin: the artifact shipped a whole-GRID mean and a per-slot slope, and
+# the engine used the mean as the SLOT-1 intercept and then added the full slope on top.
+# Every car in every race therefore carried slope * (meanGridSlot - 1) seconds nobody
+# measured. The second half of the same defect is geometric: a caller that starts cars
+# from their own slot stations already drives the extra (k - 1) x pitch metres, so the
+# geometric share of the slope is paid twice if the whole slope is added.
+# ======================================================================================
+
+def _grid_rows(intercept=6.0, slope=0.35, sessions=(0.0, 2.0, -1.5), n=20):
+    """A synthetic field whose excess is EXACTLY intercept + slope*(k-1) + session effect."""
+    return [{"cluster": f"S{i}", "gridRank": k,
+             "excessS": intercept + slope * (k - 1) + off}
+            for i, off in enumerate(sessions) for k in range(1, n + 1)]
+
+
+def test_grid_slope_fit_recovers_the_intercept_and_slope_it_was_given():
+    f = grid_slope_fit(_grid_rows(intercept=6.0, slope=0.35, sessions=(0.0, 2.0, -1.5)))
+    assert f["slope"] == pytest.approx(0.35, abs=1e-9)
+    assert f["meanGridSlot"] == pytest.approx(10.5, abs=1e-9)
+    # the intercept is the n-weighted mean session effect, i.e. slot 1 at an average start
+    assert f["intercept"] == pytest.approx(6.0 + (0.0 + 2.0 - 1.5) / 3.0, abs=1e-9)
+    assert f["nClusters"] == 3
+
+
+def test_the_field_mean_is_not_the_pole_value_and_the_gap_is_the_whole_defect():
+    rows = _grid_rows(intercept=6.0, slope=0.35, n=20)
+    f = grid_slope_fit(rows)
+    mean = float(np.mean([r["excessS"] for r in rows]))
+    slot1 = float(np.mean([r["excessS"] for r in rows if r["gridRank"] == 1]))
+    # the intercept IS what the slot-1 cars actually did
+    assert f["intercept"] == pytest.approx(slot1, abs=1e-9)
+    # and the mean is that plus the slope carried to the middle of the grid: exactly the
+    # seconds the old engine added to every car before adding the slope again
+    assert mean - f["intercept"] == pytest.approx(0.35 * (10.5 - 1), abs=1e-9)
+    assert mean - f["intercept"] > 3.0
+
+
+def test_the_identity_the_intercept_is_built_from_holds_exactly():
+    for sessions, n in (((0.0, 1.0), 18), ((0.0,), 22), ((-2.0, 0.5, 4.0, 1.0), 20)):
+        f = grid_slope_fit(_grid_rows(sessions=sessions, n=n))
+        assert f["level"] == pytest.approx(
+            f["intercept"] + f["slope"] * (f["meanGridSlot"] - 1), abs=1e-9)
+
+
+def test_a_line_fitted_on_one_sample_may_not_be_paired_with_another_sample_mean():
+    """Why meanGridSlot has to ship WITH its own n: the identity is per row set."""
+    full = grid_slope_fit(_grid_rows(n=20))
+    front = grid_slope_fit(_grid_rows(n=10))      # only the front half finished lap 1
+    assert front["meanGridSlot"] < full["meanGridSlot"]
+    # same true line, different sample mean -- so the SAME intercept comes out
+    assert front["intercept"] == pytest.approx(full["intercept"], abs=1e-9)
+    # ...but pairing one sample's level with the other's mean rank does not
+    wrong = front["level"] - full["slope"] * (full["meanGridSlot"] - 1)
+    assert abs(wrong - front["intercept"]) > 0.5
+
+
+def test_grid_slope_fit_refuses_a_sample_too_small_to_separate_a_level_from_a_slope():
+    assert grid_slope_fit([]) is None
+    assert grid_slope_fit(_grid_rows(sessions=(0.0,), n=4)) is None
+    # a row with no grid rank cannot be placed on the line and is not counted
+    unranked = [{"cluster": "S0", "gridRank": None, "excessS": 4.0}] * 40
+    assert grid_slope_fit(unranked) is None
+
+
+def test_delete_one_start_jackknife_is_zero_when_the_starts_agree():
+    rows = _grid_rows(sessions=(0.0, 0.0, 0.0, 0.0))
+    se, k = delete_one_cluster_se(
+        rows, lambda rr: (grid_slope_fit(rr) or {}).get("intercept"))
+    assert k == 4
+    assert se == pytest.approx(0.0, abs=1e-9)
+
+
+def test_delete_one_start_jackknife_grows_with_the_spread_between_starts():
+    se, _ = delete_one_cluster_se(
+        _grid_rows(sessions=(0.0, 3.0, -3.0, 6.0)),
+        lambda rr: (grid_slope_fit(rr) or {}).get("intercept"))
+    assert se > 1.0
+
+
+def test_the_jackknife_refuses_rather_than_inventing_an_se_from_two_starts():
+    se, k = delete_one_cluster_se(
+        _grid_rows(sessions=(0.0, 1.0)),
+        lambda rr: (grid_slope_fit(rr) or {}).get("intercept"))
+    assert se is None and k == 2
+
+
+def test_the_geometric_part_of_a_slot_is_pitch_over_the_speed_it_is_covered_at():
+    assert geometric_seconds_per_slot(8.029, 76.0) == pytest.approx(8.029 / 76.0)
+    # the lap AVERAGE speed is a different, lower denominator and gives a materially
+    # bigger number; the two must not be swapped for one another
+    assert (geometric_seconds_per_slot(8.029, 55.0)
+            > 1.3 * geometric_seconds_per_slot(8.029, 76.0))
+    for bad in ((0.0, 76.0), (8.029, 0.0), (-1.0, 76.0), (8.029, -5.0)):
+        with pytest.raises(ValueError):
+            geometric_seconds_per_slot(*bad)
+
+
+def test_one_slot_of_extra_lap_one_distance_is_exactly_one_pitch_of_geometry():
+    """Ties the geometric seconds back to this module's own lap-1 distance."""
+    ring, pitch = 5825.74, 8.029
+    d = [lap1_distance_m(116.9, pitch, k, ring) for k in range(1, 23)]
+    assert np.allclose(np.diff(d), pitch)
+    assert (d[1] - d[0]) / 76.0 == pytest.approx(
+        geometric_seconds_per_slot(pitch, 76.0), abs=1e-12)
+
+
+def test_a_field_launched_from_its_own_slots_already_drives_the_geometric_metres():
+    """launch_state puts slot k (k-1) pitches behind pole, so it PAYS that distance. The
+    whole slope may not then be added on top: only the part that is not this."""
+    order, params = _uniform_field(22)
+    pitch = 8.029
+    state = launch_state(order, params, 0.0, anchor_m=116.9, pitch_m=pitch,
+                         ring_length_m=5825.74)
+    behind = [state[0]["progressM"] - c["progressM"] for c in state]
+    assert behind[-1] == pytest.approx(21 * pitch, abs=1e-9)
+    assert all(b == pytest.approx((i) * pitch, abs=1e-9) for i, b in enumerate(behind))
+
+
+# ======================================================================================
 # MEASURED: the 2026 feed itself
 # ======================================================================================
 
@@ -486,6 +609,116 @@ def test_the_lap_one_penalty_grows_down_the_grid():
     assert slope["value"] > 0.0
     assert slope["ci95"][0] > 0.0
     assert "GEOMETRY" in slope["note"], "the caller must be warned not to double count"
+
+
+@pytestmark_data
+def test_the_pole_intercept_ships_and_is_not_the_field_mean():
+    """The BLOCKER: TypeScript needs a slot-1 value. Without one it used the whole-grid
+    mean as the intercept and then added the slope per slot on top of it."""
+    l1 = fitted()["lap1"]
+    pole, mean = l1["excessSecondsAtPole"], l1["excessSecondsVsCleanLap"]
+    assert pole["provenance"] == "DERIVED"
+    assert pole["value"] is not None, pole
+    assert 2.0 <= pole["value"] <= 9.0, pole
+    assert pole["value"] < mean["value"], "the pole car cannot lose the field average"
+    # the size of the defect, in seconds charged to every car in every generated race
+    assert 2.0 <= mean["value"] - pole["value"] <= 5.0, (pole, mean)
+    assert pole["n"] >= 100 and pole["se"] > 0.0
+    assert pole["seMethod"].startswith("delete-one")
+    assert "jackknife" in pole["note"]
+
+
+@pytestmark_data
+def test_the_pole_intercept_is_exactly_reconstructible_from_what_ships_beside_it():
+    l1 = fitted()["lap1"]
+    pole, slope, kbar = (l1["excessSecondsAtPole"], l1["excessSecondsPerGridSlot"],
+                         l1["meanGridSlot"])
+    # 2e-5 is the arithmetic of three values each rounded to 6 dp by leaf(), the slope's
+    # rounding multiplied by kbar - 1; it is not slack for a different definition
+    assert pole["value"] == pytest.approx(
+        pole["levelSeconds"] - slope["value"] * (kbar["value"] - 1), abs=2e-5)
+    # the level, the slope and the mean rank must all come from the SAME rows, or the
+    # identity above is silently false
+    assert pole["n"] == slope["n"] == kbar["n"]
+    assert pole["levelSeconds"] != l1["excessSecondsVsCleanLap"]["value"]
+
+
+@pytestmark_data
+def test_the_intercept_se_is_neither_the_means_nor_the_slopes():
+    """It is a function of BOTH, fitted on the same starts. Measured on this feed the
+    jackknife lands above either input SE, which is the check that the propagation was
+    done rather than one of the two being copied across."""
+    l1 = fitted()["lap1"]
+    pole, slope = l1["excessSecondsAtPole"], l1["excessSecondsPerGridSlot"]
+    assert pole["se"] > l1["excessSecondsVsCleanLap"]["se"]
+    assert pole["se"] > slope["se"]
+    assert pole["ci95"][0] > 0.0, "the pole penalty is still significantly positive"
+
+
+@pytestmark_data
+def test_the_mean_grid_slot_ships_with_the_sample_the_slope_was_fitted_on():
+    l1 = fitted()["lap1"]
+    kbar = l1["meanGridSlot"]
+    assert 8.0 <= kbar["value"] <= 13.0, kbar
+    assert kbar["se"] is not None and 0.0 < kbar["se"] < 1.0, kbar
+    assert kbar["n"] == l1["excessSecondsPerGridSlot"]["n"]
+    assert kbar["provenance"] == "DERIVED"
+
+
+@pytestmark_data
+def test_the_fitted_line_reproduces_the_measured_excess_at_every_grid_slot():
+    """intercept + slope * (k - 1) against what the feed actually did, slot by slot."""
+    q = fitted()["lap1"]["gridSlopeFitQuality"]
+    assert q["nSlots"] >= 15
+    assert q["minRowsPerSlot"] == SLOT_MIN_ROWS
+    assert q["slotMeanResidualRmsSeconds"] < 1.5, q
+    assert q["slotMeanResidualMaxAbsSeconds"] < 3.0, q
+    # the per-slot miss has to be small against the spread INSIDE one slot, or a straight
+    # line is hiding structure the caller would inherit
+    assert q["slotMeanResidualRmsSeconds"] < q["withinSlotSdSeconds"], q
+    assert q["nSlotsAll"] >= q["nSlots"]
+
+
+@pytestmark_data
+def test_the_geometric_share_of_the_grid_slope_is_measured_and_already_subtracted():
+    l1 = fitted()["lap1"]
+    slope = l1["excessSecondsPerGridSlot"]["value"]
+    geom = l1["geometricSecondsPerGridSlot"]["summary"]
+    non = l1["nonGeometricSecondsPerGridSlot"]
+    assert 0.0 < geom["value"] < slope, geom
+    assert non["value"] == pytest.approx(slope - geom["value"], abs=1e-6)
+    assert non["ci95"][0] > 0.0, "traffic is not all geometry"
+    # the caller is handed the answer, not the arithmetic
+    assert "nonGeometricSecondsPerGridSlot" in l1["excessSecondsPerGridSlot"]["note"]
+    assert "GEOMETRY" in l1["excessSecondsPerGridSlot"]["note"]
+
+
+@pytestmark_data
+def test_the_geometric_share_is_a_per_circuit_fact_not_one_constant():
+    block = fitted()["lap1"]["geometricSecondsPerGridSlot"]
+    per = block["perTrack"]
+    vals = [v["value"] for v in per.values() if v["value"] is not None]
+    assert len(vals) >= 8
+    # 8 m at 200-330 kph: nothing here may drift outside a physically possible band
+    assert all(0.05 < v < 0.25 for v in vals), per
+    assert max(vals) / min(vals) > 1.2, "one constant would be wrong by a fifth"
+    # only the starts that actually contribute a green lap-1 row are pooled, and the ones
+    # that do not say so rather than being averaged in silently
+    pooled = [v for v in per.values() if "NOT pooled" not in (v.get("note") or "")]
+    assert len(pooled) == block["summary"]["n"]
+    assert 0 < block["summary"]["n"] < len(per)
+    assert "END of lap 1" in block["definition"]
+
+
+@pytestmark_data
+def test_the_launch_loss_is_removed_at_pole_as_well_as_at_the_field_mean():
+    l1 = fitted()["lap1"]
+    split = l1["penaltySplit"]
+    loss = split["launchLossSeconds"]["value"]
+    at_pole = split["remainderSecondsAtPole"]
+    assert at_pole["value"] == pytest.approx(
+        l1["excessSecondsAtPole"]["value"] - loss, abs=1e-6)
+    assert 0.0 < at_pole["value"] < split["remainderSeconds"]["value"]
 
 
 @pytestmark_data

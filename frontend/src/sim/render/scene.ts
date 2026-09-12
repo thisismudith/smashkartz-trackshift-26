@@ -4,7 +4,7 @@ import * as THREE from "three";
 import type { TrackModel } from "../contract/types";
 import { CAR } from "@/components/loader/physics/constants";
 import { HAAS } from "@/lib/palette";
-import { halfWidthAt } from "../data/manifest";
+import { halfWidthAt, surfaceAt } from "../data/manifest";
 import { POSE_FLOATS_PER_CAR, POSE_STATUS } from "../worker/protocol";
 import {
   carInstanceY, FOCUS_OUTLINE_SCALE, focusGhostY, PRESENTATION_SCALE,
@@ -12,11 +12,12 @@ import {
 import { buildF1CarGeometry } from "./carGeometry";
 import { buildDriverLabels, type DriverLabels } from "./driverLabels";
 import {
-  applyEnvironmentMaterials, environmentForTrack, type ResolvedEnvironment,
+  applyEnvironmentMaterials, environmentForTrack, sameEnvironment,
+  type ResolvedEnvironment,
 } from "./environments";
 import {
   applyShadowPriceOverlay, buildPitLaneMesh, buildTrackMesh, buildTrackOutline,
-  carOrientation, renderForward, toRenderFrame,
+  carOrientation, fromRenderFrame, renderForward, toRenderFrame,
 } from "./trackMesh";
 
 export type CameraMode = "broadcast" | "orbit" | "onboard" | "helicopter";
@@ -107,15 +108,172 @@ const DIM_MIX = 0.4;
 
 /** Chase-camera rig, metres: how far behind the car the eye sits, how far above it,
  * and how far ahead of the car it looks. Broadcast looks AT the car; onboard looks
- * down the road. Both take their direction from renderForward, never from a
- * hand-written sin/cos triple -- see chaseCameraPose. */
+ * down the road. Every direction is taken from renderForward, never from a
+ * hand-written sin/cos triple -- see chaseCameraPose.
+ *
+ * `headingRelative` says whether the rig turns with the car. Both ground rigs do: the
+ * eye belongs behind the NOSE, wherever the nose is pointing. The helicopter's map view
+ * deliberately does not, so the circuit does not spin under the viewer every time the
+ * car turns a corner.
+ *
+ * The helicopter's 0.01 m is NOT a rig dimension. It is the nudge that keeps the view
+ * matrix from collapsing: a camera looking exactly along its own up axis has no basis.
+ * It used to be applied as a raw +0.01 on world Z after the rig was built; expressing it
+ * as "0.01 m behind the car" puts it through the same renderForward path as everything
+ * else and leaves the measured 45 m height untouched.
+ */
 const CHASE_RIG = {
-  broadcast: { backM: 15, upM: 6, aheadM: 0 },
-  onboard: { backM: 9, upM: 3.2, aheadM: 20 },
+  broadcast: { backM: 15, upM: 6, aheadM: 0, headingRelative: true },
+  onboard: { backM: 9, upM: 3.2, aheadM: 20, headingRelative: true },
+  helicopter: { backM: 0.01, upM: 45, aheadM: 0, headingRelative: false },
 } as const;
 
-/** Height of the helicopter camera above the car it follows, metres. */
-const HELICOPTER_HEIGHT_M = 45;
+/** Every camera mode that hangs off a car. Orbit is the odd one out: it looks at the
+ * circuit, so it has no focused car to hang off and takes the free-camera path. */
+export type ChaseMode = Exclude<CameraMode, "orbit">;
+
+export interface ChaseRigGeometry {
+  /** Distance from the anchor to the eye, metres. */
+  distM: number;
+  /**
+   * Height of the eye above the horizontal, RADIANS FROM THE GROUND PLANE.
+   *
+   * NOT the same quantity as `orbitPitch`, which orbitEye measures from the UP axis.
+   * The two are complementary, and mixing them silently lays the camera on its side, so
+   * they are clamped by different functions (clampRigElevation here, MIN/MAX_ORBIT_POLAR
+   * there) and are never assigned to one another.
+   */
+  elevation: number;
+  aheadM: number;
+  headingRelative: boolean;
+}
+
+function rigGeometryOf(mode: ChaseMode): ChaseRigGeometry {
+  const r = CHASE_RIG[mode];
+  return {
+    distM: Math.hypot(r.backM, r.upM),
+    elevation: Math.atan2(r.upM, r.backM),
+    aheadM: r.aheadM,
+    headingRelative: r.headingRelative,
+  };
+}
+
+/**
+ * The same three rigs, in the polar form the camera is actually driven in.
+ *
+ * This is a CHANGE OF COORDINATES, not a change of rig: dist = hypot(back, up) and
+ * elevation = atan2(up, back) put the eye exactly where the old back/up arithmetic put
+ * it (the test pins all three modes against that arithmetic, to 1e-9 m). Polar is the
+ * form a user can be handed a mouse in -- yaw and elevation swing the eye around the
+ * car, zoom scales the distance -- and the neutral rig is still the shot the camera has
+ * always taken, so nothing had to be re-tuned to make the camera drivable.
+ */
+const CHASE_GEOMETRY: Record<ChaseMode, ChaseRigGeometry> = {
+  broadcast: rigGeometryOf("broadcast"),
+  onboard: rigGeometryOf("onboard"),
+  helicopter: rigGeometryOf("helicopter"),
+};
+
+/** The rig a chase mode is built on, in polar form. Read-only: it is the shipped shot. */
+export function chaseRigGeometry(mode: ChaseMode): Readonly<ChaseRigGeometry> {
+  return CHASE_GEOMETRY[mode];
+}
+
+/** Render-frame up. One shared vector: the camera maths needs it several times a frame
+ * and nothing ever writes to it. */
+const RENDER_UP = new THREE.Vector3(0, 1, 0);
+
+/** How low and how high the user may tilt a chase rig, radians above the ground plane.
+ * The floor keeps the eye out of the scenery; the ceiling stops one notch short of
+ * straight down, where the view direction is parallel to the camera's own up axis and
+ * the view matrix has no solution. */
+export const MIN_RIG_ELEVATION = 0.03;
+export const MAX_RIG_ELEVATION = Math.PI / 2 - 1e-4;
+/** How far in and out a chase rig may be pushed, as a multiple of its own distance. */
+export const MIN_RIG_ZOOM = 0.2;
+export const MAX_RIG_ZOOM = 8;
+/** How far the rig may be slid off the car it is following, metres. A cap, not a
+ * behaviour: without it a leant-on key flies the camera to another county while the
+ * "locked" badge still claims it is following someone. */
+export const MAX_RIG_PAN_M = 500;
+
+export function clampRigElevation(elevation: number): number {
+  return Math.max(MIN_RIG_ELEVATION, Math.min(MAX_RIG_ELEVATION, elevation));
+}
+
+/** Polar-angle limits for the free/orbit camera, measured from the UP axis (see
+ * ChaseRigGeometry.elevation for why the two must not be interchanged). Both were
+ * already in the pointer handler as bare numbers. */
+export const MIN_ORBIT_POLAR = 0.05;
+export const MAX_ORBIT_POLAR = 1.5;
+export const MIN_ORBIT_DIST_M = 12;
+export const MAX_ORBIT_DIST_M = 8000;
+
+/**
+ * The user's nudge to a chase camera, held PER MODE so a helicopter flown out over the
+ * infield does not also drag the onboard shot with it.
+ *
+ * It is an OFFSET from the mode's own rig, never a replacement for it, which is what
+ * keeps "locked" meaning locked: the camera still follows the focused car around the
+ * lap, it just follows it from where the user put it. An all-zero rig with zoom 1 is
+ * exactly the shipped shot.
+ *
+ * yaw:   swings the eye about the anchor, radians. 0 = directly behind the car (or,
+ *        for the world-fixed helicopter, along render-frame +X).
+ * pitch: ADDED to the mode's base elevation. The TOTAL is clamped, not this.
+ * zoom:  multiplies the mode's base distance.
+ * pan:   slides the whole rig -- eye AND look-at -- in the rig's own basis
+ *        (x = right of travel, y = world up, z = along travel). Held in the rig basis
+ *        rather than in world metres so it turns with the car instead of sliding off
+ *        the road at the next corner.
+ */
+export interface CameraRig {
+  yaw: number;
+  pitch: number;
+  zoom: number;
+  pan: THREE.Vector3;
+}
+
+export function makeCameraRig(): CameraRig {
+  return { yaw: 0, pitch: 0, zoom: 1, pan: new THREE.Vector3() };
+}
+
+/** Puts a rig back to the shipped shot, in place. */
+export function resetRig(rig: CameraRig): CameraRig {
+  rig.yaw = 0;
+  rig.pitch = 0;
+  rig.zoom = 1;
+  rig.pan.set(0, 0, 0);
+  return rig;
+}
+
+/** Whether the user has moved this rig at all, so a HUD can offer a reset only when
+ * there is something to reset. */
+export function rigIsNeutral(rig: CameraRig): boolean {
+  return rig.yaw === 0 && rig.pitch === 0 && rig.zoom === 1 && rig.pan.lengthSq() === 0;
+}
+
+/** The untouched rig, shared and frozen: chaseCameraPose only ever reads it, and a
+ * module is strict-mode, so an accidental write throws here instead of quietly
+ * re-aiming every camera in the app. */
+const NEUTRAL_RIG: CameraRig = Object.freeze(makeCameraRig()) as CameraRig;
+
+/** Input rates, all previously bare numbers in the pointer handlers. A drag is an
+ * ANGLE per pixel; a pan and a zoom are a fraction of the current view distance per
+ * pixel, so the same gesture covers the same share of the screen whether the camera is
+ * 9 m off a car or 2 km above the circuit. */
+const LOOK_RAD_PER_PX = 0.005;
+const PAN_M_PER_PX_PER_M = 0.0016;
+const ZOOM_PER_WHEEL_UNIT = 0.0012;
+
+/** How fast the camera closes on its goal, in e-foldings per second (see dampFactor).
+ * 14 Hz settles ~75% of the remaining distance in 0.1 s: smooth, not laggy. */
+const CAMERA_DAMP_HZ = 14;
+
+/** Past this much error the camera is placed rather than eased -- see updateCamera for
+ * the two situations (first frame, and 20x playback under a slow frame) where a bounded
+ * per-frame lerp was measured to diverge instead of converge. */
+const SNAP_DISTANCE_M = 60;
 
 /**
  * Ring tangent across the segment [i0, i1], widening the chord SYMMETRICALLY about the
@@ -201,34 +359,84 @@ export function carRenderPos(
   return out.set(rx, carInstanceY(ry, geometryMinY), rz);
 }
 
+/* Scratch for the per-frame camera maths. Module-scope and reused, the same rule
+ * carGeometry/trackMesh already follow (ORIENT_SCRATCH): chaseCameraPose runs once per
+ * frame and must allocate nothing. */
+const RIG_RIGHT_SCRATCH = new THREE.Vector3();
+const RIG_ANCHOR_SCRATCH = new THREE.Vector3();
+const RIG_VIEW_SCRATCH = new THREE.Vector3();
+
 /**
  * Eye and look-at for a camera following a car at `focusPos` with track-frame heading
- * `heading`. `focusPos` is the position the car was actually DRAWN at, which is what
- * makes the camera centre the car the viewer can see.
+ * `heading`, as adjusted by the user's `rig`. `focusPos` is the position the car was
+ * actually DRAWN at, which is what makes the camera centre the car the viewer can see.
  *
- * Both chase modes take their direction from renderForward, the one place the
- * track-frame -> render-frame convention lives. Hand-written sin/cos triples here were
- * what made flipping toRenderFrame on its own point the cameras backwards.
+ * The rig is polar about the car: yaw swings the eye around it, elevation raises it,
+ * zoom pushes in and out, and pan slides the whole thing -- eye and look-at together --
+ * off the car without letting go of it. With a neutral rig this reproduces the shipped
+ * shot for all three modes to within floating point.
+ *
+ * EVERY VECTOR COMES FROM renderForward, the one place the track-frame -> render-frame
+ * convention lives. Hand-written sin/cos triples here were what made flipping
+ * toRenderFrame on its own point the cameras backwards. The world-fixed helicopter is
+ * no exception: renderForward(0) IS the render-frame +X axis, so its basis comes from
+ * the same function rather than from a second, hand-written one.
  */
 export function chaseCameraPose(
-  mode: Exclude<CameraMode, "orbit">,
+  mode: ChaseMode,
   focusPos: THREE.Vector3, heading: number,
   eye: THREE.Vector3, lookAt: THREE.Vector3,
   fwd: THREE.Vector3 = new THREE.Vector3(),
+  rig: CameraRig = NEUTRAL_RIG,
 ): void {
-  if (mode === "helicopter") {
-    // nudged off the car in Z so lookAt is never exactly along the camera's own up
-    // axis, which leaves the view matrix degenerate
-    eye.set(focusPos.x, focusPos.y + HELICOPTER_HEIGHT_M, focusPos.z + 0.01);
-    lookAt.copy(focusPos);
-    return;
+  const geom = CHASE_GEOMETRY[mode];
+  renderForward(geom.headingRelative ? heading : 0, fwd);
+  // forward x up = right of travel. Derived, not retyped: the cross product carries the
+  // handedness of whatever renderForward just produced.
+  const right = RIG_RIGHT_SCRATCH.copy(fwd).cross(RENDER_UP);
+  const elevation = clampRigElevation(geom.elevation + rig.pitch);
+  const cy = Math.cos(rig.yaw), sy = Math.sin(rig.yaw);
+  const ce = Math.cos(elevation), se = Math.sin(elevation);
+
+  // The rig hangs off the car, displaced by the user's pan. Eye and look-at take the
+  // SAME displacement, so panning slides the whole rig rather than swinging the camera
+  // off its subject. With a neutral rig every term is exactly zero, so the anchor is
+  // bit-for-bit the drawn position.
+  const anchor = RIG_ANCHOR_SCRATCH.copy(focusPos)
+    .addScaledVector(right, rig.pan.x)
+    .addScaledVector(RENDER_UP, rig.pan.y)
+    .addScaledVector(fwd, rig.pan.z);
+
+  const dist = geom.distM * rig.zoom;
+  eye.copy(anchor)
+    .addScaledVector(fwd, -dist * ce * cy)
+    .addScaledVector(right, dist * ce * sy)
+    .addScaledVector(RENDER_UP, dist * se);
+
+  lookAt.copy(anchor);
+  if (geom.aheadM !== 0) {
+    // onboard looks down the road, and the road it looks down turns with the user's
+    // yaw, so a mouse-look really does look where it is aimed instead of the eye
+    // sliding sideways while the view stays pinned on the apex ahead.
+    const viewFwd = RIG_VIEW_SCRATCH.copy(fwd).multiplyScalar(cy).addScaledVector(right, -sy);
+    lookAt.addScaledVector(viewFwd, geom.aheadM);
   }
-  const rig = mode === "onboard" ? CHASE_RIG.onboard : CHASE_RIG.broadcast;
-  renderForward(heading, fwd);
-  eye.copy(focusPos).addScaledVector(fwd, -rig.backM);
-  eye.y += rig.upM;
-  lookAt.copy(focusPos);
-  if (rig.aheadM !== 0) lookAt.addScaledVector(fwd, rig.aheadM);
+}
+
+/**
+ * A movement the user asked for IN THE VIEW -- (right, up, forward) metres as they read
+ * on screen -- expressed in the rig's own basis, which is where the pan offset lives.
+ *
+ * The two frames differ by exactly the rig yaw about the up axis, so this is one 2-D
+ * rotation and not a second camera basis to keep in step with the first. At yaw 0 it is
+ * the identity, which is why a camera that has never been swung pans exactly along the
+ * car's own axes.
+ */
+export function viewToRigPan(
+  yaw: number, right: number, up: number, forward: number, out: THREE.Vector3,
+): THREE.Vector3 {
+  const c = Math.cos(yaw), s = Math.sin(yaw);
+  return out.set(right * c - forward * s, up, right * s + forward * c);
 }
 
 /**
@@ -262,6 +470,220 @@ export function orbitPanBasis(yaw: number, right: THREE.Vector3, fwd: THREE.Vect
   right.set(Math.sin(yaw), 0, -Math.cos(yaw));
   fwd.set(Math.cos(yaw), 0, Math.sin(yaw));
 }
+
+export interface OrbitState { yaw: number; pitch: number; dist: number }
+
+/**
+ * The exact inverse of orbitEye: the yaw, polar pitch and distance that put an eye
+ * where it already is.
+ *
+ * This is what makes unlocking seamless. The free camera used to keep whatever orbit
+ * angles it was last left with, so taking manual control jumped the view somewhere else
+ * before the user had touched anything; reading the angles back off the live camera
+ * hands the user the picture they were already looking at.
+ */
+export function orbitFromEye(
+  eye: THREE.Vector3, centre: THREE.Vector3, out: OrbitState,
+): OrbitState {
+  const dx = eye.x - centre.x, dy = eye.y - centre.y, dz = eye.z - centre.z;
+  const dist = Math.hypot(dx, dy, dz);
+  out.dist = dist;
+  // atan2 of (z, x) inverts orbitEye's (cos yaw, sin yaw); at dist 0 there is no
+  // direction to report, and 0 is the same answer orbitEye would have been given.
+  out.yaw = dist > 0 ? Math.atan2(dz, dx) : 0;
+  out.pitch = dist > 0 ? Math.acos(Math.max(-1, Math.min(1, dy / dist))) : 0;
+  return out;
+}
+
+/**
+ * Frame-rate-independent smoothing weight: the share of the remaining distance to cover
+ * in `dt` seconds at rate `hz`.
+ *
+ * 1 - exp(-dt*k) is the exact solution of x' = k(goal - x), so ten 10 ms steps land in
+ * exactly the same place as one 100 ms step -- exp(-k*a)*exp(-k*b) = exp(-k*(a+b)) --
+ * and a dropped frame cannot make the camera lurch. A raw per-frame lerp cannot say
+ * that: its settling time is whatever the frame rate happened to be.
+ */
+export function dampFactor(dtSeconds: number, hz: number): number {
+  if (!(dtSeconds > 0) || !(hz > 0)) return 0;
+  return 1 - Math.exp(-dtSeconds * hz);
+}
+
+/**
+ * Keys the camera listens to, by physical `code` rather than `key`, so the WASD block
+ * stays the WASD block on an AZERTY or QWERTZ keyboard.
+ */
+export const CAMERA_KEYS = {
+  forward: ["KeyW", "ArrowUp"],
+  back: ["KeyS", "ArrowDown"],
+  left: ["KeyA", "ArrowLeft"],
+  right: ["KeyD", "ArrowRight"],
+  up: ["KeyE", "KeyR", "PageUp"],
+  down: ["KeyQ", "KeyF", "PageDown"],
+  faster: ["ShiftLeft", "ShiftRight"],
+  reset: ["KeyC"],
+} as const;
+
+const CAMERA_KEY_CODE_SET = new Set<string>();
+for (const group of Object.values(CAMERA_KEYS)) {
+  for (const code of group) CAMERA_KEY_CODE_SET.add(code);
+}
+/** Every code above, so a key the camera does not use is left alone for the page. */
+export const CAMERA_KEY_CODES: ReadonlySet<string> = CAMERA_KEY_CODE_SET;
+
+/** How much faster shift makes the camera fly. */
+export const KEY_BOOST = 4;
+
+/** How the printed help spells a key code. */
+export function keyLabel(code: string): string {
+  if (code.startsWith("Key")) return code.slice(3);
+  if (code.startsWith("Shift")) return "Shift";
+  switch (code) {
+    case "ArrowUp": return "↑";
+    case "ArrowDown": return "↓";
+    case "ArrowLeft": return "←";
+    case "ArrowRight": return "→";
+    case "PageUp": return "PgUp";
+    case "PageDown": return "PgDn";
+    default: return code;
+  }
+}
+
+/**
+ * The direction the held keys are asking for, in VIEW axes (x right, y up, z forward),
+ * unit length or exactly zero.
+ *
+ * Normalised, so holding two keys does not make a diagonal 1.41x faster than a straight
+ * line, and opposite keys cancel to a dead stop rather than fighting.
+ */
+export function keyMoveVector(held: ReadonlySet<string>, out: THREE.Vector3): THREE.Vector3 {
+  const axis = (pos: readonly string[], neg: readonly string[]) =>
+    (pos.some((c) => held.has(c)) ? 1 : 0) - (neg.some((c) => held.has(c)) ? 1 : 0);
+  out.set(
+    axis(CAMERA_KEYS.right, CAMERA_KEYS.left),
+    axis(CAMERA_KEYS.up, CAMERA_KEYS.down),
+    axis(CAMERA_KEYS.forward, CAMERA_KEYS.back),
+  );
+  if (out.lengthSq() > 0) out.normalize();
+  return out;
+}
+
+export function keyBoost(held: ReadonlySet<string>): number {
+  return CAMERA_KEYS.faster.some((c) => held.has(c)) ? KEY_BOOST : 1;
+}
+
+/** Flying speed as a fraction of the current view distance, per second, and the floor
+ * under it. Tied to the view distance because the same key has to feel right in an
+ * onboard rig 9 m off the car and in an orbit 2 km above the circuit. */
+export const MOVE_PER_DISTANCE_HZ = 0.7;
+export const MIN_MOVE_MPS = 3;
+
+export function cameraMoveSpeed(distM: number, boost: number): number {
+  return Math.max(MIN_MOVE_MPS, Math.abs(distM) * MOVE_PER_DISTANCE_HZ) * boost;
+}
+
+/** Closest ring vertex to a render-frame (x, z), by PLAN distance -- height ignored. */
+export function nearestRingIndex(
+  track: Pick<TrackModel, "x" | "y">, x: number, z: number,
+): number {
+  const [tx, ty] = fromRenderFrame(x, 0, z);
+  const n = track.x.length;
+  let best = 0, bestD = Infinity;
+  for (let i = 0; i < n; i++) {
+    const dx = track.x[i] - tx, dy = track.y[i] - ty;
+    const d = dx * dx + dy * dy;
+    if (d < bestD) { bestD = d; best = i; }
+  }
+  return best;
+}
+
+/**
+ * How far either side of the nearest vertex still counts as "here" when deciding which
+ * piece of road an eye is standing on. A little wider than any circuit's tarmac
+ * (Silverstone's full ribbon is 12.2-15.0 m), so the band always contains the road the
+ * eye is over, and short enough that it cannot reach a different part of the lap.
+ */
+export const GROUND_BAND_M = 25;
+
+/**
+ * Height of the road under an eye at render-frame (x, z, eyeY), in render-frame metres.
+ *
+ * Reads the BAKED surface through surfaceAt wherever the circuit carries one
+ * (Silverstone today) -- that is the height the real model draws at, and the ribbon's
+ * own z sits up to 0.110 m off it (measured across the shipped model) -- and falls back
+ * to the ring everywhere else: every station of the other twelve circuits, and every
+ * Silverstone station the raycast missed. It never invents a height; absence resolves to
+ * the ring, not to zero.
+ *
+ * THE EYE'S OWN HEIGHT IS AN INPUT because a ring can pass over itself. Suzuka's
+ * crossover carries two pieces of road 13.9 m apart in plan and 5.41 m apart in height
+ * (measured 13 Sep 2026 from the shipped model; no other shipped circuit has a crossing
+ * pair at all). Taking the nearest vertex in plan there would hand a camera under the
+ * bridge the height of the bridge and shove it 3.4 m upward, twice a lap, in onboard.
+ * So the road is chosen from those in the band that are NOT ABOVE the eye -- the one it
+ * is standing on -- and only an eye below every one of them falls back to the nearest in
+ * plan, which is the case the clamp exists to fix anyway.
+ */
+export function groundHeightAt(
+  track: TrackModel, x: number, z: number, eyeY: number,
+): number {
+  const [tx, ty] = fromRenderFrame(x, 0, z);
+  const n = track.x.length;
+  let nearest = 0, nearestD2 = Infinity;
+  for (let i = 0; i < n; i++) {
+    const dx = track.x[i] - tx, dy = track.y[i] - ty;
+    const d2 = dx * dx + dy * dy;
+    if (d2 < nearestD2) { nearestD2 = d2; nearest = i; }
+  }
+
+  const band = Math.sqrt(nearestD2) + GROUND_BAND_M;
+  const band2 = band * band;
+  let under = -1, underD2 = Infinity;
+  for (let i = 0; i < n; i++) {
+    if (track.z[i] > eyeY) continue;
+    const dx = track.x[i] - tx, dy = track.y[i] - ty;
+    const d2 = dx * dx + dy * dy;
+    if (d2 <= band2 && d2 < underD2) { underD2 = d2; under = i; }
+  }
+
+  // The band is walked on the RING's own z rather than on the baked surface: the two are
+  // 0.110 m apart at worst, which cannot confuse two roads 5.41 m apart, and it keeps
+  // this to one surfaceAt call instead of one per candidate.
+  const chosen = under >= 0 ? under : nearest;
+  const sample = surfaceAt(track, chosen * (track.lengthMetres / n));
+  return toRenderFrame(0, 0, sample ? sample.zM : track.z[chosen])[1];
+}
+
+/** Metres of air kept between the eye and the road. About head height: enough that the
+ * near clip plane (1 m) never eats the tarmac and the camera never ends up inside it. */
+export const MIN_EYE_ABOVE_GROUND_M = 1.2;
+
+/** Lifts an eye that has been driven below the road back onto it. Returns whether it
+ * had to, so a caller can report it rather than guess. */
+export function clampEyeAboveGround(
+  eye: THREE.Vector3, groundY: number, marginM: number = MIN_EYE_ABOVE_GROUND_M,
+): boolean {
+  const floor = groundY + marginM;
+  if (!(eye.y < floor)) return false;   // NaN-safe: an unknown height leaves the eye alone
+  eye.y = floor;
+  return true;
+}
+
+/**
+ * What the camera controls are, for a HUD to print. Kept beside the bindings so the two
+ * cannot drift apart: the test asserts that every key the camera binds is named here,
+ * in the spelling keyLabel gives it.
+ */
+export const CAMERA_CONTROL_HELP: readonly { keys: string; action: string }[] = [
+  { keys: "drag", action: "look around -- swings the camera about the car" },
+  { keys: "right-drag", action: "slide the view left/right and up/down" },
+  { keys: "scroll", action: "push in / pull out" },
+  { keys: "W A S D  or  ← ↑ ↓ →", action: "fly across the ground" },
+  { keys: "E R / PgUp  and  Q F / PgDn", action: "fly up / down" },
+  { keys: "Shift", action: "move 4x faster" },
+  { keys: "C", action: "reset this camera" },
+  { keys: "middle-click", action: "follow the car / free the camera" },
+];
 
 /**
  * Assigns each car a lane offset so cars running within a rendered car-length of each
@@ -594,6 +1016,19 @@ export class SimRenderer {
   private orbitYaw = Math.PI / 4;
   private orbitPitch = 0.6;
   private orbitDist = 400;
+  /** Distance the free camera is easing toward, so a scroll dollies instead of cutting. */
+  private easedOrbitDist = 400;
+  /** The framing distance setTrack computed for this circuit, so a reset has somewhere
+   * to go back to. */
+  private orbitHomeDist = 400;
+  /** The user's nudge to each chase mode, kept per mode: a helicopter flown out over
+   * the infield must not also drag the onboard shot with it. */
+  private rigs: Record<ChaseMode, CameraRig> = {
+    broadcast: makeCameraRig(), onboard: makeCameraRig(), helicopter: makeCameraRig(),
+  };
+  /** Key codes held right now. Cleared on window blur, because a key held while the
+   * window loses focus never sends its keyup. */
+  private heldKeys = new Set<string>();
   /** false = the camera is free (user driven); true = it follows the focused car. */
   private cameraLocked = true;
   private onLockChange: ((locked: boolean) => void) | null = null;
@@ -615,6 +1050,9 @@ export class SimRenderer {
   private panRight = new THREE.Vector3();
   private panFwd = new THREE.Vector3();
   private orbitTargetScratch = new THREE.Vector3();
+  private moveScratch = new THREE.Vector3();
+  private panStepScratch = new THREE.Vector3();
+  private orbitStateScratch: OrbitState = { yaw: 0, pitch: 0, dist: 0 };
   /** Car indices in station order, reused by declutterLanes. */
   private declutterOrder: number[] = [];
   private raycaster = new THREE.Raycaster();
@@ -691,6 +1129,10 @@ export class SimRenderer {
     window.addEventListener("pointerup", this.onPointerUp);
     canvas.addEventListener("wheel", this.onWheel, { passive: false });
     canvas.addEventListener("contextmenu", this.onContextMenu);
+    // keys on the window: the canvas is not focusable, so a keydown never reaches it
+    window.addEventListener("keydown", this.onKeyDown);
+    window.addEventListener("keyup", this.onKeyUp);
+    window.addEventListener("blur", this.onWindowBlur);
     canvas.addEventListener("auxclick", (e) => { if (e.button === 1) e.preventDefault(); });
 
     this.resize();
@@ -724,6 +1166,8 @@ export class SimRenderer {
     const radius = Math.max(maxX - minX, maxY - minY) / 2;
     this.orbitCentre.set(...toRenderFrame(cx, cy, sumZ / track.x.length));
     this.orbitDist = radius * 2.2;
+    this.orbitHomeDist = this.orbitDist;
+    this.easedOrbitDist = this.orbitDist;
     this.cameraTarget.copy(this.orbitCentre);
 
     // Null for twelve of thirteen circuits and for every artifact built before the
@@ -746,7 +1190,7 @@ export class SimRenderer {
    * does nothing else. It does not restart the fetch and does not re-add the model.
    */
   setEnvironment(env: ResolvedEnvironment | null) {
-    if (env && this.env && env.assetUrl === this.env.assetUrl) {
+    if (sameEnvironment(env, this.env)) {
       this.applyRibbonForEnvironment();
       return;
     }
@@ -1016,6 +1460,24 @@ export class SimRenderer {
 
   onPerf(cb: (p: PerfStats) => void) { this.onPerfSample = cb; }
 
+  /**
+   * True when the camera is flying free rather than hanging off a car.
+   *
+   * Orbit counts as free whatever the lock says: it looks at the CIRCUIT, so there is no
+   * car for a rig to hang off, and it would otherwise be the one mode that ignored every
+   * key and every drag. Everywhere else this is false exactly when a chase rig is live,
+   * which is what makes the `as ChaseMode` casts below sound.
+   */
+  private isFreeCamera(): boolean {
+    return !this.cameraLocked || this.cameraMode === "orbit";
+  }
+
+  /** The rig for the mode currently on screen. Only ever called when isFreeCamera() is
+   * false, i.e. when the mode is one of the three chase modes. */
+  private rig(): CameraRig {
+    return this.rigs[this.cameraMode as ChaseMode];
+  }
+
   private onPointerDown = (e: PointerEvent) => {
     if (e.button === 1) {
       // middle click toggles follow/free, the shortcut asked for
@@ -1023,50 +1485,95 @@ export class SimRenderer {
       this.setCameraLocked(!this.cameraLocked);
       return;
     }
-    if (this.cameraLocked) return; // a followed camera is not draggable
     this.dragButton = e.button;
     this.lastPointer = { x: e.clientX, y: e.clientY };
   };
 
+  /**
+   * Left-drag looks, right-drag (or shift-left) slides the view.
+   *
+   * Both work in EVERY mode now, not only in the free camera. In a chase mode they move
+   * the RIG the camera hangs off, so the camera keeps following the focused car -- from
+   * wherever the user put it. A followed camera used to refuse the mouse outright.
+   *
+   * The two conventions the shipped free camera already used are kept, and matched here:
+   * a drag TURNS the camera (the world swings the other way, as in any mouse-look) and a
+   * pan DRAGS THE WORLD with the pointer. Note the yaw signs differ between the two
+   * paths on purpose: orbitYaw and rig yaw are angles in frames of opposite handedness
+   * (see orbitPanBasis), and both signs below are chosen so that dragging right turns
+   * the camera right.
+   */
   private onPointerMove = (e: PointerEvent) => {
     if (this.dragButton === null) return;
     const dx = e.clientX - this.lastPointer.x;
     const dy = e.clientY - this.lastPointer.y;
     this.lastPointer = { x: e.clientX, y: e.clientY };
+    const look = this.dragButton === 0 && !e.shiftKey;
 
-    if (this.dragButton === 0 && !e.shiftKey) {
-      this.orbitYaw -= dx * 0.005;
-      this.orbitPitch = Math.max(0.05, Math.min(1.5, this.orbitPitch - dy * 0.005));
+    if (this.isFreeCamera()) {
+      if (look) {
+        this.orbitYaw -= dx * LOOK_RAD_PER_PX;
+        this.orbitPitch = Math.max(MIN_ORBIT_POLAR,
+          Math.min(MAX_ORBIT_POLAR, this.orbitPitch - dy * LOOK_RAD_PER_PX));
+        return;
+      }
+      // pan across the ground, scaled by how far out we are. The basis is the camera's
+      // OWN screen axes (see orbitPanBasis), so the world travels with the pointer in
+      // both axes.
+      const k = this.orbitDist * PAN_M_PER_PX_PER_M;
+      orbitPanBasis(this.orbitYaw, this.panRight, this.panFwd);
+      this.panOffset.addScaledVector(this.panRight, -dx * k).addScaledVector(this.panFwd, -dy * k);
       return;
     }
-    // right button (or shift+left): pan across the ground, scaled by how far out we
-    // are. The basis is the camera's OWN screen axes (see orbitPanBasis), so the world
-    // travels with the pointer in both axes.
-    const k = this.orbitDist * 0.0016;
-    orbitPanBasis(this.orbitYaw, this.panRight, this.panFwd);
-    this.panOffset.addScaledVector(this.panRight, -dx * k).addScaledVector(this.panFwd, -dy * k);
+
+    const rig = this.rig();
+    const geom = chaseRigGeometry(this.cameraMode as ChaseMode);
+    if (look) {
+      rig.yaw += dx * LOOK_RAD_PER_PX;
+      // The OFFSET is clamped against its own mode's base elevation, not the total.
+      // Clamping only the total lets a drag that has run into the limit wind the offset
+      // up indefinitely, and then the drag back does nothing until it has unwound.
+      rig.pitch = Math.max(MIN_RIG_ELEVATION - geom.elevation,
+        Math.min(MAX_RIG_ELEVATION - geom.elevation, rig.pitch + dy * LOOK_RAD_PER_PX));
+      return;
+    }
+    // Vertical drag moves the rig UP AND DOWN rather than along the ground: "in
+    // helicopter I can move the camera up down left right with the mouse" is the ask,
+    // and the ground-plane version of the same motion is on W/S.
+    const k = geom.distM * rig.zoom * PAN_M_PER_PX_PER_M;
+    viewToRigPan(rig.yaw, -dx * k, dy * k, 0, this.panStepScratch);
+    rig.pan.add(this.panStepScratch).clampLength(0, MAX_RIG_PAN_M);
   };
 
   private onPointerUp = () => { this.dragButton = null; };
 
   private onContextMenu = (e: Event) => {
-    if (!this.cameraLocked) e.preventDefault(); // right-drag is a pan, not a menu
+    e.preventDefault(); // right-drag is a pan in every mode now, not a menu
   };
 
-  /** Zoom toward wherever the cursor is, rather than the screen centre: the point
-   * under the pointer is projected onto the ground plane and the orbit target eased
-   * toward it as the distance shrinks. */
+  /**
+   * Scroll dollies: in a chase mode it pushes the rig in and out along its own axis, and
+   * in the free camera it zooms toward wherever the cursor is -- the point under the
+   * pointer is projected onto the ground plane and the orbit target eased toward it as
+   * the distance shrinks.
+   */
   private onWheel = (e: WheelEvent) => {
-    if (this.cameraLocked) return;
     e.preventDefault();
+    const factor = Math.exp(e.deltaY * ZOOM_PER_WHEEL_UNIT);
+
+    if (!this.isFreeCamera()) {
+      const rig = this.rig();
+      rig.zoom = Math.max(MIN_RIG_ZOOM, Math.min(MAX_RIG_ZOOM, rig.zoom * factor));
+      return;
+    }
+
     const rect = this.canvas.getBoundingClientRect();
     const ndc = new THREE.Vector2(
       ((e.clientX - rect.left) / rect.width) * 2 - 1,
       -((e.clientY - rect.top) / rect.height) * 2 + 1,
     );
-    const factor = Math.exp(e.deltaY * 0.0012);
     const before = this.orbitDist;
-    this.orbitDist = Math.max(12, Math.min(8000, this.orbitDist * factor));
+    this.orbitDist = Math.max(MIN_ORBIT_DIST_M, Math.min(MAX_ORBIT_DIST_M, this.orbitDist * factor));
 
     this.raycaster.setFromCamera(ndc, this.camera);
     const hit = new THREE.Vector3();
@@ -1079,19 +1586,110 @@ export class SimRenderer {
     }
   };
 
+  /** Keys are taken on the window, not the canvas: the canvas is not focusable, and the
+   * user has just clicked a HUD button as often as not. A key the camera does not bind
+   * is left entirely alone, so the page keeps its own shortcuts (SimCanvas owns Space). */
+  private onKeyDown = (e: KeyboardEvent) => {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (!CAMERA_KEY_CODES.has(e.code)) return;
+    const el = e.target as HTMLElement | null;
+    // typing in a field is typing, never flying. BUTTON is deliberately NOT in this
+    // list: clicking "helicopter" leaves that button focused, and WASD has to keep
+    // working afterwards.
+    if (el && (/^(INPUT|SELECT|TEXTAREA)$/.test(el.tagName) || el.isContentEditable)) return;
+    if ((CAMERA_KEYS.reset as readonly string[]).includes(e.code)) {
+      this.resetCamera();
+      return;
+    }
+    this.heldKeys.add(e.code);
+    // arrows and PgUp/PgDn scroll the page otherwise, which is the one thing a viewport
+    // must not do while someone is flying a camera with them
+    if (e.code.startsWith("Arrow") || e.code.startsWith("Page")) e.preventDefault();
+  };
+
+  private onKeyUp = (e: KeyboardEvent) => { this.heldKeys.delete(e.code); };
+
+  /** A key held while the window loses focus never sends its keyup, and the camera would
+   * fly off in that direction for as long as the tab stayed open. */
+  private onWindowBlur = () => { this.heldKeys.clear(); };
+
+  /** Applies whatever keys are held this frame. Metres, not pixels: the step is
+   * dt-scaled, so the camera covers the same ground per second at 30 fps and at 165. */
+  private applyKeyboardMotion(dt: number) {
+    if (this.heldKeys.size === 0) return;
+    const dir = keyMoveVector(this.heldKeys, this.moveScratch);
+    if (dir.lengthSq() === 0) return;
+    const boost = keyBoost(this.heldKeys);
+
+    if (this.isFreeCamera()) {
+      const step = cameraMoveSpeed(this.orbitDist, boost) * dt;
+      // the pan basis IS the camera's own screen axes, so the keys move the view the way
+      // it is facing; panFwd points BACK toward the viewer, hence the minus on forward
+      orbitPanBasis(this.orbitYaw, this.panRight, this.panFwd);
+      this.panOffset
+        .addScaledVector(this.panRight, dir.x * step)
+        .addScaledVector(RENDER_UP, dir.y * step)
+        .addScaledVector(this.panFwd, -dir.z * step);
+      return;
+    }
+
+    const rig = this.rig();
+    const geom = chaseRigGeometry(this.cameraMode as ChaseMode);
+    const step = cameraMoveSpeed(geom.distM * rig.zoom, boost) * dt;
+    viewToRigPan(rig.yaw, dir.x * step, dir.y * step, dir.z * step, this.panStepScratch);
+    rig.pan.add(this.panStepScratch).clampLength(0, MAX_RIG_PAN_M);
+  }
+
+  /** Keeps the eye out of the tarmac. The baked surface where the circuit has one
+   * (Silverstone), the ring's own elevation everywhere else -- never a made-up height. */
+  private clampCameraToGround(eye: THREE.Vector3) {
+    if (!this.track) return;
+    clampEyeAboveGround(eye, groundHeightAt(this.track, eye.x, eye.z, eye.y));
+  }
+
   setCameraLocked(locked: boolean) {
     this.cameraLocked = locked;
-    if (locked) this.panOffset.set(0, 0, 0);
-    else {
-      // start the free camera where the user is already looking
+    this.panOffset.set(0, 0, 0);
+    if (!locked) {
+      // Take the free camera over EXACTLY where the chase camera was: centre on what it
+      // was looking at, and read back the yaw, polar pitch and distance that reproduce
+      // its eye (orbitFromEye is the exact inverse of orbitEye). Before this, unlocking
+      // resumed whatever orbit angles the camera was last left with and the view jumped
+      // before the user had touched anything.
       this.orbitCentre.copy(this.cameraTarget);
-      this.orbitDist = Math.max(40, this.camera.position.distanceTo(this.cameraTarget));
+      const s = orbitFromEye(this.camera.position, this.orbitCentre, this.orbitStateScratch);
+      this.orbitYaw = s.yaw;
+      this.orbitPitch = Math.max(MIN_ORBIT_POLAR, Math.min(MAX_ORBIT_POLAR, s.pitch));
+      this.orbitDist = Math.max(MIN_ORBIT_DIST_M, Math.min(MAX_ORBIT_DIST_M, s.dist));
+      this.easedOrbitDist = this.orbitDist;
     }
     this.onLockChange?.(locked);
   }
 
   isCameraLocked() { return this.cameraLocked; }
   onCameraLockChange(cb: (locked: boolean) => void) { this.onLockChange = cb; }
+
+  /**
+   * Puts the camera on screen back where it started: the shipped rig for a chase mode,
+   * the circuit framing for the free/orbit camera. Bound to C, and exposed so the HUD
+   * can offer a button (see isCameraNudged).
+   */
+  resetCamera() {
+    if (this.isFreeCamera()) {
+      this.panOffset.set(0, 0, 0);
+      this.orbitDist = this.orbitHomeDist;
+      return;
+    }
+    resetRig(this.rig());
+  }
+
+  /** Whether the user has moved the camera on screen off its default. */
+  isCameraNudged(): boolean {
+    if (this.isFreeCamera()) {
+      return this.panOffset.lengthSq() > 0 || this.orbitDist !== this.orbitHomeDist;
+    }
+    return !rigIsNeutral(this.rig());
+  }
 
   /**
    * Fallback world position for a car straight from the pose, used only before any
@@ -1316,59 +1914,68 @@ export class SimRenderer {
       }
     }
 
+    this.applyKeyboardMotion(dtWall);
+
     const desired = this.camEye;
     const lookAt = this.camLook;
     // Tracking has to hold at 20x playback, where the car covers ~20 m between
     // frames. At the old rate the camera settled hundreds of metres behind and the
     // car shrank to a speck on the horizon; this keeps it framed while still easing.
-    const lag = 1 - Math.exp(-dtWall * 14);
+    // dampFactor, not a bare lerp weight: the settling time is then a property of the
+    // camera and not of whatever frame rate the machine happened to deliver.
+    const lag = dampFactor(dtWall, CAMERA_DAMP_HZ);
 
-    if (!this.cameraLocked) {
-      const target = this.orbitTargetScratch.copy(this.orbitCentre).add(this.panOffset);
-      orbitEye(target, this.orbitYaw, this.orbitPitch, this.orbitDist, this.camera.position);
-      this.camera.lookAt(target);
-      this.cameraTarget.copy(target);
+    if (this.isFreeCamera()) {
+      // The user drives the GOAL; the camera eases onto it. Both the look-at and the
+      // distance are damped, so a pan glides and a scroll dollies instead of teleporting
+      // -- the free camera used to be placed exactly on its goal every frame.
+      const goal = this.orbitTargetScratch.copy(this.orbitCentre).add(this.panOffset);
+      if (this.cameraTarget.distanceTo(goal) > SNAP_DISTANCE_M) {
+        this.cameraTarget.copy(goal);
+      } else {
+        this.cameraTarget.lerp(goal, lag);
+      }
+      this.easedOrbitDist += (this.orbitDist - this.easedOrbitDist) * lag;
+      orbitEye(this.cameraTarget, this.orbitYaw, this.orbitPitch, this.easedOrbitDist, desired);
+      this.clampCameraToGround(desired);
+      this.camera.position.copy(desired);
+      this.camera.lookAt(this.cameraTarget);
       // Keep the chase camera's easing state on the camera the viewer can actually
       // see. Without this, re-locking resumed the lerp from wherever cameraPos was
       // left before the user took over, so the view jumped before it eased.
-      this.cameraPos.copy(this.camera.position);
+      this.cameraPos.copy(desired);
       return;
     }
 
-    const mode = this.cameraMode;
-    if (mode === "orbit") {
-      orbitEye(this.orbitCentre, this.orbitYaw, this.orbitPitch, this.orbitDist, desired);
-      lookAt.copy(this.orbitCentre);
-      this.camera.position.copy(desired);
-      this.camera.lookAt(lookAt);
-      // orbit is not eased, but it must still leave the follow/free state consistent:
-      // cameraTarget is what setCameraLocked(false) hands the free camera, and
-      // cameraPos is where a switch back to a chase mode resumes easing from.
+    // Orbit never reaches here: isFreeCamera() is true for it whatever the lock says,
+    // which is what makes this cast sound.
+    chaseCameraPose(
+      this.cameraMode as ChaseMode, focusPos, headingBox.value,
+      desired, lookAt, this.fwdScratch, this.rig(),
+    );
+    // A pure per-frame lerp assumes small, regular frame times. It breaks in two
+    // real situations: the very first frame (camera starts at the scene origin,
+    // potentially hundreds of metres from any car) and a stalled/slow frame or a
+    // high playback multiplier (the target can move faster, between renders, than
+    // a bounded lerp can ever catch up to -- it was measured to DIVERGE, not
+    // converge, at 20x speed under a slow frame rate). Snapping past a distance
+    // threshold makes both cases instant instead of a multi-second crawl.
+    if (this.cameraPos.distanceTo(desired) > SNAP_DISTANCE_M) {
       this.cameraPos.copy(desired);
+    } else {
+      this.cameraPos.lerp(desired, lag);
+    }
+    // Clamp the EASED position, not just the copy handed to three.js: clamping only the
+    // copy would leave the eased state underground and the camera would fight the floor
+    // every frame instead of resting on it.
+    this.clampCameraToGround(this.cameraPos);
+    this.camera.position.copy(this.cameraPos);
+    if (this.cameraTarget.distanceTo(lookAt) > SNAP_DISTANCE_M) {
       this.cameraTarget.copy(lookAt);
     } else {
-      chaseCameraPose(mode, focusPos, headingBox.value, desired, lookAt, this.fwdScratch);
-      // A pure per-frame lerp assumes small, regular frame times. It breaks in two
-      // real situations: the very first frame (camera starts at the scene origin,
-      // potentially hundreds of metres from any car) and a stalled/slow frame or a
-      // high playback multiplier (the target can move faster, between renders, than
-      // a bounded lerp can ever catch up to -- it was measured to DIVERGE, not
-      // converge, at 20x speed under a slow frame rate). Snapping past a distance
-      // threshold makes both cases instant instead of a multi-second crawl.
-      const SNAP_DISTANCE_M = 60;
-      if (this.cameraPos.distanceTo(desired) > SNAP_DISTANCE_M) {
-        this.cameraPos.copy(desired);
-      } else {
-        this.cameraPos.lerp(desired, lag);
-      }
-      this.camera.position.copy(this.cameraPos);
-      if (this.cameraTarget.distanceTo(lookAt) > SNAP_DISTANCE_M) {
-        this.cameraTarget.copy(lookAt);
-      } else {
-        this.cameraTarget.lerp(lookAt, lag);
-      }
-      this.camera.lookAt(this.cameraTarget);
+      this.cameraTarget.lerp(lookAt, lag);
     }
+    this.camera.lookAt(this.cameraTarget);
   }
 
   start() {
@@ -1424,6 +2031,9 @@ export class SimRenderer {
     window.removeEventListener("pointermove", this.onPointerMove);
     window.removeEventListener("pointerup", this.onPointerUp);
     this.canvas.removeEventListener("wheel", this.onWheel);
+    window.removeEventListener("keydown", this.onKeyDown);
+    window.removeEventListener("keyup", this.onKeyUp);
+    window.removeEventListener("blur", this.onWindowBlur);
     this.canvas.removeEventListener("contextmenu", this.onContextMenu);
     // BEFORE the traverse, not after. The circuit model is shared, module-scope state
     // cached across renderer lifetimes, and this traverse frees the geometry and

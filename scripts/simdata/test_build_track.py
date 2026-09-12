@@ -368,11 +368,14 @@ def _fake_bake(n, *, coverage=None, residual_std=0.05, sha=_FITTED_SHA):
     slope = np.full(n, 0.0100)
     camber = np.full(n, 0.0050)
     residual = np.zeros(n)
-    for arr in (z, slope, camber, residual):
+    edge_left = np.full(n, 8.0)
+    edge_right = np.full(n, 6.5)
+    for arr in (z, slope, camber, residual, edge_left, edge_right):
         arr[~valid] = np.nan
     return SurfaceBake(
         z_m=z, slope_rad=slope, camber_rad=camber, camber_base_m=np.full(n, 2.0),
         valid=valid, camber_valid=valid.copy(), residual_m=residual,
+        edge_left_m=edge_left, edge_right_m=edge_right,
         fit=Fit(scale=1.0, yaw_rad=0.0, mirror=-1, tx=1.0, tz=2.0, ty=3.0),
         coverage=float(valid.mean()) if coverage is None else coverage,
         road_coverage=0.99, residual_std_m=residual_std,
