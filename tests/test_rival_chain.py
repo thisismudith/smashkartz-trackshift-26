@@ -1,5 +1,7 @@
 from __future__ import annotations
 import json
+from math import log
+import pytest
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
@@ -34,6 +36,9 @@ def test_synthetic_is_seeded_non_degenerate_and_recoverable():
 def test_era_harness_excludes_british_training_and_keeps_2026_only_without_evidence():
     report=evaluate_era_strategies([{"year":2025,"event":"Italian Grand Prix"},{"year":2026,"event":"Australian Grand Prix"}],split_version="c9",rule_configuration_version="rules-v1")
     assert report["selected"] == "2026_only" and report["held_out_2026_n"] == 1
+    assert report["metrics"]["2026_only"]["mean_nll"] is None
+    assert "unavailable" in report["metrics"]["2026_only"]["reason"]
+    assert all(report["metrics"][name]["status"] == "BLOCKED" for name in report["strategies"][1:])
     try: evaluate_era_strategies([{"year":2026,"event":"British Grand Prix","training":True}],split_version="c9",rule_configuration_version="r")
     except ValueError: pass
     else: raise AssertionError("British GP training accepted")
