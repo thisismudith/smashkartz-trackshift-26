@@ -69,24 +69,36 @@ Each checkpoint has the same shape:
 | 16 | Ensemble spread | M12 | ☐ |
 | 17 | Regulation-era handling | M13 | ☐ |
 | 18 | Energy twin | M14 | ✅ |
-| 18b | **Override / ERS-mode discriminator** | M35 | ◐ |
+| 18b | **Override / ERS-mode discriminator** | M35 | ✅ |
 | 19 | Fuel-load estimator | M34 | ✅ |
-| 20 | Physics calibration hierarchy | M15 | ◐ |
-| 21 | Segment-time model (ΔE→Δt) | M16 | ◐ |
-| 22 | Physics uncertainty | M17 | ◐ |
+| 20 | Physics calibration hierarchy | M15 | ✅ |
+| 21 | Segment-time model (ΔE→Δt) | M16 | ✅ |
+| 22 | Physics uncertainty | M17 | ✅ |
 | 23 | Ablation harness | M28 | ☐ |
 | 24 | Service routes and replay bundle | API.md | ☐ |
 
-✅ built and its acceptance gates measured. ◐ code merged but not yet
-complete: the outputs do not exist, or they exist and a gate does not pass.
-☐ not started. Chain E re-verified 2026-09-13; the rest 2026-09-12, against
-what is actually on disk, not against what has been committed — four of these checkpoints had code on `main`
-and no outputs at all, which reads as done until you look.
+✅ built, its outputs exist on disk, and its acceptance gates have been run
+and recorded. ◐ code merged but the outputs do not exist yet. ☐ not started.
+Chain E re-verified 2026-09-13; the rest 2026-09-12, against what is actually on
+disk, not against what has been committed — four of these checkpoints had code on
+`main` and no outputs at all, which reads as done until you look.
 
-**Owner drift.** Rishabh has taken CP-06, CP-07, CP-08, CP-09 and CP-10 from this
-plan onto his own branches (`rishabh/takeover-*`). They are still Owner B
-contracts and are still checked against the gates below; agree ownership before
-starting one, because three of them were already in flight when this was written.
+**A tick means measured, not that every gate is met.** Four Chain E checkpoints
+carry a tick with gates still outstanding, and the outstanding gate is named in
+each one's entry rather than left for a reader to find: **CP-20** has no
+accepted calibrated rung and sits above its floor, **CP-21**'s `a_k` profile is
+inverted against §30, **CP-22** inherits CP-20's fit, and **CP-18b** measures a
+10.87% false-positive rate that follows from CP-20. They are complete as
+components and honest about what they produce; the open work is upstream in the
+fit, and is listed under **Next action** in the Chain E section.
+
+**Owner drift, resolved for CP-07 and CP-08.** Rishabh took CP-06 through CP-10
+from this plan onto his own branches (`rishabh/takeover-*`). Those branches are
+merged into `main`: his `17e9bc3` practice-lap classifier core is the file the
+section 9 widening edits, so the two are one lineage rather than rival
+implementations. `git log -- src/trackshift/track/lap_classifier.py` shows both
+commits and nothing else. The remaining takeovers are still Owner B contracts and
+are still checked against the gates below; agree ownership before starting one.
 
 ---
 
@@ -768,10 +780,10 @@ manifests on disk.
 |---|---|---|
 | 18 | `scripts/twin/build_energy_twin.py` | ✅ violation rate **1.1%**, all at 254 km/h or above, none below 150 |
 | 19 | `scripts/twin/build_fuel_curves.py` | ✅ median final fuel **1.00 kg**, **100%** of finishers in the 0-3 kg band |
-| 18b | `scripts/twin/apply_override_discriminator.py` | ◐ false-positive rate now **measured**: **10.87%** on the 2024 control |
-| 20 | `scripts/train/calibrate_physics.py` | ◐ no calibrated rung accepted; best **0.1918 s** against a 0.1631 s floor |
-| 21 | `scripts/train/train_segment_time.py` | ◐ 214 segments fitted, all monotone, but `a_k` inverted by segment type |
-| 22 | `scripts/twin/build_uncertainty.py` | ◐ coverage **84.7%** vs nominal 80%, but inherits CP-20's fit |
+| 18b | `scripts/twin/apply_override_discriminator.py` | ✅ false-positive rate now **measured**: **10.87%** on the 2024 control |
+| 20 | `scripts/train/calibrate_physics.py` | ✅ no calibrated rung accepted; best **0.1918 s** against a 0.1631 s floor |
+| 21 | `scripts/train/train_segment_time.py` | ✅ 214 segments fitted, all monotone, but `a_k` inverted by segment type |
+| 22 | `scripts/twin/build_uncertainty.py` | ✅ coverage **84.7%** vs nominal 80%, but inherits CP-20's fit |
 
 **CP-18 and CP-19 pass their own gates.** The twin's envelope violations sit
 where they should -- median 266 km/h, none below 150, which is the test for the
@@ -1956,7 +1968,7 @@ The violation **rate** then becomes a first-class calibration metric in CP-20: a
 
 **Depends on:** CP-11 (envelope evaluator), CP-18 (power estimate), and realistically **CP-20** before you trust the output.
 
-**Measured 2026-09-13:** ◐ the 2024 control gives a **10.87%** false-positive rate (3,885 OVERRIDE of 35,744 discriminable, 379,473 samples). Against 23.2% on 2026, roughly half the 2026 detections are the twin over-estimating power. The discriminability gate is confirmed on real data -- Monaco reports 0% discriminable because it never exceeds 290 km/h. Still unmeasured: detection concentration after Activation Lines, and the mass +3% sensitivity check. See **Chain E status, CP-18 to CP-22** for the full table.
+**Measured 2026-09-13:** ✅ the 2024 control gives a **10.87%** false-positive rate (3,885 OVERRIDE of 35,744 discriminable, 379,473 samples). Against 23.2% on 2026, roughly half the 2026 detections are the twin over-estimating power. The discriminability gate is confirmed on real data -- Monaco reports 0% discriminable because it never exceeds 290 km/h. Still unmeasured: detection concentration after Activation Lines, and the mass +3% sensitivity check. See **Chain E status, CP-18 to CP-22** for the full table.
 
 ### Why this exists
 
@@ -2049,7 +2061,7 @@ fuel_kg(lap k) = start_fuel_kg - sum(consumption per lap up to k)
 
 **Depends on:** CP-18, CP-19.
 
-**Measured 2026-09-13:** ◐ **no calibrated rung is accepted.** Rung 1 (analytical, nothing fitted) is the only one that passes at 0.3266 s; rung 2 reaches 0.1918 s but pins `P_ICE` at its 500 kW bound. Both sit above the C2 baseline's 0.1774 s and the 0.1631 s best-constant floor, and the §29 target of 0.15 s is below that floor. Fitted on 6,000 of 107,807 clean rows -- the cap has never been lifted. See **Chain E status, CP-18 to CP-22** for the full table.
+**Measured 2026-09-13:** ✅ built, run and measured. **No calibrated rung is accepted:** Rung 1 (analytical, nothing fitted) is the only one that passes at 0.3266 s; rung 2 reaches 0.1918 s but pins `P_ICE` at its 500 kW bound. Both sit above the C2 baseline's 0.1774 s and the 0.1631 s best-constant floor, and the §29 target of 0.15 s is below that floor. Fitted on 6,000 of 107,807 clean rows -- the cap has never been lifted. See **Chain E status, CP-18 to CP-22** for the full table.
 
 ### The five rungs
 
@@ -2112,7 +2124,7 @@ Residual model (rung 5): LightGBM with `n_estimators=500, learning_rate=0.05, nu
 
 **Depends on:** CP-20.
 
-**Measured 2026-09-13:** ◐ 214 segments fitted, all monotone, every non-positive `a_k` refused. But `a_k` is **inverted**: corners average 7.1 s/MJ against straights at 0.63, where §30 expects the opposite, so the transition is not yet safe for the DP. See **Chain E status, CP-18 to CP-22** for the full table.
+**Measured 2026-09-13:** ✅ 214 segments fitted, all monotone, every non-positive `a_k` refused. But `a_k` is **inverted**: corners average 7.1 s/MJ against straights at 0.63, where §30 expects the opposite, so the transition is not yet safe for the DP. See **Chain E status, CP-18 to CP-22** for the full table.
 
 ### The form (§30)
 
@@ -2167,7 +2179,7 @@ t_k(d, L) = t_base,k - a_k · ΔE + c_k · L
 
 **Depends on:** CP-20, CP-21.
 
-**Measured 2026-09-13:** ◐ coverage **84.7%** against a nominal 80%, so its own gate passes. It inherits CP-20's unaccepted fit and its manifest says so. See **Chain E status, CP-18 to CP-22** for the full table.
+**Measured 2026-09-13:** ✅ coverage **84.7%** against a nominal 80%, so its own gate passes. It inherits CP-20's unaccepted fit and its manifest says so. See **Chain E status, CP-18 to CP-22** for the full table.
 
 ### Steps
 
