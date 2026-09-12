@@ -54,19 +54,26 @@ def load_geometry(circuit: str) -> dict:
     return yaml.safe_load(path.read_text(encoding="utf-8-sig"))
 
 
-def build_for_event(geometry: dict, event_display: str, years: tuple[str, ...] | None = None):
-    """One row per (year, event, session, driver, lap, segment_id)."""
+def build_for_event(geometry: dict, event_display: str, years: tuple[str, ...] | None = None,
+                    lake_root: Path | None = None):
+    """One row per (year, event, session, driver, lap, segment_id).
+
+    ``lake_root`` defaults to the canonical lake. It is a parameter rather than a
+    constant so a smoke test or a second machine can point the same producer at
+    another lake without writing into the canonical one (AGENTS.md section 5).
+    """
     import pandas as pd
 
+    lake = lake_root or LAKE
     safe = event_display.replace(" ", "_")
     pattern = "year=*" if not years else None
     if years:
         files = []
         for year in years:
-            files.extend(LAKE.glob(f"year={year}/event={safe}/session=*/telemetry_20m.parquet"))
+            files.extend(lake.glob(f"year={year}/event={safe}/session=*/telemetry_20m.parquet"))
         files = sorted(files)
     else:
-        files = sorted(LAKE.glob(f"{pattern}/event={safe}/session=*/telemetry_20m.parquet"))
+        files = sorted(lake.glob(f"{pattern}/event={safe}/session=*/telemetry_20m.parquet"))
     if not files:
         return None, {"reason": "no lake data"}
 
@@ -143,10 +150,11 @@ def build_for_event(geometry: dict, event_display: str, years: tuple[str, ...] |
     return pd.DataFrame(rows), {"laps": grouped.ngroups, "rows": len(rows)}
 
 
-def build_circuit(circuit: str, output_root: Path, years: tuple[str, ...] | None = None) -> dict:
+def build_circuit(circuit: str, output_root: Path, years: tuple[str, ...] | None = None,
+                  lake_root: Path | None = None) -> dict:
     """Build one circuit's segment table. Module-level so it pickles."""
     geometry = load_geometry(circuit)
-    frame, info = build_for_event(geometry, geometry["event_display"], years)
+    frame, info = build_for_event(geometry, geometry["event_display"], years, lake_root)
     if frame is None:
         return {"circuit": circuit, "skipped": True, **info}
     destination = output_root / f"circuit={circuit}" / "segments.parquet"
@@ -174,6 +182,8 @@ def main() -> int:
     parser.add_argument("--circuit", default=None)
     parser.add_argument("--all", action="store_true", help="Every circuit with a segment map")
     parser.add_argument("--output", type=Path, default=OUT)
+    parser.add_argument("--lake", type=Path, default=LAKE,
+                        help="Telemetry-20m lake to read (default: data/processed/telemetry_20m)")
     parser.add_argument("--years", default=None,
                         help="CSV of years to rebuild, e.g. 2024. Other years already in "
                              "the table are kept, so a new season does not cost a full rebuild.")
@@ -203,7 +213,7 @@ def main() -> int:
 
     if args.jobs > 1 and len(circuits) > 1:
         with ProcessPoolExecutor(max_workers=args.jobs) as pool:
-            futures = {pool.submit(build_circuit, c, args.output, years): c for c in circuits}
+            futures = {pool.submit(build_circuit, c, args.output, years, args.lake): c for c in circuits}
             pending = set(futures)
             while pending:
                 finished, pending = wait(pending, timeout=1.0, return_when=FIRST_COMPLETED)
@@ -219,7 +229,7 @@ def main() -> int:
     else:
         for circuit in circuits:
             prog.set_label(circuit)
-            record(build_circuit(circuit, args.output, years))
+            record(build_circuit(circuit, args.output, years, args.lake))
             prog.tick()
     prog.close()
 
@@ -227,6 +237,7 @@ def main() -> int:
         "schema_version": "c1_segments_v1",
         "created_utc": datetime.now(timezone.utc).isoformat(),
         "years_rebuilt": list(years) if years else "all",
+        "lake_root": str(args.lake),
         "written": sorted(written, key=lambda r: str(r.get("circuit"))),
         "skipped": sorted(skipped, key=lambda r: str(r.get("circuit"))),
     }
