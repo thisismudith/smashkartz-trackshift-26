@@ -43,15 +43,21 @@ def build(rows, defenders=None):
 
 
 def c1_row(driver: str, index: int, *, speed_kmh: float, segment_time_s: float | None = None,
+           segment_time_s_offline: float | None = None,
            geometry_version: str = "test-geometry-v1", **extra):
     row = {
         "year": 2026, "event": "EVT", "session": "Sprint", "lap": 1,
         "segment_id": index, "driver": driver, "circuit": "test", "geometry_version": geometry_version,
-        "entry_speed_kmh": speed_kmh,
+        "entry_speed_kmh": speed_kmh, "entry_distance_m": index * 100.0,
+        "entry_lap_elapsed_s": index * 10.0, "lap_start_session_s": 100.0,
+        "normal_race_model_eligible": True, "race_control_transition_flag": False,
+        "pit_transition_flag": False, "pit_state": "ON_TRACK", "team": "TEAM",
         **extra,
     }
     if segment_time_s is not None:
         row["segment_time_s"] = segment_time_s
+    if segment_time_s_offline is not None:
+        row["segment_time_s_offline"] = segment_time_s_offline
     return row
 
 
@@ -135,7 +141,8 @@ def test_missing_c2_c5_values_are_explicit_api_quantities_not_defaults():
     output = build([source]).rows[0]
     unavailable = output["unavailable_quantities"]
     for name in (
-        "baseline_residual_delta_s", "fuel_load_delta_kg_est", "fuel_load_delta_uncertainty_kg",
+        "previous_completed_segment_time_residual_s", "baseline_residual_delta_s",
+        "fuel_load_delta_kg_est", "fuel_load_delta_uncertainty_kg",
         "ers_energy_delta_kj_est", "ers_energy_delta_uncertainty_kj",
     ):
         assert output[name] is None
@@ -149,33 +156,113 @@ def test_missing_c2_c5_values_are_explicit_api_quantities_not_defaults():
 
 
 def test_valid_public_c2_driver_baselines_produce_a_causal_residual_delta():
-    battle = battle_row(1, geometry_version="test-geometry-v1")
+    battle = battle_row(2, geometry_version="test-geometry-v1")
     segments = [
-        c1_row("HAM", 1, speed_kmh=252.0, segment_time_s=5.0),
-        c1_row("ANT", 1, speed_kmh=234.0, segment_time_s=4.4),
+        c1_row("HAM", 1, speed_kmh=252.0, segment_time_s_offline=5.0),
+        c1_row("HAM", 2, speed_kmh=252.0, segment_time_s=1.0, segment_time_s_offline=99.0),
+        c1_row("ANT", 1, speed_kmh=234.0, segment_time_s_offline=4.4),
+        c1_row("ANT", 2, speed_kmh=234.0, segment_time_s=2.0, segment_time_s_offline=88.0),
     ]
     result = build_pairwise_features(
         [battle], segments,
         driver_baseline_rows=[driver_baseline("HAM", 1, 4.0), driver_baseline("ANT", 1, 4.0)],
     ).rows[0]
+    assert result["previous_completed_segment_time_residual_s"] == pytest.approx(0.6)
     assert result["baseline_residual_delta_s"] == pytest.approx(0.6)
     assert "baseline_residual_delta_s" not in result["unavailable_quantities"]
 
 
-def test_invalid_or_noncausal_c2_input_remains_null_with_an_honest_reason():
-    battle = battle_row(1, geometry_version="test-geometry-v1")
+def test_c2_residual_uses_prior_completed_segment_not_current_or_future_segment():
+    battle = battle_row(2, geometry_version="test-geometry-v1")
     segments = [
         c1_row("HAM", 1, speed_kmh=252.0, segment_time_s_offline=5.0),
+        c1_row("HAM", 2, speed_kmh=252.0, segment_time_s=1.0, segment_time_s_offline=99.0),
+        c1_row("HAM", 3, speed_kmh=252.0, segment_time_s_offline=77.0),
         c1_row("ANT", 1, speed_kmh=234.0, segment_time_s_offline=4.4),
+        c1_row("ANT", 2, speed_kmh=234.0, segment_time_s=2.0, segment_time_s_offline=88.0),
+        c1_row("ANT", 3, speed_kmh=234.0, segment_time_s_offline=66.0),
+    ]
+    baselines = [driver_baseline("HAM", 1, 4.0), driver_baseline("ANT", 1, 4.0)]
+    first = build_pairwise_features([battle], segments, baseline_rows=baselines).rows[0]
+    changed = [dict(row) for row in segments]
+    for row in changed:
+        if row["segment_id"] == 2:
+            row["segment_time_s_offline"] = -1000.0
+        if row["segment_id"] == 3:
+            row["segment_time_s_offline"] = 1000.0
+    second = build_pairwise_features([battle], changed, baseline_rows=baselines).rows[0]
+    assert first["previous_completed_segment_time_residual_s"] == pytest.approx(0.6)
+    assert second["previous_completed_segment_time_residual_s"] == pytest.approx(0.6)
+
+
+def test_c2_residual_is_truncation_invariant_for_an_earlier_decision_row():
+    battles = [battle_row(2, geometry_version="test-geometry-v1"), battle_row(3, geometry_version="test-geometry-v1")]
+    segments = [
+        c1_row(driver, index, speed_kmh=250.0 if driver == "HAM" else 240.0,
+               segment_time_s_offline=(5.0 if driver == "HAM" else 4.4) + index)
+        for driver in ("HAM", "ANT") for index in (1, 2, 3)
+    ]
+    baselines = [driver_baseline("HAM", 1, 4.0), driver_baseline("ANT", 1, 4.0)]
+    full = build_pairwise_features(battles, segments, baseline_rows=baselines).rows
+    truncated = build_pairwise_features(
+        battles[:1], [row for row in segments if row["segment_id"] <= 2], baseline_rows=baselines,
+    ).rows
+    assert full[0]["previous_completed_segment_time_residual_s"] == truncated[0]["previous_completed_segment_time_residual_s"]
+
+
+def test_invalid_or_noncausal_c2_input_remains_null_with_an_honest_reason():
+    battle = battle_row(2, geometry_version="test-geometry-v1")
+    segments = [
+        c1_row("HAM", 1, speed_kmh=252.0, segment_time_s_offline=5.0),
+        c1_row("HAM", 2, speed_kmh=252.0, segment_time_s_offline=5.0),
+        c1_row("ANT", 1, speed_kmh=234.0, segment_time_s_offline=4.4),
+        c1_row("ANT", 2, speed_kmh=234.0, segment_time_s_offline=4.4),
     ]
     result = build_pairwise_features(
         [battle], segments,
         driver_baseline_rows=[driver_baseline("HAM", 1, 4.0), driver_baseline("ANT", 1, 4.0, valid=False)],
     ).rows[0]
+    assert result["previous_completed_segment_time_residual_s"] is None
     assert result["baseline_residual_delta_s"] is None
     quantity = result["unavailable_quantities"]["baseline_residual_delta_s"]
     assert quantity["value"] is None and quantity["provenance"] == "DERIVED"
     assert "UNAVAILABLE_C2" in quantity["reason"]
+
+
+def test_c2_uses_team_or_field_baseline_only_after_higher_level_is_invalid():
+    battle = battle_row(2, geometry_version="test-geometry-v1")
+    segments = [
+        c1_row("HAM", 1, speed_kmh=252.0, segment_time_s_offline=5.0, team="A"),
+        c1_row("HAM", 2, speed_kmh=252.0, segment_time_s_offline=99.0, team="A"),
+        c1_row("ANT", 1, speed_kmh=234.0, segment_time_s_offline=4.4, team="B"),
+        c1_row("ANT", 2, speed_kmh=234.0, segment_time_s_offline=88.0, team="B"),
+    ]
+    baselines = [
+        driver_baseline("HAM", 1, 4.0, valid=False),
+        driver_baseline("ANT", 1, 4.0, valid=False),
+        {"schema_version": BASELINE_SCHEMA_VERSION, "baseline_level": "team", "circuit": "test", "year_group": "2026", "segment_id": 1, "team": "A", "baseline_valid": True, "segment_time_s_median": 4.5},
+        {"schema_version": BASELINE_SCHEMA_VERSION, "baseline_level": "team", "circuit": "test", "year_group": "2026", "segment_id": 1, "team": "B", "baseline_valid": True, "segment_time_s_median": 4.0},
+    ]
+    output = build_pairwise_features([battle], segments, baseline_rows=baselines).rows[0]
+    assert output["previous_completed_segment_time_residual_s"] == pytest.approx(0.1)
+
+
+def test_c2_residual_resets_at_a_c7_transition_boundary():
+    battle = battle_row(3, geometry_version="test-geometry-v1")
+    segments = [
+        c1_row("HAM", 1, speed_kmh=252.0, segment_time_s_offline=5.0),
+        c1_row("HAM", 2, speed_kmh=252.0, segment_time_s_offline=5.0,
+               normal_race_model_eligible=False, race_control_transition_flag=True),
+        c1_row("HAM", 3, speed_kmh=252.0, segment_time_s_offline=5.0),
+        c1_row("ANT", 1, speed_kmh=234.0, segment_time_s_offline=4.4),
+        c1_row("ANT", 2, speed_kmh=234.0, segment_time_s_offline=4.4,
+               normal_race_model_eligible=False, race_control_transition_flag=True),
+        c1_row("ANT", 3, speed_kmh=234.0, segment_time_s_offline=4.4),
+    ]
+    baselines = [driver_baseline("HAM", 1, 4.0), driver_baseline("ANT", 1, 4.0)]
+    output = build_pairwise_features([battle], segments, baseline_rows=baselines).rows[0]
+    assert output["previous_completed_segment_time_residual_s"] is None
+    assert "continuous normal-race context" in output["unavailable_quantities"]["previous_completed_segment_time_residual_s"]["reason"]
 
 
 def test_defender_alignment_never_uses_a_previous_or_future_segment():
@@ -233,3 +320,4 @@ def test_real_c8_builder_rows_are_accepted_by_the_public_pairwise_boundary():
     output = build_pairwise_features(c8.battle_rows, c1_rows)
     assert len(c8.battle_rows) == len(output.rows) == 1
     assert output.rows[0]["battle_id"] == c8.battle_rows[0]["battle_id"]
+    assert output.rows[0]["normal_race_model_eligible"] is True

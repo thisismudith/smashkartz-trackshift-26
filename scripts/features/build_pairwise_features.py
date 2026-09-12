@@ -16,10 +16,13 @@ sys.path.insert(0, str(ROOT / "src"))
 from trackshift.features.api import (  # noqa: E402
     PAIRWISE_FEATURE_SCHEMA, PAIRWISE_FEATURE_SCHEMA_VERSION, build_pairwise_features,
 )
+from trackshift.track.api import BASELINE_SCHEMA_VERSION  # noqa: E402
 
 DEFAULT_C8 = ROOT / "data" / "processed" / "battle_episodes" / "battle_segment_rows.jsonl"
 DEFAULT_C1 = ROOT / "data" / "processed" / "segments"
 DEFAULT_C2_DRIVER = ROOT / "data" / "processed" / "driver_segment_baselines" / "driver_segment_baselines.parquet"
+DEFAULT_C2_TEAM = ROOT / "data" / "processed" / "team_segment_baselines" / "team_segment_baselines.parquet"
+DEFAULT_C2_FIELD = ROOT / "data" / "processed" / "field_segment_baselines" / "field_segment_baselines.parquet"
 DEFAULT_OUT = ROOT / "data" / "processed" / "pairwise_segment_features"
 
 
@@ -52,14 +55,17 @@ def _load_c1(args: argparse.Namespace) -> tuple[list[dict[str, Any]], list[str]]
     return frame.where(frame.notna(), None).to_dict(orient="records"), [str(path) for path in paths]
 
 
-def _load_driver_baselines(path: Path) -> list[dict[str, Any]]:
+def _load_baselines(paths: list[Path]) -> list[dict[str, Any]]:
     import pandas as pd
 
-    if not path.exists():
-        raise ValueError(
-            f"C2 driver-baseline artifact is absent: {path}. Run scripts/features/build_baselines.py; do not substitute values."
-        )
-    return pd.read_parquet(path).where(lambda frame: frame.notna(), None).to_dict(orient="records")
+    rows: list[dict[str, Any]] = []
+    for path in paths:
+        if not path.exists():
+            raise ValueError(
+                f"C2 baseline artifact is absent: {path}. Run scripts/features/build_baselines.py; do not substitute values."
+            )
+        rows.extend(pd.read_parquet(path).where(lambda frame: frame.notna(), None).to_dict(orient="records"))
+    return rows
 
 
 def main() -> int:
@@ -67,6 +73,8 @@ def main() -> int:
     parser.add_argument("--battle-rows", type=Path, default=DEFAULT_C8)
     parser.add_argument("--segments-dir", type=Path, default=DEFAULT_C1)
     parser.add_argument("--driver-baselines", type=Path, default=DEFAULT_C2_DRIVER)
+    parser.add_argument("--team-baselines", type=Path, default=DEFAULT_C2_TEAM)
+    parser.add_argument("--field-baselines", type=Path, default=DEFAULT_C2_FIELD)
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUT)
     parser.add_argument("--circuit")
     parser.add_argument("--year")
@@ -78,8 +86,11 @@ def main() -> int:
     if not c8_rows:
         raise ValueError("selected C8 battle rows are empty")
     c1_rows, c1_paths = _load_c1(args)
-    c2_driver_rows = _load_driver_baselines(args.driver_baselines)
-    result = build_pairwise_features(c8_rows, c1_rows, driver_baseline_rows=c2_driver_rows)
+    c2_paths = [args.driver_baselines, args.team_baselines, args.field_baselines]
+    c2_rows = _load_baselines(c2_paths)
+    result = build_pairwise_features(c8_rows, c1_rows, baseline_rows=c2_rows)
+    if not all(row.get("normal_race_model_eligible") is True for row in c8_rows):
+        raise ValueError("C8 input contains a non-normal row; CP-04 model-ready output must be explicitly C7 eligible")
 
     import pandas as pd
     from trackshift.data.registry import assert_registered, feature
@@ -90,8 +101,14 @@ def main() -> int:
     output_path = args.output_dir / "pairwise_segment_features.parquet"
     frame.to_parquet(output_path, index=False)
     unavailable = Counter()
+    unavailable_reasons = Counter()
     for row in result.rows:
         unavailable.update(row["unavailable_quantities"].keys())
+        unavailable_reasons.update(
+            quantity["reason"]
+            for quantity in row["unavailable_quantities"].values()
+            if quantity.get("reason")
+        )
     emitted_feature_schema = {
         column: {
             key: feature(column)[key]
@@ -106,17 +123,27 @@ def main() -> int:
             "c8_battle_rows": str(args.battle_rows),
             "c1_segments": c1_paths,
             "c7_eligibility_and_transition_fields": "embedded in C8 model-ready battle rows",
-            "c2_driver_baselines": str(args.driver_baselines),
+            "c2_baselines": [str(path) for path in c2_paths],
         },
-        "source_row_counts": {"c8_battle_rows": len(c8_rows), "c1_segments": len(c1_rows), "c2_driver_baselines": len(c2_driver_rows)},
+        "source_row_counts": {"c8_battle_rows": len(c8_rows), "c1_segments": len(c1_rows), "c2_baselines": len(c2_rows)},
         "output_row_count": len(result.rows),
+        "c2_residual_populated_rows": sum(row.get("previous_completed_segment_time_residual_s") is not None for row in result.rows),
+        "c2_residual_populated_fraction": (
+            sum(row.get("previous_completed_segment_time_residual_s") is not None for row in result.rows) / len(result.rows)
+            if result.rows else None
+        ),
         "feature_schema": emitted_feature_schema,
         "core_live_feature_schema": PAIRWISE_FEATURE_SCHEMA,
-        "causal_cutoff_policy": "current C8/C1 row plus at most two preceding rows in the same battle; C7 transition rows reset history and are excluded",
+        "causal_cutoff_policy": "current C8/C1 entry plus at most two preceding battle rows; C2 uses each car's immediately prior completed C1 segment in the same lap and continuous C7-normal context; transition rows reset history",
+        "c2_schema_version": BASELINE_SCHEMA_VERSION,
+        "c2_baseline_selection_policy": "valid driver baseline, then valid team baseline, then valid field baseline",
+        "current_segment_offline_time_used_for_c2": False,
+        "all_model_ready_rows_c7_eligible": all(row.get("normal_race_model_eligible") is True for row in result.rows),
         "excluded_rows_by_reason": result.excluded_rows_by_reason,
         "missing_defender_segments": result.missing_defender_segments,
         "defender_alignment_gaps_by_reason": result.defender_alignment_gaps_by_reason,
         "unavailable_quantity_counts": dict(sorted(unavailable.items())),
+        "unavailable_reason_counts": dict(sorted(unavailable_reasons.items())),
     }
     (args.output_dir / "pairwise_manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(manifest, indent=2))

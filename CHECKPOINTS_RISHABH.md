@@ -43,7 +43,7 @@ Each checkpoint uses the same structure.
 | 01 | Race-context labels and eligibility gate | M02, C7 | ☑ |
 | 02 | Leakage-safe splitter | M29, C9 | ☑ |
 | 03 | Dynamic pairs and battle episodes | M05, C8 | ☑ |
-| 04 | Causal pairwise features | M06, C8 | ☐ |
+| 04 | Causal pairwise features | M06, C8 | ☑ |
 | 05 | Rival-state feature dataset | M08 | ☐ |
 | 06 | Synthetic labelled trajectories | M09b | ☐ |
 | 07 | Rival-state benchmark | M09, C10 | ☐ |
@@ -212,15 +212,20 @@ Each checkpoint uses the same structure.
 
 **src/trackshift/features/pairwise.py**, **scripts/features/build_pairwise_features.py**, **tests/test_pairwise.py**, C8 pairwise table.
 
-### Revalidation status — 2026-09-12
+### Completion record — 2026-09-12
 
-**CP-04 remains unchecked.** The C2 public driver-baseline artifact is now
-joined through the public track API, but the available C1 partitions expose
-only `segment_time_s_offline`; CP-04 deliberately leaves the C2 residual null
-rather than using a full-segment value at entry. The local non-British C8
-revalidation also required the documented legacy track-status bridge because
-materialised C7 is absent. C5 remains unavailable and C6 is intentionally not
-joined until its public contract lands.
+**CP-04 is complete.** The C2 residual now uses only each car's most recent
+completed prior C1 segment in the same continuous normal-race context, with
+valid driver → team → field baseline fallback and no current-segment offline
+time. C7 was materialised from telemetry-20m lap metadata before the Canadian
+Grand Prix Race validation; all 4,339 model-ready rows were explicitly normal
+race eligible. The causal residual populated on 3,930 rows (90.57%); the
+remaining 409 rows retain explicit `UNAVAILABLE_C2` reasons. C5 fuel/ERS stays
+explicitly unavailable until a real twin exists, and time gaps stay null where
+no observed source is published. The 100 contemporaneous defender source gaps
+remain null and audited as `NO_CONTEMPORANEOUS_DEFENDER_C1_SEGMENT`; no
+backfill was used. Validation: `.venv/bin/python -m pytest -q` → 555 passed,
+7 skipped.
 
 ---
 

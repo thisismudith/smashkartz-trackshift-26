@@ -159,10 +159,10 @@ datasets:
       normal_race_model_eligible gate that every model dataset filters on
       (section 12).
     source: telemetry_20m, rcm.json, laptimes.json
-    schema_version: null
+    schema_version: c7_race_context_materialized_v1
     partitioning: year / event / session
     primary_key: [year, event, session, driver, lap, distance_m]
-    producer: src/trackshift/race_context.py
+    producer: scripts/features/build_race_context.py
     consumers: [M04, M05, M07, M08, M15]
     live_status: LIVE_SAFE
     status: built
@@ -188,7 +188,7 @@ datasets:
   - name: pairwise_segment_features
     description: Attacker/defender differentials per battle segment (section 17).
     source: segments, battle_episodes
-    schema_version: m06_pairwise_segment_features_v2
+    schema_version: m06_pairwise_segment_features_v3
     partitioning: year / event / session
     primary_key: [battle_id, segment_index]
     producer: scripts/features/build_pairwise_features.py
@@ -198,8 +198,9 @@ datasets:
     notes: >-
       M06/CP-04, owned by Rishabh. One causal row per C8 battle segment;
       rolling values use only current and earlier same-battle rows and reset at
-      C7 pit/race-control transitions. C2 residuals use valid public C2 driver
-      baselines only; C5 fuel/ERS values remain explicit unavailable API Quantities.
+      C7 pit/race-control transitions. C2 residuals use the immediately prior
+      completed segment with valid driver, team, or field baselines (in that
+      order); C5 fuel/ERS values remain explicit unavailable API Quantities.
 
   - name: battle_episodes
     description: Continuous attacker/defender fights, the unit of leakage-safe splitting (section 18).
