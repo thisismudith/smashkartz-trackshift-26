@@ -1,0 +1,13 @@
+schema_version: strategic_state_discretization_v1
+dimensions:
+  energy_state_mj: {edges: [0.0, 1.0, 2.0, 3.0, 4.0], unit: MJ}
+  tyre_state: {edges: [-2.0, -0.5, 0.5, 2.0], unit: ratio}
+  time_gap_s: {edges: [-3.0, -1.0, -0.25, 0.25, 1.0, 3.0], unit: s}
+  distance_gap_m: {edges: [-100.0, -25.0, 0.0, 25.0, 100.0], unit: m}
+  relative_speed_mps: {edges: [-15.0, -5.0, -1.0, 1.0, 5.0, 15.0], unit: m/s}
+  gap_rate_s_per_s: {edges: [-1.0, -0.2, -0.05, 0.05, 0.2, 1.0], unit: s/s}
+  overtake_state: {categories: [DISABLED, UNARMED, ARMED, ACTIVE, UNKNOWN]}
+  power_regime: {categories: [NORMAL, OVERRIDE, UNKNOWN]}
+  rival_belief: {categories: [CONSERVING, BALANCED, DEPLOYING, DERATING, UNKNOWN]}
+  uncertainty: {categories: [LOW, MEDIUM, HIGH, UNKNOWN]}
+  horizon: {edges: [0, 1, 3, 6, 12], unit: segments}
