@@ -47,6 +47,24 @@ weather_alignment_defaults: &weather_alignment_defaults
   interaction_group: [weather, audit]
   consuming_models: []
 
+rival_state_feature_defaults: &rival_state_feature_defaults
+  source: C8/M06 rows plus versioned C2/C6 artifacts
+  derivation: scripts/features/materialize_chain_s.py via the public Chain S boundaries
+  allowed_sessions: [Sprint, Race]
+  supported_years: [2026]
+  live_safe: true
+  provenance: DERIVED
+  availability_scope: partial
+  source_gated: false
+  decision_checkpoint: null
+  uncertainty_field: null
+  causal_status: CAUSAL
+  counterfactual_safe: false
+  regulation_version: rules-2026-common-v1
+  regulation_source: C6 event rule snapshot where applicable
+  interaction_group: [rival_state]
+  consuming_models: [M08, M09]
+
 # Defaults for the C8/M06 pairwise-table columns added in CP-04.  Individual
 # entries override availability/provenance when the public C2/C5 contract is
 # not yet materialised.  YAML merges keep this generated-table schema readable
@@ -2781,3 +2799,57 @@ features:
     regulation_source: "Not a regulatory value. Measured from C1 telemetry."
     interaction_group: [overtake_eligibility]
     consuming_models: ["M21", "M07", "M10"]
+
+  # ---------------------------------------------------------- M08 / CP-05
+  - name: causal_cutoff
+    <<: *rival_state_feature_defaults
+    definition: Segment-entry key proving the latest observation used for this M08 row.
+    unit: null
+
+  - name: corner_phase
+    <<: *rival_state_feature_defaults
+    definition: Versioned C1 geometry phase at segment entry, when materialised.
+    unit: null
+
+  - name: pace_residual_delta_s
+    <<: *rival_state_feature_defaults
+    definition: C2 causal attacker-minus-defender residual from prior completed segments.
+    unit: s
+
+  - name: eligibility_probability
+    <<: *rival_state_feature_defaults
+    definition: C6 decision-time probability of eligibility; an unavailable Quantity when C6 has no supported probability.
+    unit: null
+    provenance: INFERRED
+
+  - name: c6_eligibility
+    <<: *rival_state_feature_defaults
+    definition: C6 rule-derived eligibility Quantity; null is explicit unavailability, never false.
+    unit: null
+    provenance: RULE
+
+  - name: c9_split_assignment
+    <<: *rival_state_feature_defaults
+    definition: Persistent battle-level C9 evaluation assignment attached to every M08 row.
+    unit: null
+    live_safe: false
+    counterfactual_safe: true
+    interaction_group: [split, audit]
+
+  - name: reliability
+    <<: *rival_state_feature_defaults
+    definition: Causal feature reliability flags, including normal-race and contemporaneous defender alignment status.
+    unit: null
+
+  - name: provenance
+    <<: *rival_state_feature_defaults
+    definition: Dataset-level provenance label for the materialised feature row.
+    unit: null
+
+  - name: schema_version
+    <<: *rival_state_feature_defaults
+    definition: Versioned M08 schema identifier attached to every feature row.
+    unit: null
+    live_safe: false
+    counterfactual_safe: true
+    interaction_group: [schema, audit]
