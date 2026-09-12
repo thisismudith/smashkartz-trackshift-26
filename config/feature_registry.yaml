@@ -1,0 +1,1147 @@
+# TrackShift feature registry (M31, AGENTS.md sections 11, 44, 46).
+#
+# The single namespace for every column any TrackShift dataset produces. A
+# builder that writes an unregistered column fails its build (see
+# assert_registered in src/trackshift/data/registry.py) -- registration is a
+# gate, not documentation written afterwards.
+#
+# Seeded from the real 48-column telemetry_20m Parquet, not from an aspirational
+# list, because the failure mode this registry exists to prevent is drift
+# between what is registered and what is actually written.
+#
+# Required keys on every entry (AGENTS.md section 46 plus the MODELS.md update):
+#   name, definition, unit, source, derivation, allowed_sessions,
+#   supported_years, live_safe, provenance, availability_scope, source_gated,
+#   decision_checkpoint, uncertainty_field, causal_status, counterfactual_safe,
+#   regulation_version, regulation_source, interaction_group, consuming_models
+#
+# Field meanings that are easy to get wrong:
+#   live_safe          available at or before the prediction timestamp (section 44).
+#                      null only when availability_scope is none.
+#   availability_scope all | partial | none. "none" means the channel is not
+#                      obtainable today and must never be zero-filled.
+#   source_gated       true when the channel waits on a documented continuous
+#                      source (section 11).
+#   causal_status      CAUSAL uses only information at or before the row.
+#                      ACAUSAL uses future information: labels and evaluation only.
+#   counterfactual_safe true when the value stays valid under a policy that was
+#                      not the one actually driven. Anything observed is false.
+
+schema_version: 1
+
+features:
+
+  # ------------------------------------------------------------------ keys
+  - name: year
+    definition: Championship season the session belongs to.
+    unit: null
+    source: raw mirror directory name
+    derivation: directory name under data/raw/tracinginsights
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: OBSERVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [key]
+    consuming_models: [M03, M04, M05, M07, M08, M10, M13, M14]
+
+  - name: event
+    definition: Grand Prix event name as published by the source.
+    unit: null
+    source: raw mirror directory name
+    derivation: directory name under the season directory
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: OBSERVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [key]
+    consuming_models: [M03, M04, M05, M07, M08, M10, M18]
+
+  - name: session
+    definition: Session name within the event weekend.
+    unit: null
+    source: raw mirror directory name
+    derivation: directory name under the event directory
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: OBSERVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [key]
+    consuming_models: [M01, M04, M05, M07, M10]
+
+  - name: driver
+    definition: Three-letter driver code.
+    unit: null
+    source: tel.json directory name, cross-checked against drivers.json
+    derivation: directory name under the session directory
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: OBSERVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [key, identity]
+    consuming_models: [M04, M05, M06, M08, M10]
+
+  - name: lap
+    definition: Lap number within the session.
+    unit: lap
+    source: tel.json filename prefix
+    derivation: integer prefix of <n>_tel.json
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: OBSERVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [key]
+    consuming_models: [M01, M04, M05, M07, M34]
+
+  - name: distance_m
+    definition: Distance along the lap at this 20 m sample.
+    unit: m
+    source: tel.json distance
+    derivation: resample grid point; the lake's spatial key
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: DERIVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [key, geometry]
+    consuming_models: [M03, M06, M14]
+
+  # ------------------------------------------------------------ provenance
+  - name: source_file
+    definition: Path of the raw tel.json this row was resampled from.
+    unit: null
+    source: build_phase2_dataset.py
+    derivation: recorded at build time for audit
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: false
+    provenance: DERIVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [audit]
+    consuming_models: []
+
+  - name: source_rows
+    definition: Number of raw samples in the lap before resampling.
+    unit: null
+    source: build_phase2_dataset.py
+    derivation: len(tel.time)
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: false
+    provenance: DERIVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [audit]
+    consuming_models: []
+
+  - name: resample_spacing_m
+    definition: Spatial resolution used to build this row.
+    unit: m
+    source: build_phase2_dataset.py --spacing-m
+    derivation: constant per build, 20 m by default (section 10)
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: false
+    provenance: DERIVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [audit]
+    consuming_models: []
+
+  - name: validation_status
+    definition: Validator verdict for the source lap; only ACCEPTED rows are written.
+    unit: null
+    source: validation.py
+    derivation: ACCEPTED or a rejection code
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: false
+    provenance: DERIVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [audit]
+    consuming_models: []
+
+  # -------------------------------------------------------- lap metadata
+  - name: lap_time_s
+    definition: Lap time for the lap this row belongs to.
+    unit: s
+    source: laptimes.json time
+    derivation: joined per lap; constant across the lap's rows
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: false
+    provenance: OBSERVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: ACAUSAL
+    counterfactual_safe: false
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [pace]
+    consuming_models: [M01, M30]
+
+  - name: session_time_s
+    definition: Session clock at which the lap ended.
+    unit: s
+    source: laptimes.json sesT
+    derivation: joined per lap
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: false
+    provenance: OBSERVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: ACAUSAL
+    counterfactual_safe: false
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [time]
+    consuming_models: [M02, M05]
+
+  - name: lap_start_session_s
+    definition: Session clock at which the lap started.
+    unit: s
+    source: laptimes.json lST
+    derivation: joined per lap; the causal time anchor for the lap
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: OBSERVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [time]
+    consuming_models: [M02, M05, M06]
+
+  - name: sector_1_s
+    definition: Sector 1 time for the lap.
+    unit: s
+    source: laptimes.json s1
+    derivation: joined per lap
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: false
+    provenance: OBSERVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: ACAUSAL
+    counterfactual_safe: false
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [pace]
+    consuming_models: [M01]
+
+  - name: sector_2_s
+    definition: Sector 2 time for the lap.
+    unit: s
+    source: laptimes.json s2
+    derivation: joined per lap
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: false
+    provenance: OBSERVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: ACAUSAL
+    counterfactual_safe: false
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [pace]
+    consuming_models: [M01]
+
+  - name: sector_3_s
+    definition: Sector 3 time for the lap.
+    unit: s
+    source: laptimes.json s3
+    derivation: joined per lap
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: false
+    provenance: OBSERVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: ACAUSAL
+    counterfactual_safe: false
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [pace]
+    consuming_models: [M01]
+
+  - name: race_position
+    definition: Classified position at the end of the lap.
+    unit: null
+    source: laptimes.json pos
+    derivation: joined per lap
+    allowed_sessions: [Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: false
+    provenance: OBSERVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: ACAUSAL
+    counterfactual_safe: false
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [race context]
+    consuming_models: [M05, M22]
+
+  - name: tyre_compound
+    definition: Compound fitted for the lap.
+    unit: null
+    source: laptimes.json compound
+    derivation: joined per lap
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: OBSERVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: [DETECTION, ACTIVATION, BRAKING]
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [tyre]
+    consuming_models: [M07, M08, M10, M15, M30]
+
+  - name: tyre_life_laps
+    definition: Laps completed on this tyre set, including other sessions for used sets.
+    unit: laps
+    source: laptimes.json life
+    derivation: joined per lap
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: OBSERVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: [DETECTION, ACTIVATION, BRAKING]
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [tyre]
+    consuming_models: [M07, M08, M10, M15, M30]
+
+  - name: tyre_is_new
+    definition: Whether the set was new when fitted.
+    unit: null
+    source: laptimes.json fresh
+    derivation: joined per lap
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: OBSERVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: [DETECTION, ACTIVATION, BRAKING]
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [tyre]
+    consuming_models: [M08, M30]
+
+  - name: stint
+    definition: Stint index for the driver, incrementing at each pit stop.
+    unit: null
+    source: laptimes.json stint
+    derivation: joined per lap
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: OBSERVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: [DETECTION, ACTIVATION, BRAKING]
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [tyre]
+    consuming_models: [M08, M30]
+
+  - name: team
+    definition: Constructor entering the car.
+    unit: null
+    source: laptimes.json team, cross-checked against drivers.json
+    derivation: joined per lap
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: OBSERVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: [DETECTION, ACTIVATION, BRAKING]
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [identity]
+    consuming_models: [M04, M10, M15]
+
+  - name: driver_number
+    definition: Car number. Identity only; see section 36 on raw identifiers.
+    unit: null
+    source: laptimes.json dNum
+    derivation: joined per lap; used to resolve driver_ahead_number, not as a model input
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: OBSERVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [identity]
+    consuming_models: [M05, M06]
+
+  - name: track_status
+    definition: Concatenated track-status codes active during the lap.
+    unit: null
+    source: laptimes.json status
+    derivation: joined per lap; decoded into race-control state by C7 (M02)
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: OBSERVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [race context]
+    consuming_models: [M02, M04, M05, M07]
+
+  - name: is_accurate
+    definition: Source's own flag for whether the lap's timing data is reliable.
+    unit: null
+    source: laptimes.json iacc
+    derivation: joined per lap
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: false
+    provenance: OBSERVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: ACAUSAL
+    counterfactual_safe: false
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [quality]
+    consuming_models: [M01, M30]
+
+  - name: is_personal_best
+    definition: Whether the lap is the driver's personal best in the session.
+    unit: null
+    source: laptimes.json pb
+    derivation: joined per lap
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: false
+    provenance: OBSERVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: ACAUSAL
+    counterfactual_safe: false
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [pace]
+    consuming_models: [M01]
+
+  - name: lap_deleted
+    definition: Whether the stewards deleted the lap time.
+    unit: null
+    source: laptimes.json del
+    derivation: joined per lap
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: false
+    provenance: OBSERVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: ACAUSAL
+    counterfactual_safe: false
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [quality]
+    consuming_models: [M01, M30]
+
+  - name: lap_deleted_reason
+    definition: Stewards' reason for a deleted lap, where given.
+    unit: null
+    source: laptimes.json delR
+    derivation: joined per lap
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: false
+    provenance: OBSERVED
+    availability_scope: partial
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: ACAUSAL
+    counterfactual_safe: false
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [quality]
+    consuming_models: [M01]
+
+  - name: speed_trap_kmh
+    definition: Top speed on the longest straight for the lap.
+    unit: km/h
+    source: laptimes.json vst
+    derivation: joined per lap
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: false
+    provenance: OBSERVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: ACAUSAL
+    counterfactual_safe: false
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [pace]
+    consuming_models: [M14, M15]
+
+  - name: qualifying_segment
+    definition: Which qualifying segment the lap belongs to.
+    unit: null
+    source: laptimes.json qs
+    derivation: joined per lap; present only in Qualifying and Sprint Qualifying
+    allowed_sessions: [Qualifying, Sprint Qualifying, Sprint Shootout]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: OBSERVED
+    availability_scope: partial
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [race context]
+    consuming_models: [M01]
+
+  - name: pit_in_session_s
+    definition: Session clock at pit-lane entry on this lap, where it happened.
+    unit: s
+    source: laptimes.json pin
+    derivation: joined per lap; drives pit_state in C7
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: OBSERVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [race context]
+    consuming_models: [M02, M05]
+
+  - name: pit_out_session_s
+    definition: Session clock at pit-lane exit on this lap, where it happened.
+    unit: s
+    source: laptimes.json pout
+    derivation: joined per lap; drives pit_state in C7
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: OBSERVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [race context]
+    consuming_models: [M02, M05]
+
+  # --------------------------------------------------- resampled telemetry
+  - name: lap_elapsed_s
+    definition: Time since the start of the lap at this sample.
+    unit: s
+    source: tel.json time
+    derivation: linear interpolation onto the 20 m grid
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: OBSERVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [time]
+    consuming_models: [M03, M14, M16]
+
+  - name: engine_rpm
+    definition: Engine speed at this sample.
+    unit: rpm
+    source: tel.json rpm
+    derivation: linear interpolation onto the 20 m grid
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: OBSERVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: false
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [powertrain]
+    consuming_models: [M14]
+
+  - name: speed_kmh
+    definition: Car speed at this sample.
+    unit: km/h
+    source: tel.json speed
+    derivation: linear interpolation onto the 20 m grid
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: OBSERVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: [DETECTION, ACTIVATION, BRAKING]
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: false
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [pace, powertrain]
+    consuming_models: [M03, M06, M14, M16, M19]
+
+  - name: throttle_pct
+    definition: Throttle pedal position at this sample.
+    unit: "%"
+    source: tel.json throttle
+    derivation: linear interpolation onto the 20 m grid
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: OBSERVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: false
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [driver input]
+    consuming_models: [M01, M03, M14]
+
+  - name: lap_fraction
+    definition: Normalised position around the lap, 0 at the first sample and 1 at the last.
+    unit: null
+    source: tel.json rel_distance
+    derivation: linear interpolation onto the 20 m grid
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: OBSERVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [geometry]
+    consuming_models: [M03]
+
+  - name: gap_ahead_m
+    definition: Distance to the car directly ahead at this sample.
+    unit: m
+    source: tel.json DistanceToDriverAhead
+    derivation: linear interpolation onto the 20 m grid
+    allowed_sessions: [Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: OBSERVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: [DETECTION, ACTIVATION, BRAKING]
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: false
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [gap]
+    consuming_models: [M05, M06, M07, M10, M21]
+
+  - name: acc_longitudinal_mps2
+    definition: Longitudinal acceleration along the track.
+    unit: m/s2
+    source: tel.json acc_x
+    derivation: linear interpolation onto the 20 m grid
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: OBSERVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: false
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [dynamics]
+    consuming_models: [M03, M14]
+
+  - name: acc_lateral_mps2
+    definition: Lateral acceleration.
+    unit: m/s2
+    source: tel.json acc_y
+    derivation: linear interpolation onto the 20 m grid
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: OBSERVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: false
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [dynamics]
+    consuming_models: [M03]
+
+  - name: acc_vertical_mps2
+    definition: Vertical acceleration.
+    unit: m/s2
+    source: tel.json acc_z
+    derivation: linear interpolation onto the 20 m grid
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: OBSERVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: false
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [dynamics]
+    consuming_models: []
+
+  - name: x_m
+    definition: Track-map X position. Raw coordinate; do not use directly across circuits (section 36).
+    unit: m
+    source: tel.json x
+    derivation: linear interpolation onto the 20 m grid
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: OBSERVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [geometry]
+    consuming_models: [M03, M33]
+
+  - name: y_m
+    definition: Track-map Y position. Raw coordinate; do not use directly across circuits (section 36).
+    unit: m
+    source: tel.json y
+    derivation: linear interpolation onto the 20 m grid
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: OBSERVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [geometry]
+    consuming_models: [M03, M33]
+
+  - name: z_m
+    definition: Elevation above the track datum.
+    unit: m
+    source: tel.json z
+    derivation: linear interpolation onto the 20 m grid
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: OBSERVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [geometry]
+    consuming_models: [M03, M14]
+
+  - name: gear
+    definition: Selected gear at this sample.
+    unit: null
+    source: tel.json gear
+    derivation: zero-order hold from the preceding raw sample
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: OBSERVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: false
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [powertrain]
+    consuming_models: [M14]
+
+  - name: brake_on
+    definition: Whether the brakes are applied at this sample.
+    unit: null
+    source: tel.json brake
+    derivation: zero-order hold from the preceding raw sample
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: OBSERVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: false
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [driver input]
+    consuming_models: [M03, M06, M14]
+
+  - name: drs_open
+    definition: >-
+      Raw DRS channel state. A 2022-2025 historical covariate only. It is
+      uniformly zero in the 2026 mirror and must never be read as 2026 Overtake
+      state, which comes from the rule engine alone (sections 12, 20, 41).
+    unit: null
+    source: tel.json drs
+    derivation: zero-order hold from the preceding raw sample
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025]
+    live_safe: true
+    provenance: OBSERVED
+    availability_scope: partial
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: false
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [regulation era]
+    consuming_models: [M07, M13]
+
+  - name: driver_ahead_number
+    definition: Car number of the driver directly ahead at this sample.
+    unit: null
+    source: tel.json DriverAhead
+    derivation: zero-order hold from the preceding raw sample
+    allowed_sessions: [Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: OBSERVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: [DETECTION, ACTIVATION, BRAKING]
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: false
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [gap, identity]
+    consuming_models: [M05, M06, M07]
+
+  # ------------------------------------------- source-gated, section 11
+  # Registered with availability_scope: none so nobody silently zero-fills them.
+  # A channel moves to partial or all only when a documented continuous source
+  # with defined units and an availability pattern exists.
+  - name: brake_pressure
+    definition: Brake line pressure.
+    unit: bar
+    source: NOT AVAILABLE - no documented continuous source in TracingInsights
+    derivation: null
+    allowed_sessions: []
+    supported_years: []
+    live_safe: null
+    provenance: OBSERVED
+    availability_scope: none
+    source_gated: true
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: null
+    counterfactual_safe: false
+    regulation_version: null
+    regulation_source: null
+    interaction_group: []
+    consuming_models: []
+
+  - name: steering_angle
+    definition: Steering wheel angle.
+    unit: deg
+    source: NOT AVAILABLE - no documented continuous source in TracingInsights
+    derivation: null
+    allowed_sessions: []
+    supported_years: []
+    live_safe: null
+    provenance: OBSERVED
+    availability_scope: none
+    source_gated: true
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: null
+    counterfactual_safe: false
+    regulation_version: null
+    regulation_source: null
+    interaction_group: []
+    consuming_models: []
+
+  - name: tyre_temperature
+    definition: Tyre surface temperature.
+    unit: C
+    source: NOT AVAILABLE - no documented continuous source in TracingInsights
+    derivation: null
+    allowed_sessions: []
+    supported_years: []
+    live_safe: null
+    provenance: OBSERVED
+    availability_scope: none
+    source_gated: true
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: null
+    counterfactual_safe: false
+    regulation_version: null
+    regulation_source: null
+    interaction_group: []
+    consuming_models: []
+
+  - name: tyre_pressure
+    definition: Tyre inflation pressure.
+    unit: bar
+    source: NOT AVAILABLE - no documented continuous source in TracingInsights
+    derivation: null
+    allowed_sessions: []
+    supported_years: []
+    live_safe: null
+    provenance: OBSERVED
+    availability_scope: none
+    source_gated: true
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: null
+    counterfactual_safe: false
+    regulation_version: null
+    regulation_source: null
+    interaction_group: []
+    consuming_models: []
+
+  - name: brake_temperature
+    definition: Brake disc temperature.
+    unit: C
+    source: NOT AVAILABLE - no documented continuous source in TracingInsights
+    derivation: null
+    allowed_sessions: []
+    supported_years: []
+    live_safe: null
+    provenance: OBSERVED
+    availability_scope: none
+    source_gated: true
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: null
+    counterfactual_safe: false
+    regulation_version: null
+    regulation_source: null
+    interaction_group: []
+    consuming_models: []
+
+  - name: damage
+    definition: >-
+      Car damage state. An unknown damage state must remain UNKNOWN and must
+      never be encoded as no damage (section 11).
+    unit: null
+    source: NOT AVAILABLE - no documented continuous source in TracingInsights
+    derivation: null
+    allowed_sessions: []
+    supported_years: []
+    live_safe: null
+    provenance: OBSERVED
+    availability_scope: none
+    source_gated: true
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: null
+    counterfactual_safe: false
+    regulation_version: null
+    regulation_source: null
+    interaction_group: []
+    consuming_models: []
+
+  - name: fuel_consumption
+    definition: >-
+      Measured fuel flow or consumption. Not to be confused with
+      fuel_load_kg_est, which is an inferred estimate from M34.
+    unit: kg/lap
+    source: NOT AVAILABLE - no documented continuous source in TracingInsights
+    derivation: null
+    allowed_sessions: []
+    supported_years: []
+    live_safe: null
+    provenance: OBSERVED
+    availability_scope: none
+    source_gated: true
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: null
+    counterfactual_safe: false
+    regulation_version: null
+    regulation_source: null
+    interaction_group: []
+    consuming_models: []

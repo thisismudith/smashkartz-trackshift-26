@@ -285,11 +285,15 @@ Call it at the top of every `scripts/train/*.py`. A test in CP-14 asserts it fir
 
 ### ✅ Check
 
-- `artifacts/schema_audit/` contains `field_inventory.csv`, `events.csv`, `lap_quality.csv`, `summary.json`, `inventory.csv`
-- Summary shows five years `present`, zero parse errors
-- `lap_quality.csv` row count ≈ 177,288
+File names below are what the script actually writes; the earlier draft of this
+checkpoint listed four names that do not exist (`field_inventory.csv`,
+`events.csv`, `lap_quality.csv`, `summary.json`).
+
+- `artifacts/schema_audit/` contains `field_availability.csv`, `events_sessions.csv`, `data_quality_summary.csv`, `repository_summary.json`, `schema_differences.json`, `canonical_schema.json`, plus `inventory.csv` and `inventory.json` from `inventory.py`
+- `repository_summary.json` shows `partial_audit: false`, five years `present`, and `malformed: []`
+- `data_quality_summary.csv` row count = **177,288** (cross-checks against the download manifests, which report the same total)
 - `distance_monotonic` is true for **>99%** of laps — anything worse means the validator will reject at scale
-- `inventory.csv` lists 14 complete 2026 GPs
+- `inventory.csv` lists **13 complete 2026 GPs**, not 14. The mirror holds 17 2026 event directories: 13 complete Grands Prix, 3 Pre-Season Testing directories (not races), and the Spanish Grand Prix, which has Practice 1 only and no `corners.json` (open item T3). So "14 tracks" elsewhere in this file means 14 GP-named events, of which one is Practice-only.
 
 ### ⚠️ If output is bad
 
