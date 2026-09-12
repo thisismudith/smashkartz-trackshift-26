@@ -9,6 +9,7 @@ import json
 import sys
 from collections import defaultdict
 from pathlib import Path
+from simdata.paths import data_root, relative_root
 
 # The old simulator export lived at ``data/2026``.  Development and CI use the
 # documented raw-mirror hierarchy instead; prefer a local export only when it

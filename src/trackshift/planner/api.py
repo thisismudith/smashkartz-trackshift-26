@@ -1,7 +1,6 @@
-"""Public Owner A boundary for the future planner contract.
+"""Public M24 planner boundary."""
 
-Rishabh CP-12 provides the implementation. This module intentionally exposes
-no placeholder recommendation.
-"""
+from .beam import PLANNER_SCHEMA_VERSION, RISK_CRITERIA, RiskSpec, plan
+from .baselines import BASELINE_NAMES, generate_baseline_plans
 
-__all__: list[str] = []
+__all__ = ["PLANNER_SCHEMA_VERSION", "RISK_CRITERIA", "RiskSpec", "plan", "BASELINE_NAMES", "generate_baseline_plans"]

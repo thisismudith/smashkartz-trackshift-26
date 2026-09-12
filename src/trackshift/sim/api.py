@@ -1,7 +1,6 @@
-"""Public Owner A boundary for the future simulation contract.
+"""Public M26/M27 simulator and policy boundaries."""
 
-Rishabh CP-14 and CP-15 provide the implementation. This module intentionally
-exposes no placeholder counterfactual output.
-"""
+from .rival_policies import POLICY_SCHEMA_VERSION, POLICIES, UnknownPolicyError, choose_policy_action, policy_registry
+from .simulator import SIMULATOR_SCHEMA_VERSION, simulate
 
-__all__: list[str] = []
+__all__ = ["SIMULATOR_SCHEMA_VERSION", "POLICY_SCHEMA_VERSION", "POLICIES", "UnknownPolicyError", "choose_policy_action", "policy_registry", "simulate"]
