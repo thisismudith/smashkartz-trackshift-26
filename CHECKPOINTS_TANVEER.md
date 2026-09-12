@@ -55,7 +55,7 @@ Each checkpoint has the same shape:
 | 02 | Registries scaffold | M31 | ✅ |
 | 03 | Rule config skeleton + **speed-dependent power envelope**, all tracks | M18 | ✅ |
 | 04 | Build the 20 m lake | Phase 2 | ☐ |
-| 05 | **Track segmentation — freeze `segment_id`** | M03 | ☐ |
+| 05 | **Track segmentation — freeze `segment_id`** | M03 | ✅ |
 | 06 | Track-relative weather | M33 | ☐ |
 | 07 | Practice lap classifier | M01 | ☐ |
 | 08 | Tyre degradation and normalised pace | M30 | ☐ |
