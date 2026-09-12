@@ -65,6 +65,7 @@ from .features import (
     FeatureSelection,
     FeatureSelectionError,
     build_matrix,
+    audit_feature_matrix,
     select_features,
 )
 from .folds import (
@@ -126,6 +127,7 @@ __all__ = [
     "available_families",
     "bin_diagnostics",
     "build_matrix",
+    "audit_feature_matrix",
     "check_gates",
     "configure_threads",
     "crossfit_calibration_set",

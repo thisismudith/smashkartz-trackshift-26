@@ -35,6 +35,7 @@ from trackshift.pass_model.api import (  # noqa: E402
     FAMILIES,
     Fold,
     aggregate,
+    audit_feature_matrix,
     assert_disjoint,
     available_families,
     build_matrix,
@@ -52,7 +53,7 @@ from trackshift.pass_model.api import (  # noqa: E402
     write_fit_artifact,
 )
 from trackshift.data.guards import DemoScope  # noqa: E402
-from trackshift.features.opportunities import CHECKPOINTS, LABEL_DEFINITION  # noqa: E402
+from trackshift.features.opportunities import CHECKPOINTS, LABEL_DEFINITION, OPPORTUNITY_SCHEMA_VERSION  # noqa: E402
 
 OPPORTUNITIES = ROOT / "data" / "processed" / "overtake_opportunities"
 MODELS_ROOT = ROOT / "artifacts" / "models" / "pass"
@@ -95,6 +96,13 @@ def load_opportunities(root: Path) -> tuple[Any, list[str]]:
     frames, sources, schemas = [], [], set()
     for path in paths:
         frame = pd.read_parquet(path)
+        if "schema_version" in frame.columns:
+            versions = {str(value) for value in frame["schema_version"].dropna().unique()}
+            if versions and versions != {OPPORTUNITY_SCHEMA_VERSION}:
+                raise SystemExit(
+                    f"opportunity schema mismatch in {path}: found {sorted(versions)}, "
+                    f"expected {OPPORTUNITY_SCHEMA_VERSION}; rebuild M07 artifacts"
+                )
         schemas.add(tuple(sorted(frame.columns)))
         frames.append(frame)
         # posix separators so a manifest written on Windows compares byte-for-byte
@@ -219,6 +227,7 @@ def main() -> int:
             selection = select_features(
                 checkpoint, rows.columns, include_identity=args.identity, dtypes=rows.dtypes
             )
+            audit_feature_matrix(rows, selection)
             preview[checkpoint] = selection.as_schema()
         print(json.dumps({
             "dataset": dataset,

@@ -12,6 +12,7 @@ import sys
 from pathlib import Path
 
 import pytest
+import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
@@ -21,8 +22,11 @@ from trackshift.features.opportunities import (  # noqa: E402
     CHECKPOINTS,
     LABEL_DEFINITION,
     LeakageError,
+    MODEL_ELIGIBLE_FEATURES,
     OpportunityContext,
     OpportunityError,
+    RULE_DISPLAY_METADATA,
+    UNAVAILABLE_QUANTITY_FIELDS,
     allowed_at_checkpoint,
     assert_checkpoint_scope,
     build_opportunity_rows,
@@ -251,3 +255,24 @@ def test_bad_lap_length_is_refused():
     with pytest.raises(OpportunityError, match="positive"):
         build_opportunity_rows(context(), CUTOFFS, honest_builder, lap_length_m=0, registry=REGISTRY)
 
+
+def test_m07_fields_have_explicit_semantic_surfaces():
+    assert "gap_at_checkpoint" in MODEL_ELIGIBLE_FEATURES
+    assert "projected_gap_at_detection_s" in RULE_DISPLAY_METADATA
+    assert "eligibility_margin" in RULE_DISPLAY_METADATA
+    assert "zone" in RULE_DISPLAY_METADATA
+    assert "projected_gap_sigma_s" in UNAVAILABLE_QUANTITY_FIELDS
+    assert MODEL_ELIGIBLE_FEATURES.isdisjoint(RULE_DISPLAY_METADATA)
+
+
+def test_floor_only_gap_sigma_is_an_unavailable_quantity():
+    from scripts.features.build_opportunities import _checkpoint_features
+
+    view = pd.DataFrame([{"gap_ahead_m": 100.0, "speed_kmh": 200.0, "offset_m": 0.0}])
+    features = _checkpoint_features(
+        view, {"activation_offset_m": 200.0, "zone_end_offset_m": 600.0},
+        "DETECTION", 0.0, 1.0, [0.01],
+    )
+    assert features["projected_gap_sigma_s"] is None
+    unavailable = features["unavailable_quantities"]["projected_gap_sigma_s"]
+    assert unavailable["value"] is None and "UNAVAILABLE_C6" in unavailable["reason"]

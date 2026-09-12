@@ -29,7 +29,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 
 from trackshift.data.guards import DemoScope  # noqa: E402
-from trackshift.features.opportunities import CHECKPOINTS  # noqa: E402
+from trackshift.features.opportunities import CHECKPOINTS, OPPORTUNITY_SCHEMA_VERSION  # noqa: E402
 from trackshift.pass_model.api import (  # noqa: E402
     DEFAULT_SEED,
     DESIGNS,
@@ -65,6 +65,7 @@ def _display(path: Path) -> str:
 def load_opportunities(root: Path):
     import pandas as pd
 
+    root = root.expanduser().resolve()
     paths = sorted(root.glob("event=*/opportunities.parquet"))
     if not paths:
         raise SystemExit(
@@ -73,8 +74,16 @@ def load_opportunities(root: Path):
         )
     frames, sources = [], []
     for path in paths:
-        frames.append(pd.read_parquet(path))
-        sources.append(path.relative_to(ROOT).as_posix())
+        frame = pd.read_parquet(path)
+        if "schema_version" in frame.columns:
+            versions = {str(value) for value in frame["schema_version"].dropna().unique()}
+            if versions and versions != {OPPORTUNITY_SCHEMA_VERSION}:
+                raise SystemExit(
+                    f"opportunity schema mismatch in {path}: found {sorted(versions)}, "
+                    f"expected {OPPORTUNITY_SCHEMA_VERSION}; rebuild M07 artifacts"
+                )
+        frames.append(frame)
+        sources.append(path.resolve().relative_to(ROOT.resolve()).as_posix())
     return pd.concat(frames, ignore_index=True), sources
 
 
