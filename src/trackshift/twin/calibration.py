@@ -235,6 +235,11 @@ def compare_rungs(results: Sequence[RungResult]) -> list[RungResult]:
                 f"held-out MAE {result.mae_s:.4f} s does not improve on the previous "
                 f"rung's {best:.4f} s"
             )
+        if result.cells_fitted == 0:
+            reasons.append(
+                "fitted no cells, so its predictions are the previous rung's. A rung "
+                "that fits nothing has not been evaluated, it has been skipped."
+            )
         if result.residual_share is not None and result.residual_share > 0.30:
             reasons.append(
                 f"residual model contributes {result.residual_share:.0%} of predicted "
@@ -242,6 +247,7 @@ def compare_rungs(results: Sequence[RungResult]) -> list[RungResult]:
             )
         result.accepted = not reasons
         result.rejection_reason = "; ".join(reasons) if reasons else None
-        if result.accepted:
-            best = result.mae_s if best is None else min(best, result.mae_s)
+        # The bar is the best MAE seen, accepted or not. Tracking only accepted
+        # rungs lets a rejected one hide the comparison from the next.
+        best = result.mae_s if best is None else min(best, result.mae_s)
     return ordered

@@ -29,6 +29,7 @@ from .fuel import (
     start_fuel_kg,
 )
 from .override import (
+    DEFAULT_K_SIGMA,
     NORMAL,
     OVERRIDE,
     UNKNOWN,
@@ -84,7 +85,7 @@ __all__ = [
     "segment_power", "trailing_mean", "wheel_power_kw",
     "LAP_TIME_EFFECT_S_PER_KG", "FuelError", "FuelEstimate",
     "consumption_from_ice_work", "estimate_fuel_curve", "start_fuel_kg",
-    "NORMAL", "OVERRIDE", "UNKNOWN", "OverrideError", "OverrideInference",
+    "DEFAULT_K_SIGMA", "NORMAL", "OVERRIDE", "UNKNOWN", "OverrideError", "OverrideInference",
     "discriminate", "historical_false_positive_rate",
     "MAE_TARGETS", "PARAMETER_BOUNDS", "PARAMETER_NAMES", "RUNGS",
     "CalibrationError", "RungResult", "check_physical_constraints", "compare_rungs",
