@@ -35,6 +35,7 @@ from .opportunities import (
     label_zone_exit_v1,
     opportunity_id,
 )
+from .rival_state_features import RIVAL_FEATURE_SCHEMA_VERSION, build_rival_state_features
 
 __all__ = [
     # CP-13 overtake opportunities (M07)
@@ -66,4 +67,6 @@ __all__ = [
     "TyrePaceError",
     "build_tyre_pace_overlay",
     "load_tyre_pace_config",
+    "RIVAL_FEATURE_SCHEMA_VERSION",
+    "build_rival_state_features",
 ]

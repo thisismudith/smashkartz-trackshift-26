@@ -256,6 +256,15 @@ backfill was used. Validation: `.venv/bin/python -m pytest -q` → 555 passed,
 
 **src/trackshift/features/rival_state_features.py**, **scripts/features/build_rival_features.py**, processed feature dataset, tests, manifest.
 
+### Validation — not complete
+
+M08 producer and causal/provenance tests exist. The local non-British CP-04
+pairwise materialisation currently contains zero battle rows, so the producer
+emits zero rows rather than inventing C8 inputs. C5 and C6 have no joined
+decision-point materialisation for this artifact and remain null with explicit
+unavailability reasons. Rebuild C8/M06 on eligible non-British races and a C9
+assignment before completing this checkpoint.
+
 ---
 
 # CP-06: Synthetic labelled trajectories
@@ -284,6 +293,14 @@ backfill was used. Validation: `.venv/bin/python -m pytest -q` → 555 passed,
 ### Deliverables
 
 **src/trackshift/rival/synthetic.py**, **tests/test_rival_synthetic.py**, synthetic validation artifacts.
+
+### Validation — not complete
+
+The seeded M09b generator and regression tests cover all four declared states,
+variable dwell durations, deterministic seeds, an intentionally merged-state
+scenario, and above-chance synthetic recovery. No generated validation artifact
+is committed; freeze and retain the external benchmark report with the eventual
+M09 evaluation before marking the checkpoint complete.
 
 ---
 
@@ -323,6 +340,13 @@ backfill was used. Validation: `.venv/bin/python -m pytest -q` → 555 passed,
 
 **src/trackshift/rival/api.py**, HMM, HSMM, GBM, neural modules, training and evaluation scripts, rival artifacts, rival report.
 
+### Validation — not complete
+
+CPU-only interpretable candidate comparison is scaffolded and returns a
+normalised C10 distribution on synthetic data. No C9-assigned real M08 sequence
+exists locally, so there is no real-sequence likelihood, calibration, stability,
+or latency evidence from which to select a production rival model.
+
 ---
 
 # CP-08: Rival-side regulation-era evaluation
@@ -347,6 +371,13 @@ backfill was used. Validation: `.venv/bin/python -m pytest -q` → 555 passed,
 ### Deliverables
 
 **src/trackshift/rival/era.py**, comparison in rival report, selected strategy in manifest.
+
+### Validation — not complete
+
+The era harness explicitly excludes historical DRS from 2026 Overtake inputs
+and defaults to 2026-only until held-out 2026 evidence exists. The local M08
+availability audit has no non-British rows, so no regulation-era comparison can
+yet be reported.
 
 ---
 
