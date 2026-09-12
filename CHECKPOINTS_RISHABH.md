@@ -591,4 +591,4 @@ Owner A route modules in **src/trackshift/serve/**, service tests, replay inputs
 | C7 race context, C8 battles, C9 splits, C10 rival belief | Rishabh | Tanveer CP-04 onward and end-to-end planning |
 | Shared registry additions | both | each producing checkpoint |
 | UI and final demo composition | Owner C | final release |
-| Joint integration plan | Rishabh, after both owner plans | end-to-end merge and rehearsal |
+| Joint integration plan | Rishabh through `CHECKPOINTS_INTEGRATION.md` | end-to-end merge and rehearsal |
