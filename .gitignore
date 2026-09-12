@@ -1,6 +1,10 @@
 # Raw and derived data is regenerable by the build scripts and can reach
 # many GB once the 20 m lake is built (AGENTS.md sections 10, 48). Never commit it.
-data/
+#
+# Anchored with a leading slash. A bare "data/" matches a directory named data at
+# ANY depth, which silently swallowed scripts/data/ -- two CP-03 scripts were
+# skipped by `git add -A` with no warning and never reached the repo.
+/data/
 frontend/public/sim/
 artifacts/schema_audit/*.csv
 artifacts/schema_audit/*.json

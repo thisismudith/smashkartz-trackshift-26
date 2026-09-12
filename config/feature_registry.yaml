@@ -1145,3 +1145,524 @@ features:
     regulation_source: null
     interaction_group: []
     consuming_models: []
+
+  # ------------------------------------------------ C1 segments (M03, CP-05)
+  # Static circuit geometry plus per-lap segment aggregates. Fields available at
+  # segment ENTRY are live-safe; anything summarising the whole segment is only
+  # knowable once it is over and carries an _offline suffix (sections 13, 44).
+
+  - name: segment_id
+    definition: Sequential segment index within the lap, stable for a given geometry_version.
+    unit: null
+    source: derived from config/geometry/<circuit>.yaml
+    derivation: bisect of distance_m against the static boundary array
+    note: >-
+      The join key for every downstream table. Frozen per geometry_version:
+      if it moves, every table that joins on it is silently wrong.
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: DERIVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [key, geometry]
+    consuming_models: [M04, M05, M06, M07, M08, M14, M16, M19, M22]
+
+  - name: geometry_version
+    definition: Version stamp of the segment map that produced this row.
+    unit: null
+    source: config/geometry/<circuit>.yaml
+    derivation: constant per map
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: DERIVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [audit]
+    consuming_models: []
+
+  - name: boundary_hash
+    definition: Fingerprint of the boundary array behind this segmentation.
+    unit: null
+    source: sha256 of the rounded boundary distances
+    derivation: recorded at build time
+    note: >-
+      How a table built against a stale segment map becomes detectable
+      instead of silently misaligned.
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: DERIVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [audit]
+    consuming_models: []
+
+  - name: start_distance_m
+    definition: Distance at which the segment begins.
+    unit: m
+    source: config/geometry/<circuit>.yaml
+    derivation: static per circuit
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: DERIVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [geometry]
+    consuming_models: [M03, M14, M16]
+
+  - name: end_distance_m
+    definition: Distance at which the segment ends.
+    unit: m
+    source: config/geometry/<circuit>.yaml
+    derivation: static per circuit
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: DERIVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [geometry]
+    consuming_models: [M03, M14, M16]
+
+  - name: segment_length_m
+    definition: Length of the segment.
+    unit: m
+    source: config/geometry/<circuit>.yaml
+    derivation: end_distance_m - start_distance_m
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: DERIVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [geometry]
+    consuming_models: [M14, M16]
+
+  - name: kind
+    definition: "Segment role: STRAIGHT, BRAKING, CORNER or EXIT."
+    unit: null
+    source: config/geometry/<circuit>.yaml
+    derivation: from the boundary source and curvature
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: DERIVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [geometry]
+    consuming_models: [M06, M10, M16]
+
+  - name: corner_id
+    definition: Corner number from corners.json where the segment contains one.
+    unit: null
+    source: corners.json via the segment map
+    derivation: marker distance inside the segment
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: DERIVED
+    availability_scope: partial
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [geometry]
+    consuming_models: [M06, M08, M10]
+
+  - name: corner_type
+    definition: "Versioned geometry class: STRAIGHT, HAIRPIN, SLOW, MEDIUM, FAST or CHICANE, with a LEFT/RIGHT suffix."
+    unit: null
+    source: peak curvature of the median centreline plus apex speed
+    derivation: curvature decides whether it is a corner, apex speed decides which kind
+    note: >-
+      Not a free-text circuit label (section 12). The curvature threshold is
+      calibrated against known corner positions and is in the source's own
+      x/y units, which are not metres.
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: DERIVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [geometry]
+    consuming_models: [M06, M08, M10, M15]
+
+  - name: sector
+    definition: Timing sector containing the segment.
+    unit: null
+    source: config/geometry/<circuit>.yaml
+    derivation: static per circuit
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: DERIVED
+    availability_scope: partial
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [geometry]
+    consuming_models: [M06, M10]
+
+  - name: zone
+    definition: Overtake zone index where the segment falls inside one.
+    unit: null
+    source: config/rules/2026/<event>.yaml via the segment map
+    derivation: static per circuit
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: DERIVED
+    availability_scope: partial
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [geometry]
+    consuming_models: [M07, M20, M21]
+
+  - name: track_heading_deg
+    definition: Direction of travel at segment entry, degrees in [0, 360).
+    unit: deg
+    source: atan2 over the smoothed median centreline, rotation-corrected
+    derivation: corners.json Rotation applied to the frame
+    note: >-
+      M33 projects wind onto this, so a wrong coordinate frame silently
+      corrupts the head and cross components.
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: DERIVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [geometry]
+    consuming_models: [M33]
+
+  - name: entry_distance_m
+    definition: Distance of the first lake row inside the segment.
+    unit: m
+    source: telemetry_20m
+    derivation: first row at or after start_distance_m
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: DERIVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [geometry]
+    consuming_models: [M14]
+
+  - name: entry_speed_kmh
+    definition: Speed at segment entry.
+    unit: km/h
+    source: telemetry_20m
+    derivation: first row inside the segment
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: DERIVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: false
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [pace]
+    consuming_models: [M06, M10, M14, M16]
+
+  - name: entry_lap_elapsed_s
+    definition: Lap time elapsed at segment entry.
+    unit: s
+    source: telemetry_20m
+    derivation: first row inside the segment
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: DERIVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [time]
+    consuming_models: [M16]
+
+  - name: gap_ahead_m_entry
+    definition: Distance to the car ahead at segment entry.
+    unit: m
+    source: telemetry_20m
+    derivation: first row inside the segment
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: DERIVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: [DETECTION, ACTIVATION, BRAKING]
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: false
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [gap]
+    consuming_models: [M05, M06, M07, M21]
+
+  - name: rows
+    definition: Number of 20 m lake rows aggregated into this segment.
+    unit: null
+    source: telemetry_20m
+    derivation: row count
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: false
+    provenance: DERIVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: ACAUSAL
+    counterfactual_safe: false
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [audit]
+    consuming_models: []
+
+  - name: segment_time_s_offline
+    definition: Time taken to traverse the segment.
+    unit: s
+    source: telemetry_20m
+    derivation: last minus first lap_elapsed_s in the segment
+    note: >-
+      Only knowable once the segment is over, so it is a target and an
+      evaluation field, never a live input.
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: false
+    provenance: DERIVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: ACAUSAL
+    counterfactual_safe: false
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [pace]
+    consuming_models: [M04, M16]
+
+  - name: exit_speed_kmh_offline
+    definition: Speed at segment exit.
+    unit: km/h
+    source: telemetry_20m
+    derivation: last row inside the segment
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: false
+    provenance: DERIVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: ACAUSAL
+    counterfactual_safe: false
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [pace]
+    consuming_models: [M04, M06]
+
+  - name: min_speed_kmh_offline
+    definition: Minimum speed within the segment, the apex speed for a corner.
+    unit: km/h
+    source: telemetry_20m
+    derivation: min over the segment
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: false
+    provenance: DERIVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: ACAUSAL
+    counterfactual_safe: false
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [pace]
+    consuming_models: [M04, M08]
+
+  - name: max_speed_kmh_offline
+    definition: Maximum speed within the segment.
+    unit: km/h
+    source: telemetry_20m
+    derivation: max over the segment
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: false
+    provenance: DERIVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: ACAUSAL
+    counterfactual_safe: false
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [pace]
+    consuming_models: [M04, M14]
+
+  - name: mean_speed_kmh_offline
+    definition: Mean speed within the segment.
+    unit: km/h
+    source: telemetry_20m
+    derivation: mean over the segment
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: false
+    provenance: DERIVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: ACAUSAL
+    counterfactual_safe: false
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [pace]
+    consuming_models: [M04]
+
+  - name: brake_fraction_offline
+    definition: Share of the segment spent braking.
+    unit: null
+    source: telemetry_20m
+    derivation: mean of brake_on over the segment
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: false
+    provenance: DERIVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: ACAUSAL
+    counterfactual_safe: false
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [driver input]
+    consuming_models: [M04, M08]
+
+  - name: full_throttle_fraction_offline
+    definition: Share of the segment above 95 percent throttle.
+    unit: null
+    source: telemetry_20m
+    derivation: mean of throttle_pct >= 95
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: false
+    provenance: DERIVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: ACAUSAL
+    counterfactual_safe: false
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [driver input]
+    consuming_models: [M04, M14]
+
+  - name: gap_ahead_m_exit_offline
+    definition: Distance to the car ahead at segment exit.
+    unit: m
+    source: telemetry_20m
+    derivation: last row inside the segment
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: false
+    provenance: DERIVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: ACAUSAL
+    counterfactual_safe: false
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [gap]
+    consuming_models: [M05, M06]

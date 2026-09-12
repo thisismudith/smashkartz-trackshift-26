@@ -53,7 +53,7 @@ Each checkpoint has the same shape:
 | 00 | Environment and dependencies | — | ✅ |
 | 01 | Local data audit | §51, §63 | ✅ |
 | 02 | Registries scaffold | M31 | ✅ |
-| 03 | Rule config skeleton + **speed-dependent power envelope**, all tracks | M18 | ☐ |
+| 03 | Rule config skeleton + **speed-dependent power envelope**, all tracks | M18 | ✅ |
 | 04 | Build the 20 m lake | Phase 2 | ☐ |
 | 05 | **Track segmentation — freeze `segment_id`** | M03 | ☐ |
 | 06 | Track-relative weather | M33 | ☐ |
@@ -309,7 +309,8 @@ checkpoint listed four names that do not exist (`field_inventory.csv`,
 
 ### ✅ Completed
 
-`.unbooks\CP-01.ps1 -SkipAudit` reports **8 of 8 requirements met**. Full mirror audited: five seasons, `partial_audit: false`, **177,288 lap files**, **zero malformed**. The lap total cross-checks exactly against the download manifests and the inventory.
+`.
+unbooks\CP-01.ps1 -SkipAudit` reports **8 of 8 requirements met**. Full mirror audited: five seasons, `partial_audit: false`, **177,288 lap files**, **zero malformed**. The lap total cross-checks exactly against the download manifests and the inventory.
 
 Audit runtime was **1h30m** at 26 laps/s for 2022–2025 — slower than the 81/s measured on a warm subset, so budget ~90 minutes rather than 40 for a cold full run.
 
@@ -562,6 +563,30 @@ race_control:
 ### Deliverables
 
 `config/rules/2026/common.yaml` + 14 event files, `scripts/data/extract_race_control.py`, `scripts/data/derive_drs_zones.py`, `artifacts/race_control/*.json`, `src/trackshift/rules/config.py`, `tests/test_rules_config.py`.
+
+### ✅ Completed
+
+All six acceptance gates pass; 83 CP-03 tests, 244 in the suite.
+
+| Gate | Result |
+|---|---|
+| 14 event files | ✅ 13 complete GPs + Spanish GP (Practice-only, flagged) |
+| Every file validates | ✅ no problems |
+| No `RULE_FIA` with a TODO source | ✅ none |
+| Race control covers every event | ✅ 17 files; totals reconcile to **51 enable / 23 disable** |
+| `resolve()` raises in strict mode on `UNVERIFIED` | ✅ |
+| Lap lengths sane vs published | ✅ all within 3%, worst −2.71% |
+
+**Measured, not assumed.** Lap length is `DERIVED_TELEMETRY` (median `max(distance)` over sampled Race laps) and corner geometry is `OBSERVED` from `corners.json`. Every *regulatory* value — power envelope, energy budgets, detection gap, line positions — stays `UNVERIFIED` pending an FIA citation.
+
+Four findings worth carrying forward:
+
+- **The ±50 m lap-length gate was wrong and is now ±3%.** Telemetry distance reads short of the homologated length on *every* circuit, from −0.61% at Monza to −2.71% at the Hungaroring, tracking corner density: distance is integrated along the driven path and straight-line integration between samples undershoots the arc through a corner. **Use the measured value** — CP-05 segments on telemetry distance, so boundaries must share that coordinate system. Each file records the published length and delta as a cross-check only.
+- **Race control writes `VSC DEPLOYED`, not the expanded form.** Matching only the long spelling found all 26 endings and none of the 31 deployments, which would have left VSC periods invisible to the `normal_race_model_eligible` gate.
+- **The DRS-proxy threshold is calibrated, not guessed.** The channel thins from 5.2% of samples in 2022 to 1.0% in 2025, so the initial 25% lap-share found both Silverstone zones in 2022 and nothing after. At 8% all four seasons independently recover the same two zones within 40 m — that agreement is the evidence they are circuit features rather than one race's traffic.
+- **Corner data is not clean everywhere.** The Hungaroring repeats three distances and lists them out of order. The files sort them and record the anomaly rather than smoothing it away.
+
+**Still open (research, not code):** every regulatory value is `UNVERIFIED`. `strict_mode` stays `false` until the FIA 2026 Sporting and Technical Regulations and the per-event notes are sourced. Nothing is blocked by this — only demo claims are (§57).
 
 ---
 
