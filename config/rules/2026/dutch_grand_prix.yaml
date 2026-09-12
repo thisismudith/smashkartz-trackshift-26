@@ -1,0 +1,97 @@
+# TrackShift 2026 event rule configuration (M18, CP-03).
+#
+# Every regulatory value is UNVERIFIED until traced to an FIA article and
+# recorded in its source field (AGENTS.md sections 20.1, 21, 57). Values here
+# are usable for modelling immediately; they simply may not back a claim that
+# the system is legal by construction.
+#
+# value_source tiers:
+#   RULE_FIA             cited to a Sporting/Technical Regulation or event note
+#   OBSERVED_RCM         derived from race-control messages in the raw mirror
+#   DERIVED_TELEMETRY    measured from the telemetry itself
+#   PROXY_HISTORICAL_DRS inferred from 2022-2025 DRS activity; development only
+#   UNVERIFIED           not yet sourced
+
+schema_version: 1
+event: dutch_grand_prix
+event_display: "Dutch Grand Prix"
+circuit: dutch
+year: 2026
+
+complete_in_mirror: true
+
+lap_length_m:
+  value: 4222.5
+  value_source: DERIVED_TELEMETRY
+  source: "median max(distance) over 30 sampled Race laps, lap 1 excluded"
+  published_circuit_length_m: 4259
+  delta_vs_published_m: -36.5
+  delta_vs_published_pct: -0.86
+  note: >-
+    Telemetry distance is integrated along the path the car actually drove, so it
+    reads shorter than the homologated circuit length: straight-line integration
+    between samples undershoots the arc through a corner. The shortfall tracks
+    corner density, from -0.61% at Monza to -2.58% at the Hungaroring.
+    USE THE MEASURED VALUE. CP-05 segments on telemetry distance, so segment
+    boundaries must live in the same coordinate system; the published figure is a
+    sanity cross-check only, and is not interchangeable with it.
+
+geometry:
+  corner_count: 14
+  rotation_deg: 0.0
+  value_source: OBSERVED
+  source: "data/raw/tracinginsights/2026/Dutch Grand Prix/Race/corners.json"
+  corner_distances_m: [484.4, 790.2, 961.7, 1184.7, 1363.8, 1520.7, 1833.1, 2139.1, 2361.9, 2622.5, 3200.5, 3288.5, 3601.5, 3851.0]
+
+overtake:
+  enabled: true
+  # Race control states WHETHER Overtake is available, never WHERE. Line
+  # positions are not derivable from rcm.json and stay UNVERIFIED until an
+  # FIA event note is found, or PROXY_HISTORICAL_DRS from derive_drs_zones.py.
+  zones:
+    - zone: 1
+      name: "Historical DRS active-zone proxy 1"
+      detection_line_m:
+        value: null
+        value_source: UNVERIFIED
+        source: "No Detection Line is supplied by artifacts/drs_zones/dutch_grand_prix.json: scripts/data/derive_drs_zones.py derives only historical DRS active-zone starts and ends, not Detection Lines. No authoritative historical Detection-Line source is configured."
+        note: "Retained null: no fixed upstream offset, speed, segment, or heuristic may manufacture a 2026 Detection Line."
+      activation_line_m:
+        value: 2600.0
+        value_source: PROXY_HISTORICAL_DRS
+        source: "2024 and 2025 Dutch Grand Prix Race historical DRS; scripts/data/derive_drs_zones.py --raw-root data/raw --all; MIN_LAP_SHARE=0.08, MIN_ZONE_LENGTH_M=300 m, BIN_M=20 m, consensus >=2 seasons; artifacts/drs_zones/dutch_grand_prix.json consensus zone 2600-3000 m."
+        note: "Tier-C development-only proxy for historical DRS active-zone start; not a 2026 FIA Overtake fact and rejected by strict_mode."
+      zone_end_m:
+        value: 3000.0
+        value_source: PROXY_HISTORICAL_DRS
+        source: "2024 and 2025 Dutch Grand Prix Race historical DRS; scripts/data/derive_drs_zones.py --raw-root data/raw --all; MIN_LAP_SHARE=0.08, MIN_ZONE_LENGTH_M=300 m, BIN_M=20 m, consensus >=2 seasons; artifacts/drs_zones/dutch_grand_prix.json consensus zone 2600-3000 m."
+        note: "Tier-C development-only proxy for historical DRS active-zone end; not a 2026 FIA Overtake fact and rejected by strict_mode."
+    - zone: 2
+      name: "Historical DRS active-zone proxy 2"
+      detection_line_m:
+        value: null
+        value_source: UNVERIFIED
+        source: "No Detection Line is supplied by artifacts/drs_zones/dutch_grand_prix.json; historical DRS active-zone derivation does not derive Detection Lines."
+        note: "Retained null: no heuristic Detection-Line fallback is permitted."
+      activation_line_m:
+        value: 3600.0
+        value_source: PROXY_HISTORICAL_DRS
+        source: "2022, 2024 and 2025 Dutch Grand Prix Race historical DRS; scripts/data/derive_drs_zones.py --raw-root data/raw --all; MIN_LAP_SHARE=0.08, MIN_ZONE_LENGTH_M=300 m, BIN_M=20 m, consensus >=2 seasons; artifacts/drs_zones/dutch_grand_prix.json consensus zone 3600-4200 m."
+        note: "Tier-C development-only proxy for historical DRS active-zone start; not a 2026 FIA Overtake fact and rejected by strict_mode."
+      zone_end_m:
+        value: 4200.0
+        value_source: PROXY_HISTORICAL_DRS
+        source: "2022, 2024 and 2025 Dutch Grand Prix Race historical DRS; scripts/data/derive_drs_zones.py --raw-root data/raw --all; MIN_LAP_SHARE=0.08, MIN_ZONE_LENGTH_M=300 m, BIN_M=20 m, consensus >=2 seasons; artifacts/drs_zones/dutch_grand_prix.json consensus zone 3600-4200 m."
+        note: "Tier-C development-only proxy for historical DRS active-zone end; not a 2026 FIA Overtake fact and rejected by strict_mode."
+
+race_control:
+  overtake_windows_source: "artifacts/race_control/2026_dutch_grand_prix.json"
+  value_source: OBSERVED_RCM
+  source: "race-control messages in the raw mirror, extracted by scripts/data/extract_race_control.py"
+  overtake_enabled_messages: 5
+  overtake_disabled_messages: 3
+
+# Season-wide values (power envelope, energy budgets, detection gap) live in
+# common.yaml. Add a key here only to override the season value for this
+# event, and only with a cited source.
+overrides: {}

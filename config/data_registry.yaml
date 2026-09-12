@@ -38,6 +38,44 @@ datasets:
       path length, so distance is non-monotonic. Measured on 2026: Race 94.96%
       accepted, Qualifying 75.69%. See scripts/data/quality_report.py.
 
+  - name: practice_lap_classes
+    description: >-
+      Versioned, one-row-per-lap deterministic M01 overlay for 2026 Practice 1.
+      It preserves the source telemetry lake and records an exactly-one label
+      plus DERIVED provenance for every accepted lake lap.
+    source: telemetry_20m lap metadata
+    schema_version: m01_practice_lap_class_v1
+    partitioning: year / event / session
+    primary_key: [year, event, session, driver, lap]
+    producer: scripts/features/build_practice_lap_classes.py
+    consumers: [M01, M14, M15, M16, M30]
+    live_status: OFFLINE_ONLY
+    status: built
+    notes: >-
+      M01 / CP-07. The classifier uses only the current and earlier laps for
+      the same driver/session; it never backfills a LONG_RUN label from future
+      tyre behaviour. The build emits a run manifest with complete label and
+      unknown/excluded counts, and does not mutate telemetry_20m in place.
+
+  - name: tyre_pace_overlay
+    description: >-
+      Immutable C1-keyed M30 overlay with causal tyre-degradation pace context
+      and conservative tyre-normalised segment pace. It is explicitly not a
+      tyre temperature, pressure, or physical tyre-performance sensor.
+    source: segments, telemetry_20m lap metadata, C7 race-context normalizer
+    schema_version: m30_tyre_pace_overlay_v1
+    partitioning: circuit / year / event / session
+    primary_key: [year, event, session, driver, lap, segment_id, geometry_version, boundary_hash]
+    producer: scripts/features/build_tyre_pace.py
+    consumers: [M06, M07, M08, M10, M14, M15, M16, M30]
+    live_status: OFFLINE_ONLY
+    status: built
+    notes: >-
+      M30 / CP-08. Race and Sprint only. C7-normal-race eligibility and pit/
+      race-control transitions are reconstructed from matching lake metadata
+      where C1 lacks materialized C7 fields. Fuel correction is unavailable
+      until C5/M34; all unavailable values are null with explicit reasons.
+
   - name: segments
     description: >-
       Strategic track segments, roughly 30-40 per lap, bounded by braking onset,
@@ -48,7 +86,7 @@ datasets:
     partitioning: year / event / session
     primary_key: [year, event, session, driver, lap, segment_id]
     producer: scripts/features/build_segments.py
-    consumers: [M04, M05, M06, M08, M14, M16, M19, M22]
+    consumers: [M04, M05, M06, M08, M14, M16, M19, M22, M33]
     live_status: MIXED
     status: planned
     notes: >-
@@ -57,42 +95,63 @@ datasets:
       all. Full-segment summaries are OFFLINE_ONLY; live columns are aligned to
       segment entry.
 
+  - name: segment_weather_overlay
+    description: >-
+      Versioned weather overlay keyed one-to-one to C1 segment rows. It aligns
+      raw session weather to the causal segment-entry clock and projects wind
+      relative to track heading without mutating the C1 table.
+    source: segments, data/raw[/tracinginsights]/<year>/<event>/<session>/weather.json
+    schema_version: m33_segment_weather_overlay_v1
+    partitioning: circuit / year / session
+    primary_key: [year, event, session, driver, lap, segment_id, geometry_version, boundary_hash]
+    producer: scripts/features/build_weather_overlay.py
+    consumers: [M06, M08, M14, M15, M16]
+    live_status: MIXED
+    status: built
+    notes: >-
+      Contract M33 / CP-06. Raw air, track, humidity, pressure, rain, speed and
+      bearing context retain OBSERVED provenance where present. wind_direction_deg
+      is not LIVE_SAFE; only the heading-relative wind components are live model
+      inputs. Pre-first observations and post-final holds are explicit row flags.
+
   - name: driver_segment_baselines
     description: Per-driver median reference per track segment (section 14).
     source: segments
-    schema_version: null
-    partitioning: track
-    primary_key: [track, segment_id, driver]
+    schema_version: c2_segment_baselines_v1
+    partitioning: circuit / year_group
+    primary_key: [circuit, year_group, segment_id, driver]
     producer: scripts/features/build_baselines.py
     consumers: [M06, M08, M10]
     live_status: OFFLINE_ONLY
-    status: planned
+    status: built
     notes: >-
       Contract C2. Built from normal_race_model_eligible rows only. Rows below
       the declared minimum sample count carry baseline_valid false rather than
-      being dropped, so a thin baseline is visible instead of missing.
+      being dropped, so a thin baseline is visible instead of missing. The
+      core producer excludes British GP by default and keeps 2026 separate from
+      the 2022–2025 DRS era; current local artifact covers 2026 pending all-year C1 input.
 
   - name: team_segment_baselines
     description: Per-team median reference per track segment (section 14).
     source: segments
-    schema_version: null
-    partitioning: track
-    primary_key: [track, segment_id, team]
+    schema_version: c2_segment_baselines_v1
+    partitioning: circuit / year_group
+    primary_key: [circuit, year_group, segment_id, team]
     producer: scripts/features/build_baselines.py
     consumers: [M06, M08, M10]
     live_status: OFFLINE_ONLY
-    status: planned
+    status: built
 
   - name: field_segment_baselines
     description: Whole-field median reference per track segment (section 14).
     source: segments
-    schema_version: null
-    partitioning: track
-    primary_key: [track, segment_id]
+    schema_version: c2_segment_baselines_v1
+    partitioning: circuit / year_group
+    primary_key: [circuit, year_group, segment_id]
     producer: scripts/features/build_baselines.py
     consumers: [M06, M08, M10]
     live_status: OFFLINE_ONLY
-    status: planned
+    status: built
 
   - name: race_context
     description: >-
@@ -100,10 +159,10 @@ datasets:
       normal_race_model_eligible gate that every model dataset filters on
       (section 12).
     source: telemetry_20m, rcm.json, laptimes.json
-    schema_version: null
+    schema_version: c7_race_context_materialized_v1
     partitioning: year / event / session
     primary_key: [year, event, session, driver, lap, distance_m]
-    producer: src/trackshift/race_context.py
+    producer: scripts/features/build_race_context.py
     consumers: [M04, M05, M07, M08, M15]
     live_status: LIVE_SAFE
     status: built
@@ -129,28 +188,35 @@ datasets:
   - name: pairwise_segment_features
     description: Attacker/defender differentials per battle segment (section 17).
     source: segments, battle_episodes
-    schema_version: null
+    schema_version: m06_pairwise_segment_features_v3
     partitioning: year / event / session
     primary_key: [battle_id, segment_index]
-    producer: scripts/features/build_battles.py
+    producer: scripts/features/build_pairwise_features.py
     consumers: [M07, M08, M10]
     live_status: LIVE_SAFE
-    status: planned
-    notes: Contract C8, owned by Rishabh.
+    status: built
+    notes: >-
+      M06/CP-04, owned by Rishabh. One causal row per C8 battle segment;
+      rolling values use only current and earlier same-battle rows and reset at
+      C7 pit/race-control transitions. C2 residuals use the immediately prior
+      completed segment with valid driver, team, or field baselines (in that
+      order); C5 fuel/ERS values remain explicit unavailable API Quantities.
 
   - name: battle_episodes
     description: Continuous attacker/defender fights, the unit of leakage-safe splitting (section 18).
-    source: telemetry_20m, segments
-    schema_version: null
+    source: segments with C7 race-context fields, telemetry_20m static session roster
+    schema_version: c8_battle_episodes_v2
     partitioning: year / event / session
     primary_key: [battle_id]
     producer: scripts/features/build_battles.py
     consumers: [M07, M08, M09, M29]
     live_status: MIXED
-    status: planned
+    status: built
     notes: >-
       Contract C8, owned by Rishabh. An episode never spans a race-control or
-      pit-state transition; bounded_by records why it ended.
+      pit-state transition; bounded_by records why it ended. The companion
+      pairing audit retains ineligible, unresolved-ahead, and non-close rows;
+      only normal-race, distance-close immediate-ahead rows enter battles.
 
   - name: overtake_opportunities
     description: >-
@@ -211,3 +277,19 @@ datasets:
       RULE provenance. Every key carries source and verified. Values with
       verified false are usable for modelling but must surface as unverified
       wherever displayed, and block any claim of legality by construction.
+
+  - name: overtake_state
+    description: Rule-derived 2026 Overtake state overlay at 20 m resolution, with a C1 segment-entry overlay and historical DRS-era covariates only for 2022-2025.
+    source: telemetry_20m, segments, event rules, observed race-control messages
+    schema_version: m20_overtake_state_v1
+    partitioning: year / event / session
+    primary_key: [year, event, session, driver, lap, distance_m]
+    producer: scripts/rules/apply_overtake_state.py
+    consumers: [M20, M21, M07, M10]
+    live_status: MIXED
+    status: planned
+    notes: >-
+      2026 values are RULE-derived only from configured Detection/Activation
+      lines and observed OVERTAKE ENABLED/DISABLED messages. A missing line is
+      unavailable rather than guessed. Historical DRS fields are covariates,
+      never named or consumed as 2026 Overtake state.

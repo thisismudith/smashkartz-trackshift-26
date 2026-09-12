@@ -53,17 +53,17 @@ Each checkpoint has the same shape:
 | 00 | Environment and dependencies | — | ✅ |
 | 01 | Local data audit | §51, §63 | ✅ |
 | 02 | Registries scaffold | M31 | ✅ |
-| 03 | Rule config skeleton + **speed-dependent power envelope**, all tracks | M18 | ☐ |
-| 04 | Build the 20 m lake | Phase 2 | ☐ |
-| 05 | **Track segmentation — freeze `segment_id`** | M03 | ☐ |
-| 06 | Track-relative weather | M33 | ☐ |
+| 03 | Rule config skeleton + **speed-dependent power envelope**, all tracks | M18 | ✅ |
+| 04 | Build the 20 m lake | Phase 2 | ✅ |
+| 05 | **Track segmentation — freeze `segment_id`** | M03 | ✅ |
+| 06 | Track-relative weather | M33 | ◐ |
 | 07 | Practice lap classifier | M01 | ☐ |
-| 08 | Tyre degradation and normalised pace | M30 | ☐ |
-| 09 | Segment baselines | M04 | ☐ |
-| 10 | Overtake state machine | M20 | ☐ |
-| 11 | Rule engine (owns the envelope evaluator) | M19 | ☐ |
-| 12 | Eligibility probability | M21 | ☐ |
-| 13 | Overtake-opportunity dataset | M07 | ☐ |
+| 08 | Tyre degradation and normalised pace | M30 | ◐ |
+| 09 | Segment baselines | M04 | ✅ |
+| 10 | Overtake state machine | M20 | ✅ |
+| 11 | Rule engine (owns the envelope evaluator) | M19 | ✅ |
+| 12 | Eligibility probability | M21 | ✅ |
+| 13 | Overtake-opportunity dataset | M07 | ✅ |
 | 14 | Pass-model benchmark | M10 | ☐ |
 | 15 | Probability calibration | M11 | ☐ |
 | 16 | Ensemble spread | M12 | ☐ |
@@ -76,6 +76,17 @@ Each checkpoint has the same shape:
 | 22 | Physics uncertainty | M17 | ☐ |
 | 23 | Ablation harness | M28 | ☐ |
 | 24 | Service routes and replay bundle | API.md | ☐ |
+
+✅ built and its acceptance gates measured. ◐ code merged but not yet
+complete: the outputs do not exist, or they exist and a gate does not pass.
+☐ not started. Verified 2026-09-12 against what is actually on disk, not
+against what has been committed — four of these checkpoints had code on `main`
+and no outputs at all, which reads as done until you look.
+
+**Owner drift.** Rishabh has taken CP-06, CP-07, CP-08, CP-09 and CP-10 from this
+plan onto his own branches (`rishabh/takeover-*`). They are still Owner B
+contracts and are still checked against the gates below; agree ownership before
+starting one, because three of them were already in flight when this was written.
 
 ---
 
@@ -309,7 +320,8 @@ checkpoint listed four names that do not exist (`field_inventory.csv`,
 
 ### ✅ Completed
 
-`.unbooks\CP-01.ps1 -SkipAudit` reports **8 of 8 requirements met**. Full mirror audited: five seasons, `partial_audit: false`, **177,288 lap files**, **zero malformed**. The lap total cross-checks exactly against the download manifests and the inventory.
+`.
+unbooks\CP-01.ps1 -SkipAudit` reports **8 of 8 requirements met**. Full mirror audited: five seasons, `partial_audit: false`, **177,288 lap files**, **zero malformed**. The lap total cross-checks exactly against the download manifests and the inventory.
 
 Audit runtime was **1h30m** at 26 laps/s for 2022–2025 — slower than the 81/s measured on a warm subset, so budget ~90 minutes rather than 40 for a cold full run.
 
@@ -563,6 +575,30 @@ race_control:
 
 `config/rules/2026/common.yaml` + 14 event files, `scripts/data/extract_race_control.py`, `scripts/data/derive_drs_zones.py`, `artifacts/race_control/*.json`, `src/trackshift/rules/config.py`, `tests/test_rules_config.py`.
 
+### ✅ Completed
+
+All six acceptance gates pass; 83 CP-03 tests, 244 in the suite.
+
+| Gate | Result |
+|---|---|
+| 14 event files | ✅ 13 complete GPs + Spanish GP (Practice-only, flagged) |
+| Every file validates | ✅ no problems |
+| No `RULE_FIA` with a TODO source | ✅ none |
+| Race control covers every event | ✅ 17 files; totals reconcile to **51 enable / 23 disable** |
+| `resolve()` raises in strict mode on `UNVERIFIED` | ✅ |
+| Lap lengths sane vs published | ✅ all within 3%, worst −2.71% |
+
+**Measured, not assumed.** Lap length is `DERIVED_TELEMETRY` (median `max(distance)` over sampled Race laps) and corner geometry is `OBSERVED` from `corners.json`. Every *regulatory* value — power envelope, energy budgets, detection gap, line positions — stays `UNVERIFIED` pending an FIA citation.
+
+Four findings worth carrying forward:
+
+- **The ±50 m lap-length gate was wrong and is now ±3%.** Telemetry distance reads short of the homologated length on *every* circuit, from −0.61% at Monza to −2.71% at the Hungaroring, tracking corner density: distance is integrated along the driven path and straight-line integration between samples undershoots the arc through a corner. **Use the measured value** — CP-05 segments on telemetry distance, so boundaries must share that coordinate system. Each file records the published length and delta as a cross-check only.
+- **Race control writes `VSC DEPLOYED`, not the expanded form.** Matching only the long spelling found all 26 endings and none of the 31 deployments, which would have left VSC periods invisible to the `normal_race_model_eligible` gate.
+- **The DRS-proxy threshold is calibrated, not guessed.** The channel thins from 5.2% of samples in 2022 to 1.0% in 2025, so the initial 25% lap-share found both Silverstone zones in 2022 and nothing after. At 8% all four seasons independently recover the same two zones within 40 m — that agreement is the evidence they are circuit features rather than one race's traffic.
+- **Corner data is not clean everywhere.** The Hungaroring repeats three distances and lists them out of order. The files sort them and record the anomaly rather than smoothing it away.
+
+**Still open (research, not code):** every regulatory value is `UNVERIFIED`. `strict_mode` stays `false` until the FIA 2026 Sporting and Technical Regulations and the per-event notes are sourced. Nothing is blocked by this — only demo claims are (§57).
+
 ---
 
 # CP-04 — Build the 20 m lake
@@ -765,7 +801,17 @@ wet_track_flag           = bool(wR)
 
 ### Deliverables
 
-`src/trackshift/track/weather.py`, `tests/test_weather.py`, weather columns on `segments`, registry entries.
+`src/trackshift/track/weather.py`, `scripts/features/build_weather_overlay.py`,
+`tests/test_weather.py`, versioned C1-keyed weather overlay, registry entries.
+
+### ✅ Completed
+
+2026 Australian Grand Prix Race deterministic local build: **29,508** C1-keyed
+overlay rows, **0** pre-first extrapolations and **0** post-final holds; one C1
+row without an entry clock is explicitly `MISSING_SEGMENT_ENTRY_TIME`, never
+filled. British GP Race was used only for final deterministic feature validation
+(34,173 rows; 0/0 extrapolation/hold; all available rows dry). Full suite:
+**446 passed, 7 skipped** (`.venv/bin/python -m pytest -q`).
 
 ---
 
@@ -813,6 +859,25 @@ Record `provenance: DERIVED` for all of these, and store the thresholds in `conf
 ### Deliverables
 
 `src/trackshift/track/lap_classifier.py`, `config/lap_classification.yaml`, `tests/test_lap_classifier.py`, `practice_lap_class` column, registry entries.
+
+### Validation — not complete
+
+2026 local Practice 1 validation covered 17 lake partitions / 9,488 accepted
+laps (British GP included only as deterministic validation). M01 v2 uses PUSH
+≤108% of the causal driver-session best with tyre life ≤5, a one-UNKNOWN
+candidate bridge only where its own green/time/life values preserve the actual
+run, LONG_RUN ≥4 consecutive green laps with strictly increasing life and <3%
+spread, and COOLDOWN >115% immediately after PUSH. Raw `pin`/`pout` now
+precede source timing-quality flags so pit transitions remain auditable.
+
+The permitted PUSH relaxation changed 1,095 → 1,099 PUSH laps (11.54% →
+11.58%); LONG_RUN remained 880 (9.27%) because the strict causal run rules
+admit no arbitrary slow/missing bridge. Pit labels now reconcile at 1,430/1,430
+IN_LAP and 1,607/1,607 OUT_LAP; INVALID fell 27.41% → 5.47% and INTERRUPTED
+3.28% → 3.05%. UNKNOWN only fell 34.57% → 34.53%. CP-07 remains unchecked:
+UNKNOWN is not <15% and LONG_RUN is not within 20–50% without non-causal
+backfill or labels unsupported by the documented rules. Five PUSH spot checks
+passed; 458 passed, 7 skipped.
 
 ---
 
@@ -906,6 +971,53 @@ Residuals are `x_current - baseline`, computed at consumption time, not stored p
 
 `src/trackshift/track/baselines.py`, `scripts/features/build_baselines.py`, `data/processed/{driver,team,field}_segment_baselines/`, `config/baselines.yaml`, `tests/test_baselines.py`.
 
+### ✅ Completed
+
+Built on the 2026 lake: **8,440 driver, 3,957 team, 355 field** groups over 13
+circuits. British GP is absent by design — 75,672 rows held out as the frozen
+final test.
+
+| Gate | Measured |
+|---|---|
+| Field `n` >= 100 for every segment | **min 325**, none below |
+| Driver baselines across circuits | 32 drivers, 13 circuits, 22+ per circuit |
+| Driver residuals centred on field | **+0.0008 s** (gate: +/- 0.02) |
+| `baseline_valid: false` retained, not dropped | 534 driver, 42 team |
+| A fast driver is negative vs field | ANT **-0.035 s**, negative at 79.4% of 355 segments |
+
+Gate 5 is the one that carries information: the five fastest by residual came out
+ANT, RUS, VER, NOR, PIA. A plausible pace order rather than noise is what tells
+you the residuals mean something.
+
+**`brake_onset_m` was missing entirely** — 0 of 8,440 non-null. CP-05 computed
+`brake_fraction` but never recorded *where* braking began, so one of the five
+required metrics had no source column at all. Fixed in
+`scripts/features/build_segments.py`, which now emits `brake_onset_m_offline`.
+Verified additive before rebuilding all 14 circuits: identical row count, all 42
+pre-existing columns byte-identical, one column added. Braking is now detected on
+**45.5% of 744,655** segment rows, and the per-circuit spread is the physical
+ordering you would want — hungarian 73.8% highest, italian 35.3% among the
+lowest. Flat across circuits would have meant the detection was wrong.
+
+**Completing C1 then broke the Parquet write.** `unavailable_metrics` is keyed by
+whichever metrics were missing, so with nothing missing it became a struct with no
+child fields, which Arrow cannot represent. The failure was triggered by the data
+getting *better*, and would have fired for whoever completed C1. Fixed at the
+write boundary — the dict shape is right in memory — by JSON-encoding to one
+stable column.
+
+Two honest limits to carry forward:
+
+- **2026 only.** The spec says all years and the code implements the section 41
+  `year_group` split correctly, but every group came back `year_group: 2026`
+  because the lake is 2026-only. The `drs_era` half fills in when the historical
+  lake is built for CP-14; no code change needed.
+- **C7 is not available yet**, so this ran on the track-status bridge this plan
+  prescribes as the stand-in. `c7_source: legacy_track_status_bridge_v1` is in the
+  manifest, so it is auditable and swappable when M02 lands. The filter did bite:
+  **145,296 rows** excluded as `NOT_NORMAL_RACE_MODEL_ELIGIBLE`, which is the
+  section 37 failure — baselines dominated by Safety Car laps — not happening.
+
 ---
 
 # CP-10 — Overtake state machine (M20)
@@ -956,6 +1068,55 @@ DISABLED ──(race control OVERTAKE ENABLED)───────────�
 ### Deliverables
 
 `src/trackshift/rules/state_machine.py`, `tests/test_rules.py` (threshold triples), `overtake_state`/`overtake_eligible`/`historical_drs_*` columns.
+
+### ✅ Completed
+
+Verified on Monaco, where the state distribution matches the zone geometry
+rather than merely being non-empty:
+
+| State | Rows | Share | Geometry predicts |
+|---|---|---|---|
+| `ARMED` | 4,599 | **2.0%** | detection 2920 to activation 3000 = 80 m of 3,284 = 2.4% |
+| `ACTIVE` | 16,817 | **7.2%** | activation to lap end = 284 m of 3,284 = 8.6% |
+| `DISABLED` | 34,771 | 14.8% | race-control windows |
+| `NOT_ARMED` | 178,576 | 76.1% | |
+
+Both sit just under their geometric ceiling, which is what you want -- not every
+lap arms. British GP is absent because it is held out as the frozen final test.
+
+Getting here needed four fixes, three of them bugs that each independently
+produced a plausible-looking empty result:
+
+**Detection Lines were unsourced.** The FIA Race Director's Competition Notes
+state that the Article B 7.2.1 detection line is at Safety Car Line 1, and that
+Safety Car Line 1 is the pit-entry bollard. Pit entry is measurable: the row
+where `lap_start_session_s + lap_elapsed_s` meets `pit_in_session_s`. Most
+circuits pin to a single 20 m bin over dozens of in-laps. Evidence in
+`artifacts/detection_lines/harvest_2026.json`; 11 circuits configured as
+`DERIVED_TELEMETRY`, Dutch and Hungarian left null because both measured past
+their own lap length.
+
+**One Detection Line per lap, not one per zone.** The notes say "the detection
+line" in the singular at one location. Our per-zone model was a DRS-shaped
+assumption of our own, marked UNVERIFIED, and was never evidence. Three
+independent circuit descriptions agree -- Silverstone's detection at Vale,
+Suzuka's before the final chicane, Monza's before Parabolica -- all pit-entry
+locations. `resolved_zones()` now shares the lap's line across every zone, and a
+zone-level value would still win if one is ever documented.
+
+**`detection_gap_s` was silently missing from every event.** `load_event_rules`
+merged event files over the season defaults with a shallow replace, so an event
+that defined its own `overtake` block for zones wiped out
+`overtake.detection_gap_s` from common.yaml. The state machine had no arming
+threshold and nothing armed anywhere -- and the config still validated, because
+the key existed in common.yaml. This was the real blocker; the missing Detection
+Lines had been masking it.
+
+**`ACTIVE` survived the lap boundary.** Two Tier-C proxy zones end beyond the
+telemetry lap length (Monaco 3300 m of 3284, Australian zone 4), so `ZONE_EXIT`
+could never fire and the car stayed ACTIVE for the rest of the session -- 70% of
+rows on the first corrected run. A zone lives inside a lap, so crossing the line
+now ends any armed or active state.
 
 ---
 
@@ -1031,6 +1192,43 @@ So `legal_actions` now **requires `speed_kmh` in the state**, and returns `cap_k
 ### Deliverables
 
 `src/trackshift/rules/engine.py`, `src/trackshift/rules/api.py` (C3), `tests/test_rules.py` extended, stub mode.
+
+### ✅ Completed
+
+`src/trackshift/rules/engine.py` and `src/trackshift/rules/api.py` (the C3
+boundary did not exist), with `tests/test_rules.py` at **27 tests**. Suite 496
+passed.
+
+| Gate | Measured |
+|---|---|
+| Zero illegal actions | 10,000 seeded states across 0-360 km/h, every action re-checked against a freshly evaluated cap |
+| `actions` never empty; coasting always legal | asserted at every speed; the engine **raises** if coast is ever filtered |
+| Threshold triples | below/at/above every breakpoint of both curves, plus both clamped regions and the separation speed |
+| Deploy buys less above the taper | asserted directly |
+| Cap varies along a straight | asserted — a constant cap silently reverts section 20.1 and will not otherwise announce itself |
+| Every exclusion names a real rule key | each fed back through `resolve()`, which raises if the key does not exist |
+| Strict mode refuses `UNVERIFIED` | raises on the current config |
+
+**Null limits are reported, not assumed.** All three energy limits are
+`null`/`UNVERIFIED`, so those filters cannot run. Instead of behaving as "no
+limit", the result carries `filters_not_applied` naming each skipped filter and
+why. They activate with no code change when the FIA values land.
+
+**The section 32 check is AST-based, not grep**, so prose mentions of 350 kW in
+docstrings do not cry wolf — a check that cries wolf gets muted. It immediately
+caught a hardcoded `350.0` in this checkpoint's own stub mode, now removed: the
+stub short-circuits the *filters*, never the envelope. Three pre-existing
+violations are allowlisted with the reason each is not a free fix, so anything new
+fails the build:
+
+| Location | Constant | Why it is not free |
+|---|---|---|
+| `src/trackshift/track/segmentation.py:108` | `envelope_taper_kmh: 290.0` | duplicates `power_envelope.separation_speed_kmh`; closing it bumps `geometry_version` |
+| `scripts/simdata/twin.py:64-65` | `350.0` twice | Rishabh's simulator; raise it with him rather than editing his module |
+
+**Tell Rishabh:** `legal_actions` requires `speed_kmh` in the state and returns
+`cap_kw`, `applicable_mode` and `delivered_power_kw` per action. That changes his
+DP state, which is why section 31 says to tell him the moment the signature moves.
 
 ---
 
@@ -1160,6 +1358,44 @@ Rough estimate: a race has 20–60 close approaches to a Detection Line. Across 
 ### Deliverables
 
 `src/trackshift/features/opportunities.py`, `scripts/features/build_opportunities.py`, `data/processed/overtake_opportunities/`, `tests/test_opportunities.py`, registry entries with `decision_checkpoint` on every feature.
+
+### ✅ Completed
+
+**4,970 opportunities, 14,910 rows** across 8 events, every gate measured on the
+produced data rather than on fixtures:
+
+| Gate | Measured |
+|---|---|
+| Exactly 3 rows per `opportunity_id` | **PASS**, 14,910 = 4,970 x 3 |
+| Checkpoints strictly ordered | **PASS** on distance since detection |
+| **Leakage** | **PASS** -- no activation or braking column populated in any DETECTION row |
+| Label base rate 10-35% | **15.4%** |
+
+The base rate is the gate that carries information. A definition that counted
+hopeless approaches would sit near 2%, and one that only counted completed
+passes near 70%. Landing mid-band is what says the opportunity is being defined
+at the Detection Line, before the outcome is known.
+
+**An opportunity usually crosses the start line, and this was the hard part.**
+The Detection Line is at Safety Car Line 1, near the lap end, so the activation
+zone is normally early on the *following* lap -- **90% of opportunities** wrap,
+100% at every circuit except Canada and Monaco. Three things followed:
+
+- Ordering by raw lap distance rejects every wrapping opportunity, because the
+  activation distance is numerically smaller than the detection distance. Rows
+  now carry `feature_cutoff_offset_m`, the distance travelled since detection,
+  which is strictly increasing; `feature_cutoff_distance_m` still holds the true
+  lap distance. `lap_length_m` must be supplied when an opportunity wraps, and
+  is refused rather than assumed.
+- The builder works on a continuous per-driver distance axis spanning laps. A
+  per-lap frame cannot express the opportunity at all.
+- CP-10's lap-boundary reset was right for `ACTIVE` and wrong for `ARMED`: a car
+  detected at the end of a lap must stay armed into the next one, which is the
+  whole point of a detection line placed there.
+
+Before this, 9 of 11 configured circuits produced nothing and Canada produced
+436 from its one non-wrapping zone -- a result that looked like a threshold
+problem and was really a coordinate-system problem.
 
 ---
 

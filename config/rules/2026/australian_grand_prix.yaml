@@ -1,0 +1,138 @@
+# TrackShift 2026 event rule configuration (M18, CP-03).
+#
+# Every regulatory value is UNVERIFIED until traced to an FIA article and
+# recorded in its source field (AGENTS.md sections 20.1, 21, 57). Values here
+# are usable for modelling immediately; they simply may not back a claim that
+# the system is legal by construction.
+#
+# value_source tiers:
+#   RULE_FIA             cited to a Sporting/Technical Regulation or event note
+#   OBSERVED_RCM         derived from race-control messages in the raw mirror
+#   DERIVED_TELEMETRY    measured from the telemetry itself
+#   PROXY_HISTORICAL_DRS inferred from 2022-2025 DRS activity; development only
+#   UNVERIFIED           not yet sourced
+
+schema_version: 1
+event: australian_grand_prix
+event_display: "Australian Grand Prix"
+circuit: australian
+year: 2026
+
+complete_in_mirror: true
+
+lap_length_m:
+  value: 5226.7
+  value_source: DERIVED_TELEMETRY
+  source: "median max(distance) over 30 sampled Race laps, lap 1 excluded"
+  published_circuit_length_m: 5278
+  delta_vs_published_m: -51.3
+  delta_vs_published_pct: -0.97
+  note: >-
+    Telemetry distance is integrated along the path the car actually drove, so it
+    reads shorter than the homologated circuit length: straight-line integration
+    between samples undershoots the arc through a corner. The shortfall tracks
+    corner density, from -0.61% at Monza to -2.58% at the Hungaroring.
+    USE THE MEASURED VALUE. CP-05 segments on telemetry distance, so segment
+    boundaries must live in the same coordinate system; the published figure is a
+    sanity cross-check only, and is not interchangeable with it.
+
+geometry:
+  corner_count: 14
+  rotation_deg: 44.0
+  value_source: OBSERVED
+  source: "data/raw/tracinginsights/2026/Australian Grand Prix/Race/corners.json"
+  corner_distances_m: [353.9, 436.7, 1082.3, 1240.2, 1435.1, 1864.7, 1987.2, 2157.2, 3279.2, 3383.6, 4087.8, 4359.1, 4608.5, 4765.0]
+
+overtake:
+  enabled: true
+  # Race control states WHETHER Overtake is available, never WHERE. Line
+  # positions are not derivable from rcm.json and stay UNVERIFIED until an
+  # FIA event note is found, or PROXY_HISTORICAL_DRS from derive_drs_zones.py.
+  # One Detection Line per lap, at Safety Car Line 1 (the pit-entry bollard).
+  # Shared by every zone below; a zone-level detection_line_m would override it.
+  detection_line_m:
+    value: 4940.0
+    value_source: DERIVED_TELEMETRY
+    source: "FIA 2026 Race Director's Competition Notes: \"The detection line referred to in Article B 7.2.1 of the FIA F1 Regulations, is at the same location of the Safety Car Line 1.\" Stated verbatim in the Belgian, Chinese and Hungarian notes. Item 14.3 of the same notes places Safety Car Line 1 at the pit-entry bollard: \"any driver passing to the right-hand side of the bollard at safety car line 1 will be considered as entering the pit lane.\" Pit entry measured in telemetry distance as the row where lap_start_session_s + lap_elapsed_s is closest to pit_in_session_s, over 1 Race and Sprint in-lap(s) of the 2026 lake; median 4940 m, interquartile range 4940-4940 m (0 m, one 20 m resample bin). Evidence and method in artifacts/detection_lines/harvest_2026.json."
+    note: "One Detection Line per lap, shared by every zone: the 2026 notes describe it in the singular at a single location, unlike DRS per-zone detection. The rule is Tier A; this value is the measured position of that rule's location, so it is DERIVED_TELEMETRY rather than RULE_FIA. This event's own notes are silent on the detection line; the wording is identical across the three events that do state it, which is why it is applied here, but it is not separately confirmed for this circuit."
+  zones:
+    - zone: 1
+      name: "Historical DRS active-zone proxy 1"
+      detection_line_m:
+        value: null
+        value_source: UNVERIFIED
+        source: "No Detection Line is supplied by artifacts/drs_zones/australian_grand_prix.json: scripts/data/derive_drs_zones.py derives only historical DRS active-zone starts and ends, not Detection Lines. No authoritative historical Detection-Line source is configured."
+        note: "Retained null: no fixed upstream offset, speed, segment, or heuristic may manufacture a 2026 Detection Line."
+      activation_line_m:
+        value: 560.0
+        value_source: PROXY_HISTORICAL_DRS
+        source: "2022, 2023 and 2024 Australian Grand Prix Race historical DRS; scripts/data/derive_drs_zones.py --event 'Australian Grand Prix' --raw-root data/raw --no-progress; calibrated MIN_LAP_SHARE=0.08, MIN_ZONE_LENGTH_M=300 m, BIN_M=20 m; artifacts/drs_zones/australian_grand_prix.json schema v2 consolidated consensus zone 560-940 m (support_count=3, contributing years 2022-2024; exact source intervals retained in artifact)."
+        note: "Tier-C development-only proxy for historical DRS active-zone start; not a 2026 FIA Overtake fact and rejected by strict_mode."
+      zone_end_m:
+        value: 940.0
+        value_source: PROXY_HISTORICAL_DRS
+        source: "2022, 2023 and 2024 Australian Grand Prix Race historical DRS; scripts/data/derive_drs_zones.py --event 'Australian Grand Prix' --raw-root data/raw --no-progress; calibrated MIN_LAP_SHARE=0.08, MIN_ZONE_LENGTH_M=300 m, BIN_M=20 m; artifacts/drs_zones/australian_grand_prix.json schema v2 consolidated consensus zone 560-940 m (support_count=3, contributing years 2022-2024; exact source intervals retained in artifact)."
+        note: "Tier-C development-only proxy for historical DRS active-zone end; not a 2026 FIA Overtake fact and rejected by strict_mode."
+    - zone: 2
+      name: "Historical DRS active-zone proxy 2"
+      detection_line_m:
+        value: null
+        value_source: UNVERIFIED
+        source: "No Detection Line is supplied by artifacts/drs_zones/australian_grand_prix.json; historical DRS active-zone derivation does not derive Detection Lines."
+        note: "Retained null: no heuristic Detection-Line fallback is permitted."
+      activation_line_m:
+        value: 2520.0
+        value_source: PROXY_HISTORICAL_DRS
+        source: "2023 and 2024 Australian Grand Prix Race historical DRS; scripts/data/derive_drs_zones.py --event 'Australian Grand Prix' --raw-root data/raw --no-progress; calibrated MIN_LAP_SHARE=0.08, MIN_ZONE_LENGTH_M=300 m, BIN_M=20 m; artifacts/drs_zones/australian_grand_prix.json schema v2 consolidated consensus zone 2520-3180 m (support_count=2; exact source intervals retained in artifact)."
+        note: "Tier-C development-only proxy for historical DRS active-zone start; not a 2026 FIA Overtake fact and rejected by strict_mode."
+      zone_end_m:
+        value: 3180.0
+        value_source: PROXY_HISTORICAL_DRS
+        source: "2023 and 2024 Australian Grand Prix Race historical DRS; scripts/data/derive_drs_zones.py --event 'Australian Grand Prix' --raw-root data/raw --no-progress; calibrated MIN_LAP_SHARE=0.08, MIN_ZONE_LENGTH_M=300 m, BIN_M=20 m; artifacts/drs_zones/australian_grand_prix.json schema v2 consolidated consensus zone 2520-3180 m (support_count=2; exact source intervals retained in artifact)."
+        note: "Tier-C development-only proxy for historical DRS active-zone end; not a 2026 FIA Overtake fact and rejected by strict_mode."
+    - zone: 3
+      name: "Historical DRS active-zone proxy 3"
+      detection_line_m:
+        value: null
+        value_source: UNVERIFIED
+        source: "No Detection Line is supplied by artifacts/drs_zones/australian_grand_prix.json; historical DRS active-zone derivation does not derive Detection Lines."
+        note: "Retained null: no heuristic Detection-Line fallback is permitted."
+      activation_line_m:
+        value: 3520.0
+        value_source: PROXY_HISTORICAL_DRS
+        source: "2022, 2023, 2024 and 2025 Australian Grand Prix Race historical DRS; scripts/data/derive_drs_zones.py --event 'Australian Grand Prix' --raw-root data/raw --no-progress; calibrated MIN_LAP_SHARE=0.08, MIN_ZONE_LENGTH_M=300 m, BIN_M=20 m; artifacts/drs_zones/australian_grand_prix.json schema v2 overlap-connected consolidation of [3500,3940], [3520,3960], [3500,3960], [3540,3900] to median/20 m-grid zone 3520-3960 m (support_count=4)."
+        note: "Tier-C development-only proxy for historical DRS active-zone start; not a 2026 FIA Overtake fact and rejected by strict_mode."
+      zone_end_m:
+        value: 3960.0
+        value_source: PROXY_HISTORICAL_DRS
+        source: "2022, 2023, 2024 and 2025 Australian Grand Prix Race historical DRS; scripts/data/derive_drs_zones.py --event 'Australian Grand Prix' --raw-root data/raw --no-progress; calibrated MIN_LAP_SHARE=0.08, MIN_ZONE_LENGTH_M=300 m, BIN_M=20 m; artifacts/drs_zones/australian_grand_prix.json schema v2 overlap-connected consolidation of [3500,3940], [3520,3960], [3500,3960], [3540,3900] to median/20 m-grid zone 3520-3960 m (support_count=4)."
+        note: "Tier-C development-only proxy for historical DRS active-zone end; not a 2026 FIA Overtake fact and rejected by strict_mode."
+    - zone: 4
+      name: "Historical DRS active-zone proxy 4"
+      detection_line_m:
+        value: null
+        value_source: UNVERIFIED
+        source: "No Detection Line is supplied by artifacts/drs_zones/australian_grand_prix.json; historical DRS active-zone derivation does not derive Detection Lines."
+        note: "Retained null: no heuristic Detection-Line fallback is permitted."
+      activation_line_m:
+        value: 4840.0
+        value_source: PROXY_HISTORICAL_DRS
+        source: "2022, 2023, 2024 and 2025 Australian Grand Prix Race historical DRS; scripts/data/derive_drs_zones.py --event 'Australian Grand Prix' --raw-root data/raw --no-progress; calibrated MIN_LAP_SHARE=0.08, MIN_ZONE_LENGTH_M=300 m, BIN_M=20 m; artifacts/drs_zones/australian_grand_prix.json schema v2 consolidated consensus zone 4840-5240 m (support_count=4; exact source intervals retained in artifact)."
+        note: "Tier-C development-only proxy for historical DRS active-zone start; not a 2026 FIA Overtake fact and rejected by strict_mode."
+      zone_end_m:
+        value: 5240.0
+        value_source: PROXY_HISTORICAL_DRS
+        source: "2022, 2023, 2024 and 2025 Australian Grand Prix Race historical DRS; scripts/data/derive_drs_zones.py --event 'Australian Grand Prix' --raw-root data/raw --no-progress; calibrated MIN_LAP_SHARE=0.08, MIN_ZONE_LENGTH_M=300 m, BIN_M=20 m; artifacts/drs_zones/australian_grand_prix.json schema v2 consolidated consensus zone 4840-5240 m (support_count=4; exact source intervals retained in artifact)."
+        note: "Tier-C development-only proxy for historical DRS active-zone end; not a 2026 FIA Overtake fact and rejected by strict_mode."
+
+race_control:
+  overtake_windows_source: "artifacts/race_control/2026_australian_grand_prix.json"
+  value_source: OBSERVED_RCM
+  source: "race-control messages in the raw mirror, extracted by scripts/data/extract_race_control.py"
+  overtake_enabled_messages: 5
+  overtake_disabled_messages: 1
+
+# Season-wide values (power envelope, energy budgets, detection gap) live in
+# common.yaml. Add a key here only to override the season value for this
+# event, and only with a cited source.
+overrides: {}

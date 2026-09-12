@@ -1,0 +1,84 @@
+# TrackShift 2026 event rule configuration (M18, CP-03).
+#
+# Every regulatory value is UNVERIFIED until traced to an FIA article and
+# recorded in its source field (AGENTS.md sections 20.1, 21, 57). Values here
+# are usable for modelling immediately; they simply may not back a claim that
+# the system is legal by construction.
+#
+# value_source tiers:
+#   RULE_FIA             cited to a Sporting/Technical Regulation or event note
+#   OBSERVED_RCM         derived from race-control messages in the raw mirror
+#   DERIVED_TELEMETRY    measured from the telemetry itself
+#   PROXY_HISTORICAL_DRS inferred from 2022-2025 DRS activity; development only
+#   UNVERIFIED           not yet sourced
+
+schema_version: 1
+event: hungarian_grand_prix
+event_display: "Hungarian Grand Prix"
+circuit: hungarian
+year: 2026
+
+complete_in_mirror: true
+
+lap_length_m:
+  value: 4268.0
+  value_source: DERIVED_TELEMETRY
+  source: "median max(distance) over 30 sampled Race laps, lap 1 excluded"
+  published_circuit_length_m: 4381
+  delta_vs_published_m: -113.0
+  delta_vs_published_pct: -2.58
+  note: >-
+    Telemetry distance is integrated along the path the car actually drove, so it
+    reads shorter than the homologated circuit length: straight-line integration
+    between samples undershoots the arc through a corner. The shortfall tracks
+    corner density, from -0.61% at Monza to -2.58% at the Hungaroring.
+    USE THE MEASURED VALUE. CP-05 segments on telemetry distance, so segment
+    boundaries must live in the same coordinate system; the published figure is a
+    sanity cross-check only, and is not interchangeable with it.
+
+geometry:
+  corner_count: 16
+  rotation_deg: 40.0
+  value_source: OBSERVED
+  source: "data/raw/tracinginsights/2026/Hungarian Grand Prix/Race/corners.json"
+  corner_data_note: >-
+    corners.json lists these out of distance order; sorted here because
+    CP-05 consumes them as ordered geometry markers.
+    Duplicate distances in the source: [661.2, 2121.1, 3463.2]. Two corner numbers share
+    one distance marker, so corner_count exceeds the number of distinct
+    positions. Do not treat these as separate segment boundaries.
+  corner_distances_m: [661.2, 661.2, 882.8, 1069.8, 1321.7, 1636.7, 1814.6, 2121.1, 2121.1, 2419.2, 2654.6, 2835.1, 3463.2, 3463.2, 3769.0, 3973.4]
+
+overtake:
+  enabled: true
+  tier_c_proxy_exclusions:
+    - candidate_m: [0.0, 500.0]
+      reason: "historical DRS candidate crosses CP-05 brake-onset boundary at 480.0 m"
+  # Race control states WHETHER Overtake is available, never WHERE. Line
+  # positions are not derivable from rcm.json and stay UNVERIFIED until an
+  # FIA event note is found, or PROXY_HISTORICAL_DRS from derive_drs_zones.py.
+  zones:
+    - zone: 1
+      name: "TODO"
+      detection_line_m:
+        value: null
+        value_source: UNVERIFIED
+        source: "No Detection Line is configured: the sole artifacts/drs_zones/hungarian_grand_prix.json candidate overlaps a CP-05 brake-onset boundary, and scripts/data/derive_drs_zones.py never derives Detection Lines."
+        note: "Retained null: no heuristic Detection-Line fallback is permitted."
+      activation_line_m:
+        value: null
+        value_source: UNVERIFIED
+        source: "No Activation proxy accepted: the sole historical DRS candidate overlaps a CP-05 brake-onset boundary; no FIA 2026 line source is configured."
+        note: "Retained null pending FIA line documentation or a non-overlapping documented derivation."
+
+race_control:
+  overtake_windows_source: "artifacts/race_control/2026_hungarian_grand_prix.json"
+  value_source: OBSERVED_RCM
+  source: "race-control messages in the raw mirror, extracted by scripts/data/extract_race_control.py"
+  overtake_enabled_messages: 2
+  overtake_disabled_messages: 1
+
+# Season-wide values (power envelope, energy budgets, detection gap) live in
+# common.yaml. Add a key here only to override the season value for this
+# event, and only with a cited source.
+overrides: {}

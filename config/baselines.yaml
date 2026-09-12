@@ -1,0 +1,17 @@
+schema_version: c2_baselines_config_v1
+
+minimum_samples:
+  driver: 15
+  team: 25
+  field: 100
+
+year_groups:
+  drs_era: [2022, 2023, 2024, 2025]
+  "2026": [2026]
+
+# Only for local C1 files created before C7 was materialised.  This is
+# intentionally conservative: any compound/status transition is excluded and
+# `is_accurate` must already have passed the C1 data-quality gate.
+legacy_c7_track_status_bridge:
+  required_track_status: "1"
+  require_is_accurate: true

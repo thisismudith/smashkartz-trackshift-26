@@ -29,7 +29,69 @@
 
 schema_version: 1
 
+weather_alignment_defaults: &weather_alignment_defaults
+  source: C1 segment-entry clock and raw session weather.json
+  derivation: scripts/features/build_weather_overlay.py
+  allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+  supported_years: [2022, 2023, 2024, 2025, 2026]
+  live_safe: false
+  provenance: DERIVED
+  availability_scope: partial
+  source_gated: false
+  decision_checkpoint: null
+  uncertainty_field: null
+  causal_status: CAUSAL
+  counterfactual_safe: true
+  regulation_version: null
+  regulation_source: null
+  interaction_group: [weather, audit]
+  consuming_models: []
+
+# Defaults for the C8/M06 pairwise-table columns added in CP-04.  Individual
+# entries override availability/provenance when the public C2/C5 contract is
+# not yet materialised.  YAML merges keep this generated-table schema readable
+# without weakening the required-key registry gate.
+pairwise_feature_defaults: &pairwise_feature_defaults
+  source: C8 battle rows and contemporaneous C1 segment rows
+  derivation: scripts/features/build_pairwise_features.py
+  allowed_sessions: [Sprint, Race]
+  supported_years: [2022, 2023, 2024, 2025, 2026]
+  live_safe: true
+  provenance: DERIVED
+  availability_scope: all
+  source_gated: false
+  decision_checkpoint: null
+  uncertainty_field: null
+  causal_status: CAUSAL
+  counterfactual_safe: false
+  regulation_version: null
+  regulation_source: null
+  interaction_group: [pairwise]
+  consuming_models: [M06, M08]
+
+tyre_pace_defaults: &tyre_pace_defaults
+  allowed_sessions: [Sprint, Race]
+  supported_years: [2026]
+  live_safe: false
+  provenance: DERIVED
+  availability_scope: partial
+  source_gated: false
+  decision_checkpoint: null
+  uncertainty_field: null
+  causal_status: CAUSAL
+  counterfactual_safe: true
+  regulation_version: null
+  regulation_source: null
+  interaction_group: [tyre, pace, offline]
+  consuming_models: [M06, M07, M08, M10, M14, M15, M16, M30]
+
 features:
+
+  # ------------------------------------------------------- M33 weather overlay
+  # C1 remains immutable. These columns are emitted in its keyed overlay by
+  # scripts/features/build_weather_overlay.py. Raw weather channels retain the
+  # source's OBSERVED provenance; time alignment and physical projections are
+  # explicitly DERIVED.
 
   # ------------------------------------------------------------------ keys
   - name: year
@@ -1145,3 +1207,1577 @@ features:
     regulation_source: null
     interaction_group: []
     consuming_models: []
+
+  # ------------------------------------------------ C1 segments (M03, CP-05)
+  # Static circuit geometry plus per-lap segment aggregates. Fields available at
+  # segment ENTRY are live-safe; anything summarising the whole segment is only
+  # knowable once it is over and carries an _offline suffix (sections 13, 44).
+
+  - name: segment_id
+    definition: Sequential segment index within the lap, stable for a given geometry_version.
+    unit: null
+    source: derived from config/geometry/<circuit>.yaml
+    derivation: bisect of distance_m against the static boundary array
+    note: >-
+      The join key for every downstream table. Frozen per geometry_version:
+      if it moves, every table that joins on it is silently wrong.
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: DERIVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [key, geometry]
+    consuming_models: [M04, M05, M06, M07, M08, M14, M16, M19, M22]
+
+  - name: geometry_version
+    definition: Version stamp of the segment map that produced this row.
+    unit: null
+    source: config/geometry/<circuit>.yaml
+    derivation: constant per map
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: DERIVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [audit]
+    consuming_models: []
+
+  - name: boundary_hash
+    definition: Fingerprint of the boundary array behind this segmentation.
+    unit: null
+    source: sha256 of the rounded boundary distances
+    derivation: recorded at build time
+    note: >-
+      How a table built against a stale segment map becomes detectable
+      instead of silently misaligned.
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: DERIVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [audit]
+    consuming_models: []
+
+  - name: start_distance_m
+    definition: Distance at which the segment begins.
+    unit: m
+    source: config/geometry/<circuit>.yaml
+    derivation: static per circuit
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: DERIVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [geometry]
+    consuming_models: [M03, M14, M16]
+
+  - name: end_distance_m
+    definition: Distance at which the segment ends.
+    unit: m
+    source: config/geometry/<circuit>.yaml
+    derivation: static per circuit
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: DERIVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [geometry]
+    consuming_models: [M03, M14, M16]
+
+  - name: segment_length_m
+    definition: Length of the segment.
+    unit: m
+    source: config/geometry/<circuit>.yaml
+    derivation: end_distance_m - start_distance_m
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: DERIVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [geometry]
+    consuming_models: [M14, M16]
+
+  - name: kind
+    definition: "Segment role: STRAIGHT, BRAKING, CORNER or EXIT."
+    unit: null
+    source: config/geometry/<circuit>.yaml
+    derivation: from the boundary source and curvature
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: DERIVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [geometry]
+    consuming_models: [M06, M10, M16]
+
+  - name: corner_id
+    definition: Corner number from corners.json where the segment contains one.
+    unit: null
+    source: corners.json via the segment map
+    derivation: marker distance inside the segment
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: DERIVED
+    availability_scope: partial
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [geometry]
+    consuming_models: [M06, M08, M10]
+
+  - name: corner_type
+    definition: "Versioned geometry class: STRAIGHT, HAIRPIN, SLOW, MEDIUM, FAST or CHICANE, with a LEFT/RIGHT suffix."
+    unit: null
+    source: peak curvature of the median centreline plus apex speed
+    derivation: curvature decides whether it is a corner, apex speed decides which kind
+    note: >-
+      Not a free-text circuit label (section 12). The curvature threshold is
+      calibrated against known corner positions and is in the source's own
+      x/y units, which are not metres.
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: DERIVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [geometry]
+    consuming_models: [M06, M08, M10, M15]
+
+  - name: sector
+    definition: Timing sector containing the segment.
+    unit: null
+    source: config/geometry/<circuit>.yaml
+    derivation: static per circuit
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: DERIVED
+    availability_scope: partial
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [geometry]
+    consuming_models: [M06, M10]
+
+  - name: zone
+    definition: Overtake zone index where the segment falls inside one.
+    unit: null
+    source: config/rules/2026/<event>.yaml via the segment map
+    derivation: static per circuit
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: DERIVED
+    availability_scope: partial
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [geometry]
+    consuming_models: [M07, M20, M21]
+
+  - name: track_heading_deg
+    definition: Direction of travel at segment entry, degrees in [0, 360).
+    unit: deg
+    source: atan2 over the smoothed median centreline, rotation-corrected
+    derivation: corners.json Rotation applied to the frame
+    note: >-
+      M33 projects wind onto this, so a wrong coordinate frame silently
+      corrupts the head and cross components.
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: DERIVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [geometry]
+    consuming_models: [M33]
+
+  - name: entry_distance_m
+    definition: Distance of the first lake row inside the segment.
+    unit: m
+    source: telemetry_20m
+    derivation: first row at or after start_distance_m
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: DERIVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [geometry]
+    consuming_models: [M14]
+
+  - name: entry_speed_kmh
+    definition: Speed at segment entry.
+    unit: km/h
+    source: telemetry_20m
+    derivation: first row inside the segment
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: DERIVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: false
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [pace]
+    consuming_models: [M06, M10, M14, M16]
+
+  - name: entry_lap_elapsed_s
+    definition: Lap time elapsed at segment entry.
+    unit: s
+    source: telemetry_20m
+    derivation: first row inside the segment
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: DERIVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [time]
+    consuming_models: [M16]
+
+  - name: gap_ahead_m_entry
+    definition: Distance to the car ahead at segment entry.
+    unit: m
+    source: telemetry_20m
+    derivation: first row inside the segment
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: DERIVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: [DETECTION, ACTIVATION, BRAKING]
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: false
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [gap]
+    consuming_models: [M05, M06, M07, M21]
+
+  - name: rows
+    definition: Number of 20 m lake rows aggregated into this segment.
+    unit: null
+    source: telemetry_20m
+    derivation: row count
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: false
+    provenance: DERIVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: ACAUSAL
+    counterfactual_safe: false
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [audit]
+    consuming_models: []
+
+  - name: segment_time_s_offline
+    definition: Time taken to traverse the segment.
+    unit: s
+    source: telemetry_20m
+    derivation: last minus first lap_elapsed_s in the segment
+    note: >-
+      Only knowable once the segment is over, so it is a target and an
+      evaluation field, never a live input.
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: false
+    provenance: DERIVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: ACAUSAL
+    counterfactual_safe: false
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [pace]
+    consuming_models: [M04, M16]
+
+  - name: exit_speed_kmh_offline
+    definition: Speed at segment exit.
+    unit: km/h
+    source: telemetry_20m
+    derivation: last row inside the segment
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: false
+    provenance: DERIVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: ACAUSAL
+    counterfactual_safe: false
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [pace]
+    consuming_models: [M04, M06]
+
+  - name: min_speed_kmh_offline
+    definition: Minimum speed within the segment, the apex speed for a corner.
+    unit: km/h
+    source: telemetry_20m
+    derivation: min over the segment
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: false
+    provenance: DERIVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: ACAUSAL
+    counterfactual_safe: false
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [pace]
+    consuming_models: [M04, M08]
+
+  - name: max_speed_kmh_offline
+    definition: Maximum speed within the segment.
+    unit: km/h
+    source: telemetry_20m
+    derivation: max over the segment
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: false
+    provenance: DERIVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: ACAUSAL
+    counterfactual_safe: false
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [pace]
+    consuming_models: [M04, M14]
+
+  - name: mean_speed_kmh_offline
+    definition: Mean speed within the segment.
+    unit: km/h
+    source: telemetry_20m
+    derivation: mean over the segment
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: false
+    provenance: DERIVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: ACAUSAL
+    counterfactual_safe: false
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [pace]
+    consuming_models: [M04]
+
+  - name: brake_fraction_offline
+    definition: Share of the segment spent braking.
+    unit: null
+    source: telemetry_20m
+    derivation: mean of brake_on over the segment
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: false
+    provenance: DERIVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: ACAUSAL
+    counterfactual_safe: false
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [driver input]
+    consuming_models: [M04, M08]
+
+  - name: full_throttle_fraction_offline
+    definition: Share of the segment above 95 percent throttle.
+    unit: null
+    source: telemetry_20m
+    derivation: mean of throttle_pct >= 95
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: false
+    provenance: DERIVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: ACAUSAL
+    counterfactual_safe: false
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [driver input]
+    consuming_models: [M04, M14]
+
+  - name: gap_ahead_m_exit_offline
+    definition: Distance to the car ahead at segment exit.
+    unit: m
+    source: telemetry_20m
+    derivation: last row inside the segment
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: false
+    provenance: DERIVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: ACAUSAL
+    counterfactual_safe: false
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [gap]
+    consuming_models: [M05, M06]
+
+  # ---------------------------------------------------------------- M06 C8 pairwise live features
+  - <<: *pairwise_feature_defaults
+    name: battle_id
+    definition: Stable directed C8 battle identifier.
+    unit: null
+    provenance: DERIVED
+    interaction_group: [key]
+    consuming_models: [M06, M08, M09]
+
+  - <<: *pairwise_feature_defaults
+    name: segment_index
+    definition: One-based chronological index within a C8 battle.
+    unit: null
+    provenance: DERIVED
+    interaction_group: [key]
+    consuming_models: [M06, M08, M09]
+
+  - <<: *pairwise_feature_defaults
+    name: attacker
+    definition: C8 car behind in the directed immediate-ahead relation.
+    unit: null
+    provenance: DERIVED
+    interaction_group: [identity]
+
+  - <<: *pairwise_feature_defaults
+    name: defender
+    definition: C8 immediate car ahead in the directed relation.
+    unit: null
+    provenance: DERIVED
+    interaction_group: [identity]
+
+  - <<: *pairwise_feature_defaults
+    name: normal_race_model_eligible
+    definition: C7 normal-race gate copied from the model-ready C8 row; every emitted pairwise row must be true.
+    unit: bool
+    provenance: DERIVED
+    interaction_group: [race_context, gate]
+
+  - <<: *pairwise_feature_defaults
+    name: race_control_transition_flag
+    definition: C7 hard boundary flag copied from the model-ready C8 row.
+    unit: bool
+    provenance: DERIVED
+    availability_scope: partial
+    interaction_group: [race_context, transition]
+
+  - <<: *pairwise_feature_defaults
+    name: pit_transition_flag
+    definition: C7 pit-state hard boundary flag copied from the model-ready C8 row.
+    unit: bool
+    provenance: DERIVED
+    availability_scope: partial
+    interaction_group: [race_context, transition]
+
+  - <<: *pairwise_feature_defaults
+    name: time_gap_entry_s
+    definition: Attacker-to-ahead entry time gap; never converted from distance gap.
+    unit: s
+    interaction_group: [gap, time]
+
+  - <<: *pairwise_feature_defaults
+    name: distance_gap_entry_m
+    definition: Attacker-to-ahead entry distance gap; never converted from time gap.
+    unit: m
+    interaction_group: [gap, distance]
+
+  - <<: *pairwise_feature_defaults
+    name: attacker_speed_entry_mps
+    definition: Attacker C1 entry speed converted from km/h to m/s.
+    unit: m/s
+    interaction_group: [speed, attacker]
+
+  - <<: *pairwise_feature_defaults
+    name: defender_speed_entry_mps
+    definition: Contemporaneous defender C1 entry speed converted from km/h to m/s.
+    unit: m/s
+    availability_scope: partial
+    interaction_group: [speed, defender]
+
+  - <<: *pairwise_feature_defaults
+    name: relative_speed_to_ahead_mps
+    definition: Attacker minus defender entry speed; positive means attacker faster.
+    unit: m/s
+    availability_scope: partial
+    interaction_group: [speed, relative]
+
+  - <<: *pairwise_feature_defaults
+    name: attacker_acceleration_entry_mps2
+    definition: Trailing attacker entry-speed acceleration estimate within the same battle.
+    unit: m/s2
+    availability_scope: partial
+    interaction_group: [acceleration, attacker]
+
+  - <<: *pairwise_feature_defaults
+    name: defender_acceleration_entry_mps2
+    definition: Trailing defender entry-speed acceleration estimate within the same battle.
+    unit: m/s2
+    availability_scope: partial
+    interaction_group: [acceleration, defender]
+
+  - <<: *pairwise_feature_defaults
+    name: relative_acceleration_to_ahead_mps2
+    definition: Attacker trailing acceleration minus defender acceleration; positive means attacker accelerates more.
+    unit: m/s2
+    availability_scope: partial
+    interaction_group: [acceleration, relative]
+
+  - <<: *pairwise_feature_defaults
+    name: gap_rate_ahead_s_per_s
+    definition: Trailing time-gap change per elapsed second; negative means closing.
+    unit: s/s
+    availability_scope: partial
+    interaction_group: [gap, rate]
+
+  - <<: *pairwise_feature_defaults
+    name: attacker_braking_intensity
+    definition: C1 entry-aligned attacker braking intensity when materialised; no offline segment fraction is used.
+    unit: ratio
+    availability_scope: partial
+    interaction_group: [braking, attacker]
+
+  - <<: *pairwise_feature_defaults
+    name: defender_braking_intensity
+    definition: C1 entry-aligned defender braking intensity when materialised; no offline segment fraction is used.
+    unit: ratio
+    availability_scope: partial
+    interaction_group: [braking, defender]
+
+  - <<: *pairwise_feature_defaults
+    name: braking_intensity_delta
+    definition: Attacker minus defender entry braking intensity when both are live-source available.
+    unit: ratio
+    availability_scope: partial
+    interaction_group: [braking, relative]
+
+  - <<: *pairwise_feature_defaults
+    name: attacker_tyre_life_laps
+    definition: Attacker observed tyre age at segment entry.
+    unit: laps
+    provenance: OBSERVED
+    interaction_group: [tyre, attacker]
+
+  - <<: *pairwise_feature_defaults
+    name: defender_tyre_life_laps
+    definition: Defender observed tyre age at contemporaneous segment entry.
+    unit: laps
+    provenance: OBSERVED
+    availability_scope: partial
+    interaction_group: [tyre, defender]
+
+  - <<: *pairwise_feature_defaults
+    name: tyre_life_delta_laps
+    definition: Attacker tyre life minus defender tyre life.
+    unit: laps
+    provenance: OBSERVED
+    availability_scope: partial
+    interaction_group: [tyre, relative]
+
+  - <<: *pairwise_feature_defaults
+    name: tyre_compound_pair
+    definition: Attacker and defender observed tyre compounds encoded as attacker|defender.
+    unit: null
+    provenance: OBSERVED
+    availability_scope: partial
+    interaction_group: [tyre, compound]
+
+  - <<: *pairwise_feature_defaults
+    name: attacker_tyre_degradation_proxy
+    definition: C1 causal attacker tyre degradation proxy when materialised.
+    unit: ratio
+    availability_scope: partial
+    interaction_group: [tyre, attacker]
+
+  - <<: *pairwise_feature_defaults
+    name: defender_tyre_degradation_proxy
+    definition: C1 causal defender tyre degradation proxy when materialised.
+    unit: ratio
+    availability_scope: partial
+    interaction_group: [tyre, defender]
+
+  - <<: *pairwise_feature_defaults
+    name: tyre_degradation_delta
+    definition: Attacker causal tyre degradation proxy minus defender proxy when both exist.
+    unit: ratio
+    availability_scope: partial
+    interaction_group: [tyre, relative]
+
+  - <<: *pairwise_feature_defaults
+    name: relative_speed_to_ahead_trailing_mean_3_mps
+    definition: Mean of current and at most two preceding same-battle relative-speed observations.
+    unit: m/s
+    availability_scope: partial
+    interaction_group: [speed, rolling]
+
+  - <<: *pairwise_feature_defaults
+    name: time_gap_entry_trailing_mean_3_s
+    definition: Mean of current and at most two preceding same-battle entry time gaps.
+    unit: s
+    availability_scope: partial
+    interaction_group: [gap, rolling]
+
+  - <<: *pairwise_feature_defaults
+    name: distance_gap_entry_trailing_mean_3_m
+    definition: Mean of current and at most two preceding same-battle entry distance gaps.
+    unit: m
+    interaction_group: [gap, rolling]
+
+  - <<: *pairwise_feature_defaults
+    name: gap_rate_ahead_trailing_mean_3_s_per_s
+    definition: Mean of current and at most two preceding same-battle time-gap rates.
+    unit: s/s
+    availability_scope: partial
+    interaction_group: [gap, rate, rolling]
+
+  - <<: *pairwise_feature_defaults
+    name: previous_completed_segment_time_residual_s
+    definition: C2 attacker-minus-defender residual from each car's immediately prior completed segment in the same continuous normal-race context; never current-segment pace.
+    unit: s
+    live_safe: true
+    provenance: DERIVED
+    availability_scope: partial
+    source_gated: false
+    interaction_group: [baseline, relative, causal]
+
+  - <<: *pairwise_feature_defaults
+    name: baseline_residual_delta_s
+    definition: Backward-compatible alias of previous_completed_segment_time_residual_s; null with an API Quantity reason when C2 or a prior completed segment is unavailable.
+    unit: s
+    live_safe: true
+    provenance: DERIVED
+    availability_scope: partial
+    source_gated: false
+    interaction_group: [baseline, relative]
+
+  - <<: *pairwise_feature_defaults
+    name: fuel_load_delta_kg_est
+    definition: Reserved C5 attacker-minus-defender causal fuel estimate; never proxied or zero-filled.
+    unit: kg
+    live_safe: null
+    provenance: INFERRED
+    availability_scope: none
+    source_gated: true
+    uncertainty_field: fuel_load_delta_uncertainty_kg
+    interaction_group: [fuel, relative]
+
+  - <<: *pairwise_feature_defaults
+    name: fuel_load_delta_uncertainty_kg
+    definition: Reserved C5 uncertainty for fuel_load_delta_kg_est; unavailable with the estimate.
+    unit: kg
+    live_safe: null
+    provenance: INFERRED
+    availability_scope: none
+    source_gated: true
+    interaction_group: [fuel, uncertainty]
+
+  - <<: *pairwise_feature_defaults
+    name: ers_energy_delta_kj_est
+    definition: Reserved C5 attacker-minus-defender ERS energy estimate; never fabricated from public telemetry.
+    unit: kJ
+    live_safe: null
+    provenance: SIMULATED
+    availability_scope: none
+    source_gated: true
+    uncertainty_field: ers_energy_delta_uncertainty_kj
+    interaction_group: [ers, relative]
+
+  - <<: *pairwise_feature_defaults
+    name: ers_energy_delta_uncertainty_kj
+    definition: Reserved C5 uncertainty for ers_energy_delta_kj_est; unavailable with the estimate.
+    unit: kJ
+    live_safe: null
+    provenance: SIMULATED
+    availability_scope: none
+    source_gated: true
+    interaction_group: [ers, uncertainty]
+
+  - <<: *pairwise_feature_defaults
+    name: unavailable_quantities
+    definition: JSON-compatible API Quantity objects for unavailable pairwise values, each with null value, provenance, unit and reason.
+    unit: null
+    availability_scope: partial
+    interaction_group: [availability]
+
+  # -------------------------------------------------------- M20 / CP-10
+  - name: overtake_state
+    definition: 2026 deterministic Overtake state from configured lines and observed OVERTAKE race-control messages; null outside 2026 or when a required line is unavailable.
+    unit: null
+    source: config/rules/2026 event configuration plus artifacts/race_control/2026_*.json
+    derivation: scripts/rules/apply_overtake_state.py using trackshift.rules.state_machine
+    allowed_sessions: [Sprint, Race]
+    supported_years: [2026]
+    live_safe: true
+    provenance: RULE
+    availability_scope: partial
+    source_gated: false
+    decision_checkpoint: [DETECTION, ACTIVATION]
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: rules-2026-common-v1
+    regulation_source: config/rules/2026/common.yaml and event YAML
+    interaction_group: [overtake, rule]
+    consuming_models: [M20, M21, M07, M10]
+
+  - name: overtake_eligible
+    definition: True only while the 2026 deterministic Overtake state is ACTIVE; null whenever overtake_state is unavailable or outside 2026.
+    unit: null
+    source: overtake_state
+    derivation: state == ACTIVE
+    allowed_sessions: [Sprint, Race]
+    supported_years: [2026]
+    live_safe: true
+    provenance: RULE
+    availability_scope: partial
+    source_gated: false
+    decision_checkpoint: [ACTIVATION]
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: rules-2026-common-v1
+    regulation_source: config/rules/2026/common.yaml and event YAML
+    interaction_group: [overtake, rule]
+    consuming_models: [M20, M21, M07, M10]
+
+  - name: overtake_unavailable_reason
+    definition: Explicit reason when a 2026 Overtake state is null because a required configured rule input is unavailable.
+    unit: null
+    source: event rule configuration and CP-10 state materialisation
+    derivation: scripts/rules/apply_overtake_state.py fail-closed unavailable path
+    allowed_sessions: [Sprint, Race]
+    supported_years: [2026]
+    live_safe: true
+    provenance: RULE
+    availability_scope: partial
+    source_gated: false
+    decision_checkpoint: [DETECTION, ACTIVATION]
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: rules-2026-common-v1
+    regulation_source: config/rules/2026/common.yaml and event YAML
+    interaction_group: [overtake, availability]
+    consuming_models: [M20, M21, M07, M10]
+
+  - name: historical_drs_eligible
+    definition: "Historical 2022-2025 DRS-era covariate: observed raw DRS-active indication gated by observed DRS ENABLED/DISABLED race control; never a 2026 Overtake field."
+    unit: null
+    source: historical raw drs_open plus observed DRS race-control messages
+    derivation: scripts/rules/apply_overtake_state.py
+    allowed_sessions: [Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025]
+    live_safe: true
+    provenance: DERIVED
+    availability_scope: partial
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: false
+    regulation_version: historical_drs_era
+    regulation_source: observed DRS channel and race-control messages
+    interaction_group: [historical_drs]
+    consuming_models: [M07, M10, M13]
+
+  - name: historical_drs_open
+    definition: Historical 2022-2025 observed raw DRS-open covariate gated by observed DRS ENABLED/DISABLED race control; null in 2026.
+    unit: null
+    source: historical raw drs_open plus observed DRS race-control messages
+    derivation: scripts/rules/apply_overtake_state.py
+    allowed_sessions: [Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025]
+    live_safe: true
+    provenance: DERIVED
+    availability_scope: partial
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: false
+    regulation_version: historical_drs_era
+    regulation_source: observed DRS channel and race-control messages
+    interaction_group: [historical_drs]
+    consuming_models: [M07, M10, M13]
+
+  # ------------------------------------------------------- M33 / CP-06 weather
+  - <<: *weather_alignment_defaults
+    name: segment_entry_session_time_s
+    definition: Causal session clock at segment entry, used as the weather alignment key.
+    unit: s
+    live_safe: true
+    interaction_group: [weather, time]
+    consuming_models: [M33]
+
+  - <<: *weather_alignment_defaults
+    name: weather_sample_time_before_s
+    definition: Timestamp of the weather observation at or before the aligned segment entry.
+    unit: s
+
+  - <<: *weather_alignment_defaults
+    name: weather_sample_time_after_s
+    definition: Timestamp of the weather observation at or after the aligned segment entry.
+    unit: s
+
+  - <<: *weather_alignment_defaults
+    name: weather_available
+    definition: Whether a usable weather time series was available for the C1 row's session.
+    unit: null
+
+  - <<: *weather_alignment_defaults
+    name: weather_alignment_status
+    definition: "Alignment verdict: MATCHED_SAMPLE, INTERPOLATED, PRE_FIRST_EXTRAPOLATED, POST_FINAL_HELD, or an explicit missing reason."
+    unit: null
+
+  - <<: *weather_alignment_defaults
+    name: weather_missing_reason
+    definition: Explicit reason for unavailable weather values; never silently represented as numeric zero or NaN.
+    unit: null
+
+  - <<: *weather_alignment_defaults
+    name: weather_extrapolated
+    definition: True when segment entry precedes the first weather sample and the first sample is held.
+    unit: null
+
+  - <<: *weather_alignment_defaults
+    name: weather_post_final_sample
+    definition: True when segment entry follows the final weather sample and the final sample is held.
+    unit: null
+
+  - <<: *weather_alignment_defaults
+    name: air_temperature_c
+    definition: Raw weather-feed air temperature (wAT), aligned to segment entry.
+    unit: degC
+    provenance: OBSERVED
+    live_safe: true
+    interaction_group: [weather]
+    consuming_models: [M08, M15, M16]
+
+  - <<: *weather_alignment_defaults
+    name: track_temperature_c
+    definition: Raw weather-feed track temperature (wTT), aligned to segment entry.
+    unit: degC
+    provenance: OBSERVED
+    live_safe: true
+    interaction_group: [weather]
+    consuming_models: [M08, M15, M16]
+
+  - <<: *weather_alignment_defaults
+    name: humidity_pct
+    definition: Raw weather-feed relative humidity (wH), aligned to segment entry.
+    unit: pct
+    provenance: OBSERVED
+    live_safe: true
+    interaction_group: [weather]
+    consuming_models: [M15, M16]
+
+  - <<: *weather_alignment_defaults
+    name: air_pressure_hpa
+    definition: Raw weather-feed air pressure (wP), aligned to segment entry.
+    unit: hPa
+    provenance: OBSERVED
+    live_safe: true
+    interaction_group: [weather]
+    consuming_models: [M14, M15, M16]
+
+  - <<: *weather_alignment_defaults
+    name: rain_observed
+    definition: Raw weather-feed rain indicator (wR), held causally between observations.
+    unit: null
+    provenance: OBSERVED
+    live_safe: true
+    interaction_group: [weather]
+    consuming_models: [M08, M15, M16]
+
+  - <<: *weather_alignment_defaults
+    name: wind_speed_mps
+    definition: Raw weather-feed wind speed (wWS), aligned to segment entry and retained for audit; live wind models use only heading-relative components.
+    unit: m/s
+    provenance: OBSERVED
+    live_safe: false
+    interaction_group: [weather]
+    consuming_models: []
+
+  - <<: *weather_alignment_defaults
+    name: wind_direction_deg
+    definition: Raw weather-feed compass bearing wind comes FROM (wWD), retained for audit only and never a live model feature.
+    unit: deg
+    provenance: OBSERVED
+    live_safe: false
+    interaction_group: [weather, raw_bearing]
+    consuming_models: []
+
+  - <<: *weather_alignment_defaults
+    name: wind_head_component_mps
+    definition: Wind speed projected along travel direction; positive means headwind.
+    unit: m/s
+    live_safe: true
+    interaction_group: [weather, track_relative_wind]
+    consuming_models: [M06, M08, M14, M15, M16]
+
+  - <<: *weather_alignment_defaults
+    name: wind_cross_component_mps
+    definition: Wind speed projected across travel direction; positive means wind from the right.
+    unit: m/s
+    live_safe: true
+    interaction_group: [weather, track_relative_wind]
+    consuming_models: [M06, M08, M14, M15, M16]
+
+  - <<: *weather_alignment_defaults
+    name: air_density_proxy
+    definition: Ideal-gas air-density proxy from aligned raw pressure and air temperature.
+    unit: kg/m3
+    live_safe: true
+    interaction_group: [weather, physics]
+    consuming_models: [M14, M15, M16]
+
+  - <<: *weather_alignment_defaults
+    name: wet_track_flag
+    definition: Boolean wetness context derived from the aligned raw rain indicator.
+    unit: null
+    live_safe: true
+    interaction_group: [weather]
+    consuming_models: [M08, M15, M16]
+
+  # --------------------------------------- M01 Practice lap-class overlay
+  - name: practice_lap_class
+    definition: >-
+      Deterministic M01 label for a 2026 Practice 1 lap: PUSH, LONG_RUN,
+      COOLDOWN, OUT_LAP, IN_LAP, INTERRUPTED, INVALID, or UNKNOWN.
+    unit: null
+    source: telemetry_20m lap metadata, config/lap_classification.yaml
+    derivation: Causal rule evaluation at lap completion; one label per lap.
+    allowed_sessions: [Practice 1]
+    supported_years: [2026]
+    live_safe: false
+    provenance: DERIVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [practice, calibration]
+    consuming_models: [M01, M14, M15, M16, M30]
+
+  - name: practice_lap_class_provenance
+    definition: Provenance tag for practice_lap_class; always DERIVED.
+    unit: null
+    source: M01 classifier
+    derivation: Constant provenance assigned by the deterministic classifier.
+    allowed_sessions: [Practice 1]
+    supported_years: [2026]
+    live_safe: false
+    provenance: DERIVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [practice, audit]
+    consuming_models: [M01]
+
+  - name: practice_lap_class_reason
+    definition: Deterministic rule reason that selected practice_lap_class.
+    unit: null
+    source: M01 classifier
+    derivation: First matching configured precedence rule or its qualifying condition.
+    allowed_sessions: [Practice 1]
+    supported_years: [2026]
+    live_safe: false
+    provenance: DERIVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [practice, audit]
+    consuming_models: [M01]
+
+  - name: practice_lap_classifier_version
+    definition: Version of the deterministic M01 rule configuration used for the row.
+    unit: null
+    source: config/lap_classification.yaml classifier_version
+    derivation: Attached unchanged by the M01 overlay builder.
+    allowed_sessions: [Practice 1]
+    supported_years: [2026]
+    live_safe: false
+    provenance: DERIVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [practice, audit]
+    consuming_models: [M01]
+
+  - name: driver_session_best_lap_time_s
+    definition: >-
+      Lowest usable green non-pit driver lap time observed through the current
+      Practice 1 lap; not a future-session retrospective best.
+    unit: s
+    source: telemetry_20m lap metadata
+    derivation: Causal running minimum used by M01 PUSH and COOLDOWN rules.
+    allowed_sessions: [Practice 1]
+    supported_years: [2026]
+    live_safe: false
+    provenance: DERIVED
+    availability_scope: partial
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [practice, pace]
+    consuming_models: [M01]
+
+  # --------------------------------------------- M30 tyre pace overlay
+  - <<: *tyre_pace_defaults
+    name: tyre_stint_id
+    definition: Deterministic M30 stint identifier reset at source-stint, tyre, pit, control, quality, and lap-gap boundaries.
+    unit: null
+    source: C1 lap metadata plus matching telemetry_20m pit metadata and C7 context
+    derivation: Per-driver/session deterministic stint reconstruction.
+
+  - <<: *tyre_pace_defaults
+    name: tyre_stint_reset_reason
+    definition: Explicit reason the reconstructed M30 stint was reset, where a reset occurs.
+    unit: null
+    source: M30 stint reconstruction
+    derivation: Boundary audit field; null away from a reset.
+    consuming_models: [M30]
+
+  - <<: *tyre_pace_defaults
+    name: tyre_pace_retained_lap
+    definition: Whether the lap passed C7, timing quality, tyre and lap-time requirements for M30 causal history.
+    unit: null
+    source: C7 and observed lap metadata
+    derivation: True only for clean green on-track retained laps.
+    consuming_models: [M30]
+
+  - <<: *tyre_pace_defaults
+    name: tyre_degradation_proxy_s
+    definition: Causal rolling-median lap-time context minus the first-three-retained-lap median for its reconstructed stint; not a physical tyre sensor.
+    unit: s
+    source: observed lap_time_s and M30 retained-lap history
+    derivation: median(retained laps k-4..k) minus median(first three retained stint laps), with no future laps.
+
+  - <<: *tyre_pace_defaults
+    name: tyre_degradation_proxy_reason
+    definition: Explicit unavailable reason for tyre_degradation_proxy_s; never represented by zero.
+    unit: null
+    source: M30 causal eligibility and history checks
+    derivation: null when the proxy is available.
+    consuming_models: [M30]
+
+  - <<: *tyre_pace_defaults
+    name: tyre_degradation_proxy_provenance
+    definition: Provenance tag for tyre_degradation_proxy_s; always DERIVED.
+    unit: null
+    source: M30 overlay
+    derivation: Constant provenance tag.
+    consuming_models: [M30]
+
+  - <<: *tyre_pace_defaults
+    name: tyre_normalized_pace_s
+    definition: Current offline segment time minus a causal median of at least three prior same-driver/session/circuit/compound/stint segment times at similar tyre life.
+    unit: s
+    source: C1 segment_time_s_offline and M30 causal history
+    derivation: Current segment time minus prior-history median; no C2 or future reference is used.
+
+  - <<: *tyre_pace_defaults
+    name: tyre_normalized_pace_reason
+    definition: Explicit unavailable reason for tyre_normalized_pace_s, including insufficient causal similar-life history.
+    unit: null
+    source: M30 causal history checks
+    derivation: null when the normalised pace residual is available.
+    consuming_models: [M30]
+
+  - <<: *tyre_pace_defaults
+    name: tyre_normalized_pace_provenance
+    definition: Provenance tag for tyre_normalized_pace_s; always DERIVED.
+    unit: null
+    source: M30 overlay
+    derivation: Constant provenance tag.
+    consuming_models: [M30]
+
+  - <<: *tyre_pace_defaults
+    name: tyre_pace_schema_version
+    definition: Version of the M30 overlay schema used to derive this row.
+    unit: null
+    source: M30 overlay builder
+    derivation: Constant version tag.
+    consuming_models: [M30]
+
+  # ----------------------------------------------------------------------
+  # CP-12 eligibility (M21) and CP-13 opportunity dataset (M07).
+  # decision_checkpoint lists the checkpoints at which a value is knowable.
+  # A null means checkpoint-independent. Anything scoped to ACTIVATION or
+  # BRAKING is what the section 19 leakage check refuses in a DETECTION row.
+  # ----------------------------------------------------------------------
+
+  - name: p_eligible
+    definition: "Probability the projected gap at the Detection Line is inside detection_gap_s."
+    unit: "probability"
+    source: "M21 projection over C1 gap and closing rate"
+    derivation: "Phi((detection_gap_s - mu) / sigma) from project_gap_at_line; trailing window only."
+    allowed_sessions: [Race, Sprint]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: DERIVED
+    availability_scope: partial
+    source_gated: true
+    decision_checkpoint: null
+    uncertainty_field: projected_gap_sigma_s
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: rules-2026-common-v1
+    regulation_source: "FIA 2026 Sporting Regulations Article B 7.2.1, Overtake detection. Line positions UNVERIFIED pending Race Director event notes."
+    interaction_group: [overtake_eligibility]
+    consuming_models: ["M21", "M07", "M10"]
+
+  - name: projected_gap_at_detection_s
+    definition: "Mean projected time gap at the Detection Line."
+    unit: "s"
+    source: "M21 projection"
+    derivation: "gap_now_s minus closing_rate_s_per_s times time_to_line_s."
+    allowed_sessions: [Race, Sprint]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: DERIVED
+    availability_scope: partial
+    source_gated: true
+    decision_checkpoint: null
+    uncertainty_field: projected_gap_sigma_s
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: rules-2026-common-v1
+    regulation_source: "FIA 2026 Sporting Regulations Article B 7.2.1, Overtake detection. Line positions UNVERIFIED pending Race Director event notes."
+    interaction_group: [overtake_eligibility]
+    consuming_models: ["M21", "M07"]
+
+  - name: projected_gap_sigma_s
+    definition: "Standard deviation of the projected gap, floored at 0.05 s."
+    unit: "s"
+    source: "M21 projection"
+    derivation: "Stdev of the trailing five closing rates, scaled by time to the line."
+    allowed_sessions: [Race, Sprint]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: DERIVED
+    availability_scope: partial
+    source_gated: true
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: rules-2026-common-v1
+    regulation_source: "FIA 2026 Sporting Regulations Article B 7.2.1, Overtake detection. Line positions UNVERIFIED pending Race Director event notes."
+    interaction_group: [overtake_eligibility]
+    consuming_models: ["M21", "M07"]
+
+  - name: eligibility_margin
+    definition: "detection_gap_s minus the projected gap. Positive means eligible."
+    unit: "s"
+    source: "M21"
+    derivation: "threshold_s minus projected_gap_at_detection_s."
+    allowed_sessions: [Race, Sprint]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: DERIVED
+    availability_scope: partial
+    source_gated: true
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: rules-2026-common-v1
+    regulation_source: "FIA 2026 Sporting Regulations Article B 7.2.1, Overtake detection. Line positions UNVERIFIED pending Race Director event notes."
+    interaction_group: [overtake_eligibility]
+    consuming_models: ["M21", "M07", "M10"]
+
+  - name: closing_rate_s_per_s
+    definition: "Rate at which the time gap to the car ahead is closing."
+    unit: "s/s"
+    source: "C1 gap_ahead_m and speed"
+    derivation: "Trailing first difference of the time gap; never centred."
+    allowed_sessions: [Race, Sprint]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: DERIVED
+    availability_scope: partial
+    source_gated: true
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: rules-2026-common-v1
+    regulation_source: "FIA 2026 Sporting Regulations Article B 7.2.1, Overtake detection. Line positions UNVERIFIED pending Race Director event notes."
+    interaction_group: [overtake_eligibility]
+    consuming_models: ["M21", "M07"]
+
+  - name: distance_detection_to_activation
+    definition: "Distance from the Detection Line to the Activation Line."
+    unit: "m"
+    source: "config/rules/2026 overtake zones"
+    derivation: "activation_line_m minus detection_line_m, wrapped by lap length."
+    allowed_sessions: [Race, Sprint]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: DERIVED
+    availability_scope: partial
+    source_gated: true
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: rules-2026-common-v1
+    regulation_source: "FIA 2026 Sporting Regulations Article B 7.2.1, Overtake detection. Line positions UNVERIFIED pending Race Director event notes."
+    interaction_group: [overtake_eligibility]
+    consuming_models: ["M21", "M07"]
+
+  - name: distance_remaining_in_zone
+    definition: "Distance from the checkpoint to the end of the activation zone."
+    unit: "m"
+    source: "config/rules/2026 overtake zones"
+    derivation: "zone_end_m minus feature_cutoff_distance_m."
+    allowed_sessions: [Race, Sprint]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: DERIVED
+    availability_scope: partial
+    source_gated: true
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: rules-2026-common-v1
+    regulation_source: "FIA 2026 Sporting Regulations Article B 7.2.1, Overtake detection. Line positions UNVERIFIED pending Race Director event notes."
+    interaction_group: [overtake_eligibility]
+    consuming_models: ["M07", "M10"]
+
+  - name: gap_at_activation_s
+    definition: "Time gap to the car ahead at the Activation Line."
+    unit: "s"
+    source: "C1 telemetry at the Activation Line"
+    derivation: "Gap sampled at the Activation Line crossing."
+    allowed_sessions: [Race, Sprint]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: DERIVED
+    availability_scope: partial
+    source_gated: true
+    decision_checkpoint: ["ACTIVATION", "BRAKING"]
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: rules-2026-common-v1
+    regulation_source: "FIA 2026 Sporting Regulations Article B 7.2.1, Overtake detection. Line positions UNVERIFIED pending Race Director event notes."
+    interaction_group: [overtake_eligibility]
+    consuming_models: ["M07", "M10"]
+
+  - name: speed_at_activation_kmh
+    definition: "Attacker speed at the Activation Line."
+    unit: "km/h"
+    source: "C1 speed_kmh at the Activation Line"
+    derivation: "Speed sampled at the Activation Line crossing."
+    allowed_sessions: [Race, Sprint]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: DERIVED
+    availability_scope: partial
+    source_gated: true
+    decision_checkpoint: ["ACTIVATION", "BRAKING"]
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: rules-2026-common-v1
+    regulation_source: "FIA 2026 Sporting Regulations Article B 7.2.1, Overtake detection. Line positions UNVERIFIED pending Race Director event notes."
+    interaction_group: [overtake_eligibility]
+    consuming_models: ["M07", "M10"]
+
+  - name: delta_v_at_activation
+    definition: "Attacker minus defender speed at the Activation Line."
+    unit: "km/h"
+    source: "C1 speed_kmh for both cars"
+    derivation: "Pairwise speed difference at the Activation Line."
+    allowed_sessions: [Race, Sprint]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: DERIVED
+    availability_scope: partial
+    source_gated: true
+    decision_checkpoint: ["ACTIVATION", "BRAKING"]
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: rules-2026-common-v1
+    regulation_source: "FIA 2026 Sporting Regulations Article B 7.2.1, Overtake detection. Line positions UNVERIFIED pending Race Director event notes."
+    interaction_group: [overtake_eligibility]
+    consuming_models: ["M07", "M10"]
+
+  - name: distance_activation_to_brake
+    definition: "Distance from the Activation Line to the braking point."
+    unit: "m"
+    source: "config/rules zones and CP-05 brake_onset_m"
+    derivation: "brake_onset_m minus activation_line_m, wrapped by lap length."
+    allowed_sessions: [Race, Sprint]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: DERIVED
+    availability_scope: partial
+    source_gated: true
+    decision_checkpoint: ["ACTIVATION", "BRAKING"]
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: rules-2026-common-v1
+    regulation_source: "FIA 2026 Sporting Regulations Article B 7.2.1, Overtake detection. Line positions UNVERIFIED pending Race Director event notes."
+    interaction_group: [overtake_eligibility]
+    consuming_models: ["M07", "M10"]
+
+  - name: speed_at_braking_kmh
+    definition: "Attacker speed at the braking point."
+    unit: "km/h"
+    source: "C1 speed_kmh at brake onset"
+    derivation: "Speed sampled at the brake-onset distance."
+    allowed_sessions: [Race, Sprint]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: DERIVED
+    availability_scope: partial
+    source_gated: true
+    decision_checkpoint: ["BRAKING"]
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: rules-2026-common-v1
+    regulation_source: "FIA 2026 Sporting Regulations Article B 7.2.1, Overtake detection. Line positions UNVERIFIED pending Race Director event notes."
+    interaction_group: [overtake_eligibility]
+    consuming_models: ["M07", "M10"]
+
+  - name: delta_v_at_braking
+    definition: "Attacker minus defender speed at the braking point."
+    unit: "km/h"
+    source: "C1 speed_kmh for both cars"
+    derivation: "Pairwise speed difference at brake onset."
+    allowed_sessions: [Race, Sprint]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: DERIVED
+    availability_scope: partial
+    source_gated: true
+    decision_checkpoint: ["BRAKING"]
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: rules-2026-common-v1
+    regulation_source: "FIA 2026 Sporting Regulations Article B 7.2.1, Overtake detection. Line positions UNVERIFIED pending Race Director event notes."
+    interaction_group: [overtake_eligibility]
+    consuming_models: ["M07", "M10"]
+
+  - name: passed_by_outcome_horizon
+    definition: "Label under zone_exit_v1. Attacker ahead of this defender at the activation-zone exit."
+    unit: null
+    source: "C1 race_position at the zone exit"
+    derivation: "zone_exit_v1: attacker race_position below defender at zone exit."
+    allowed_sessions: [Race, Sprint]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: false
+    provenance: OBSERVED
+    availability_scope: partial
+    source_gated: true
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: ACAUSAL
+    counterfactual_safe: false
+    regulation_version: rules-2026-common-v1
+    regulation_source: "Not a regulatory value. Outcome observed from C1."
+    interaction_group: [overtake_outcome]
+    consuming_models: ["M07", "M10", "M11", "M12"]
+
+  - name: pass_attempted
+    definition: "Audit only. Whether a pass was attempted. Never a feature, per section 19."
+    unit: null
+    source: "C1 pairwise position history"
+    derivation: "Audit field retained for review and excluded from every feature matrix."
+    allowed_sessions: [Race, Sprint]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: false
+    provenance: OBSERVED
+    availability_scope: partial
+    source_gated: true
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: ACAUSAL
+    counterfactual_safe: false
+    regulation_version: rules-2026-common-v1
+    regulation_source: "Not a regulatory value. Outcome observed from C1."
+    interaction_group: [overtake_outcome]
+    consuming_models: ["M07"]
+
+  - name: outcome_distance_m
+    definition: "Audit only. Lap distance at which the outcome resolved. Never a feature."
+    unit: null
+    source: "C1 distance_m at the outcome"
+    derivation: "Audit field retained for review and excluded from every feature matrix."
+    allowed_sessions: [Race, Sprint]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: false
+    provenance: OBSERVED
+    availability_scope: partial
+    source_gated: true
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: ACAUSAL
+    counterfactual_safe: false
+    regulation_version: rules-2026-common-v1
+    regulation_source: "Not a regulatory value. Outcome observed from C1."
+    interaction_group: [overtake_outcome]
+    consuming_models: ["M07"]
+
+  - name: gap_at_checkpoint
+    definition: "Time gap to the car ahead at this decision checkpoint."
+    unit: "s"
+    source: "C1 gap_ahead_m and speed_kmh at the checkpoint cutoff"
+    derivation: "gap_ahead_m divided by speed in m/s, sampled at or before feature_cutoff_distance_m."
+    allowed_sessions: [Race, Sprint]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: DERIVED
+    availability_scope: partial
+    source_gated: true
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: rules-2026-common-v1
+    regulation_source: "Not a regulatory value. Measured from C1 telemetry."
+    interaction_group: [overtake_eligibility]
+    consuming_models: ["M21", "M07", "M10"]

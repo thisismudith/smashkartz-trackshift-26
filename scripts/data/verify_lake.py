@@ -69,6 +69,21 @@ def verify(lake: Path) -> dict:
           manifest.get("schema_version") == "phase2_20m_v1",
           f"schema_version={manifest.get('schema_version')}, sessions={manifest.get('sessions_requested')}")
 
+    # Which code built this? Load-bearing when a lake is built on one machine and
+    # used on another: without it, data predating a change to the resampling or
+    # metadata code looks identical to data that matches.
+    built_at = manifest.get("git_commit")
+    _gate(results, "build records the commit that produced it", bool(built_at),
+          f"git_commit={(built_at or 'MISSING')[:12]}, branch={manifest.get('git_branch')}, "
+          f"host={manifest.get('hostname')}")
+
+    # A build made with uncommitted changes cannot be reproduced from any commit.
+    dirty = manifest.get("git_dirty")
+    _gate(results, "build was made from a clean working tree", dirty is not True,
+          "clean" if dirty is False else
+          (f"UNCOMMITTED CHANGES: {manifest.get('git_dirty_files')}" if dirty
+           else "unknown; manifest predates provenance recording"))
+
     _gate(results, "no session failed to build",
           manifest.get("sessions_failed", 0) == 0,
           f"{manifest.get('sessions_failed', 0)} failed of {manifest.get('sessions_requested', 0)}")
@@ -108,17 +123,46 @@ def verify(lake: Path) -> dict:
     _gate(results, "rows per lap match lap length / spacing (+/- 2)", within >= 99.0,
           f"{within:.2f}% of laps within tolerance; median {int(per_lap.median())} rows/lap at {spacing:g} m")
 
-    # gap_ahead_m: the exact property, not a field-size-dependent rate
+    # gap_ahead_m: the exact property, not a field-size-dependent rate.
+    # race_position may be null, and NaN != 1 is True in pandas, so an unguarded
+    # "!= 1" silently counts position-less rows as non-leaders. Split three ways.
     race = df[df["session"].isin(RACE_LIKE)]
     if len(race) and "race_position" in race.columns and race["race_position"].notna().any():
-        non_leader = race[race["race_position"] != 1]
-        leader = race[race["race_position"] == 1]
-        missing = int(non_leader["gap_ahead_m"].isna().sum())
-        _gate(results, "gap_ahead_m present for every non-leader row", missing == 0,
-              f"{missing} missing of {len(non_leader)} non-leader rows; "
-              f"{int(leader['gap_ahead_m'].isna().sum())} of {len(leader)} leader rows correctly null")
+        known = race[race["race_position"].notna()]
+        unknown_pos = int(race["race_position"].isna().sum())
+        non_leader = known[known["race_position"] != 1]
+        leader = known[known["race_position"] == 1]
+
+        # The real invariant: a gap must exist wherever a car is recorded ahead.
+        if "driver_ahead_number" in race.columns:
+            has_ahead = race[race["driver_ahead_number"].notna()]
+            inconsistent = int(has_ahead["gap_ahead_m"].isna().sum())
+            _gate(results, "gap_ahead_m present wherever a car is recorded ahead",
+                  inconsistent == 0,
+                  f"{inconsistent} of {len(has_ahead)} rows with driver_ahead_number lack a gap; "
+                  f"{int(leader['gap_ahead_m'].isna().sum())} of {len(leader)} leader rows correctly null; "
+                  f"{unknown_pos} rows have no race_position and are counted as neither")
+
+            # Separate concern: a non-leader row with no gap at all is a hole in
+            # the source feed, not an inconsistency in the lake. Tolerate a trace
+            # of it, but name the laps so it cannot hide. (driver_ahead_number is
+            # sparsely populated by design, so its absence is not the signal.)
+            orphan = non_leader[non_leader["gap_ahead_m"].isna()]
+            lap_keys = [c for c in ("event", "session", "driver_number", "lap") if c in orphan.columns]
+            orphan_laps = len(orphan.groupby(lap_keys)) if lap_keys and len(orphan) else 0
+            total_laps = len(known.groupby(lap_keys)) if lap_keys and len(known) else 0
+            share = (orphan_laps / total_laps * 100) if total_laps else 0.0
+            _gate(results, "non-leader rows missing gap_ahead_m are a trace",
+                  share <= 0.05,
+                  f"{orphan_laps} lap(s) of {total_laps} ({share:.4f}%) carry no gap "
+                  f"while off the lead, {len(orphan)} rows")
+        else:
+            missing = int(non_leader["gap_ahead_m"].isna().sum())
+            _gate(results, "gap_ahead_m present for every non-leader row", missing == 0,
+                  f"{missing} missing of {len(non_leader)} non-leader rows; "
+                  f"{unknown_pos} rows have no race_position and are counted as neither")
     else:
-        _gate(results, "gap_ahead_m present for every non-leader row", True,
+        _gate(results, "gap_ahead_m present wherever a car is recorded ahead", True,
               "no race-like rows with position data in this scope")
 
     # metadata must not be silently null -- the regression fixed in CP-02
@@ -146,6 +190,13 @@ def verify(lake: Path) -> dict:
     passed = sum(1 for r in results if r["ok"])
     return {
         "lake": str(lake),
+        "built_by": {
+            "git_commit": manifest.get("git_commit"),
+            "git_branch": manifest.get("git_branch"),
+            "git_dirty": manifest.get("git_dirty"),
+            "hostname": manifest.get("hostname"),
+            "created_utc": manifest.get("created_utc"),
+        },
         "parquet_files": len(parquets),
         "rows": int(len(df)),
         "sessions": manifest.get("sessions_requested"),

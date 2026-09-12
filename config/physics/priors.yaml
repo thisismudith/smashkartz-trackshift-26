@@ -1,0 +1,84 @@
+# Longitudinal power-balance priors (CP-18, M14).
+#
+# Starting values only. CP-20 fits all five rungs of section 29 against these
+# and every value here is expected to move. Each carries a source so a fitted
+# number is never confused with a cited one: `source` says where the starting
+# value came from, `value_source` says what tier it may support (section 21).
+#
+# Nothing here is a regulatory value. The power envelope lives in
+# config/rules/2026/ and is read only through the CP-11 evaluator; putting a
+# cap in this file would be the section 32 violation the rule engine exists to
+# prevent.
+schema_version: 1
+season: 2026
+
+mass:
+  chassis_minimum_kg:
+    value: 800.0
+    value_source: UNVERIFIED
+    source: "TODO: FIA 2026 Technical Regulations, minimum mass. 800 kg is the widely reported 2026 figure and is not yet cited."
+    note: >-
+      Total mass is this plus fuel. Fuel comes from M34 (CP-19); until that
+      lands the caller must pass a fuel estimate and say it is a proxy
+      (section 38). This file does not supply a fuel default, because a silent
+      default would make every power estimate wrong by a constant nobody sees.
+
+aerodynamics:
+  cda_m2:
+    value: 1.2
+    value_source: UNVERIFIED
+    source: "Literature range for a modern F1 car: roughly 1.0 low-drag to 1.4 high-downforce. Midpoint as a starting value."
+    note: >-
+      The parameter the drag term is most sensitive to at high speed, which is
+      exactly where envelope violations appear. CP-18's guidance is to raise
+      this first when the violation rate is above about 10 percent, and to
+      calibrate it per circuit in CP-20 rather than globally.
+  cda_low_drag_m2:
+    value: 1.0
+    value_source: UNVERIFIED
+    source: "Literature range, low-drag configuration (Monza-like)."
+  cda_high_downforce_m2:
+    value: 1.4
+    value_source: UNVERIFIED
+    source: "Literature range, high-downforce configuration (Monaco-like)."
+
+rolling:
+  crr:
+    value: 0.012
+    value_source: UNVERIFIED
+    source: "Literature value for slick racing tyres on asphalt. To be calibrated in CP-20."
+
+drivetrain:
+  eta_drivetrain:
+    value: 0.92
+    value_source: UNVERIFIED
+    source: "Literature estimate for a modern F1 drivetrain. To be calibrated in CP-20."
+  eta_deploy:
+    value: 0.95
+    value_source: UNVERIFIED
+    source: "Assumed Energy Store to wheel efficiency on deployment. Calibrated in CP-20."
+  eta_harvest:
+    value: 0.90
+    value_source: UNVERIFIED
+    source: "Assumed wheel to Energy Store efficiency on recovery. Distinct from eta_deploy: the round trip is lossy in both directions and collapsing them into one number hides half the loss."
+
+engine:
+  p_ice_max_kw:
+    value: 400.0
+    value_source: UNVERIFIED
+    source: "TODO: FIA 2026 Technical Regulations, internal combustion power. 400 kW is the reported 2026 figure pending a citation in CP-03."
+
+environment:
+  gravity_mps2:
+    value: 9.80665
+    value_source: OBSERVED
+    source: "ISO 80000-3 standard acceleration of gravity."
+  air_density_fallback_kgm3:
+    value: 1.225
+    value_source: UNVERIFIED
+    source: "ISA sea-level standard density, 15 C and 1013.25 hPa."
+    note: >-
+      Used only where CP-06 has no weather sample for a segment, and every row
+      relying on it is flagged `air_density_is_fallback`. It is a documented
+      standard, not a measurement: a lap run at 35 C and altitude can be 15
+      percent less dense, which lands directly on the cube term in drag.
