@@ -39,7 +39,7 @@ Everything in `TrackShift AGENTS.md` that is learned, fitted, benchmarked, or is
 
 | ID | Component | §Ref | Phase | Kind |
 |---|---|---|---|---|
-| M01 | Practice lap classifier (PUSH / LONG_RUN / COOLDOWN / OUT_LAP / IN_LAP / INTERRUPTED / INVALID / UNKNOWN) | §9 | 3 | deterministic or hybrid classifier |
+| M01 | Practice lap classifier (PUSH / LONG_RUN / RACE_PACE / COOLDOWN / OUT_LAP / IN_LAP / INTERRUPTED / INVALID / UNKNOWN) | §9 | 3 | deterministic or hybrid classifier |
 | M02 | Race-context labeller (CLEAN_AIR / FOLLOWING / CLOSE_FOLLOWING / ATTACKING / DEFENDING / TRAFFIC / SAFETY_CAR / VSC / YELLOW / PIT_IN / PIT_OUT / WET / DRY) **plus** race-control and pit-state normalisation: `pit_state` (ON_TRACK / PIT_IN / PIT_LANE / PIT_OUT / UNKNOWN), `normalized_race_control_state`, `safety_car_active`, `virtual_safety_car_active`, `race_control_transition_flag`, `pit_transition_flag`, `green_flag_elapsed_s`, and the **`normal_race_model_eligible` gate** that every downstream model dataset filters on. Transitions are hard sequence boundaries. | §11, §12, §37 | 3 | deterministic, inferred, or hybrid |
 | M03 | Track segmentation (braking onset, throttle return, FIA lines, zone boundaries; 30–40 segments/lap) plus static per-track geometry: `sector`, `zone`, `corner_id`, versioned geometry-based `corner_type` (hairpin / chicane / slow / medium / fast / left / right / straight), `corner_phase`, `track_heading_deg`, `braking_intensity_proxy`. Full-segment summaries are `OFFLINE_ONLY`; live fields are time-aligned to segment entry. | §12, §13 | 4 | deterministic algorithm *(not ML)* |
 | M04 | Driver / team / field segment baselines (median residuals), computed on `normal_race_model_eligible` rows only | §12, §14, §15 | 5 | statistical |

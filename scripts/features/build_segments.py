@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import bisect
+from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, wait
 import json
 import sys
 from datetime import datetime, timezone
@@ -53,12 +54,26 @@ def load_geometry(circuit: str) -> dict:
     return yaml.safe_load(path.read_text(encoding="utf-8-sig"))
 
 
-def build_for_event(geometry: dict, event_display: str):
-    """One row per (year, event, session, driver, lap, segment_id)."""
+def build_for_event(geometry: dict, event_display: str, years: tuple[str, ...] | None = None,
+                    lake_root: Path | None = None):
+    """One row per (year, event, session, driver, lap, segment_id).
+
+    ``lake_root`` defaults to the canonical lake. It is a parameter rather than a
+    constant so a smoke test or a second machine can point the same producer at
+    another lake without writing into the canonical one (AGENTS.md section 5).
+    """
     import pandas as pd
 
+    lake = lake_root or LAKE
     safe = event_display.replace(" ", "_")
-    files = sorted(LAKE.glob(f"year=*/event={safe}/session=*/telemetry_20m.parquet"))
+    pattern = "year=*" if not years else None
+    if years:
+        files = []
+        for year in years:
+            files.extend(lake.glob(f"year={year}/event={safe}/session=*/telemetry_20m.parquet"))
+        files = sorted(files)
+    else:
+        files = sorted(lake.glob(f"{pattern}/event={safe}/session=*/telemetry_20m.parquet"))
     if not files:
         return None, {"reason": "no lake data"}
 
@@ -135,11 +150,44 @@ def build_for_event(geometry: dict, event_display: str):
     return pd.DataFrame(rows), {"laps": grouped.ngroups, "rows": len(rows)}
 
 
+def build_circuit(circuit: str, output_root: Path, years: tuple[str, ...] | None = None,
+                  lake_root: Path | None = None) -> dict:
+    """Build one circuit's segment table. Module-level so it pickles."""
+    geometry = load_geometry(circuit)
+    frame, info = build_for_event(geometry, geometry["event_display"], years, lake_root)
+    if frame is None:
+        return {"circuit": circuit, "skipped": True, **info}
+    destination = output_root / f"circuit={circuit}" / "segments.parquet"
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    if years and destination.exists():
+        # Additive: keep the years this run did not touch, replace the ones it did.
+        import pandas as pd
+
+        existing = pd.read_parquet(destination)
+        keep = existing[~existing["year"].astype(str).isin([str(y) for y in years])]
+        frame = pd.concat([keep, frame], ignore_index=True)
+    frame.to_parquet(destination, index=False)
+    return {
+        "circuit": circuit,
+        "geometry_version": geometry["geometry_version"],
+        "segments_per_lap": geometry["segment_count"],
+        "laps": info["laps"] // geometry["segment_count"] if geometry["segment_count"] else 0,
+        "rows": len(frame),
+        "event_display": geometry["event_display"],
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--circuit", default=None)
     parser.add_argument("--all", action="store_true", help="Every circuit with a segment map")
     parser.add_argument("--output", type=Path, default=OUT)
+    parser.add_argument("--lake", type=Path, default=LAKE,
+                        help="Telemetry-20m lake to read (default: data/processed/telemetry_20m)")
+    parser.add_argument("--years", default=None,
+                        help="CSV of years to rebuild, e.g. 2024. Other years already in "
+                             "the table are kept, so a new season does not cost a full rebuild.")
+    parser.add_argument("--jobs", type=int, default=1, help="Circuits built in parallel")
     parser.add_argument("--no-progress", action="store_true")
     args = parser.parse_args()
 
@@ -151,37 +199,47 @@ def main() -> int:
     if not maps:
         parser.error("no segment maps found; run derive_track_geometry.py first")
 
+    years = tuple(y.strip() for y in args.years.split(",") if y.strip()) if args.years else None
+    circuits = [m.stem for m in maps]
     args.output.mkdir(parents=True, exist_ok=True)
-    prog = Progress(len(maps), enabled=not args.no_progress)
+    prog = Progress(len(circuits), enabled=not args.no_progress)
     written, skipped = [], []
 
-    for path in maps:
-        geometry = load_geometry(path.stem)
-        prog.set_label(geometry["event_display"])
-        frame, info = build_for_event(geometry, geometry["event_display"])
-        if frame is None:
-            skipped.append({"circuit": path.stem, **info})
-            prog.tick()
-            continue
+    def record(result):
+        if result.get("skipped"):
+            skipped.append({k: v for k, v in result.items() if k != "skipped"})
+        else:
+            written.append({k: v for k, v in result.items() if k != "event_display"})
 
-        destination = args.output / f"circuit={path.stem}" / "segments.parquet"
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        frame.to_parquet(destination, index=False)
-        written.append({
-            "circuit": path.stem,
-            "geometry_version": geometry["geometry_version"],
-            "segments_per_lap": geometry["segment_count"],
-            "laps": info["laps"] // geometry["segment_count"] if geometry["segment_count"] else 0,
-            "rows": info["rows"],
-        })
-        prog.tick()
+    if args.jobs > 1 and len(circuits) > 1:
+        with ProcessPoolExecutor(max_workers=args.jobs) as pool:
+            futures = {pool.submit(build_circuit, c, args.output, years, args.lake): c for c in circuits}
+            pending = set(futures)
+            while pending:
+                finished, pending = wait(pending, timeout=1.0, return_when=FIRST_COMPLETED)
+                for future in finished:
+                    result = future.result()
+                    record(result)
+                    prog.set_label(str(result.get("event_display") or result.get("circuit")))
+                    prog.tick()
+                if pending:
+                    prog.set_label(f"{min(len(pending), args.jobs)} building, "
+                                   f"{max(0, len(pending) - args.jobs)} queued")
+                    prog.heartbeat()
+    else:
+        for circuit in circuits:
+            prog.set_label(circuit)
+            record(build_circuit(circuit, args.output, years, args.lake))
+            prog.tick()
     prog.close()
 
     manifest = {
         "schema_version": "c1_segments_v1",
         "created_utc": datetime.now(timezone.utc).isoformat(),
-        "written": written,
-        "skipped": skipped,
+        "years_rebuilt": list(years) if years else "all",
+        "lake_root": str(args.lake),
+        "written": sorted(written, key=lambda r: str(r.get("circuit"))),
+        "skipped": sorted(skipped, key=lambda r: str(r.get("circuit"))),
     }
     (args.output / "run_manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
     print(json.dumps(manifest, indent=2))

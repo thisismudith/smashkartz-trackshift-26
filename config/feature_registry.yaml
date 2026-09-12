@@ -2274,7 +2274,10 @@ features:
   - name: practice_lap_class
     definition: >-
       Deterministic M01 label for a 2026 Practice 1 lap: PUSH, LONG_RUN,
-      COOLDOWN, OUT_LAP, IN_LAP, INTERRUPTED, INVALID, or UNKNOWN.
+      RACE_PACE, COOLDOWN, OUT_LAP, IN_LAP, INTERRUPTED, INVALID, or UNKNOWN.
+      RACE_PACE is a lap inside the PUSH time band on a tyre older than the
+      PUSH life limit: ordinary race-pace running, neither a qualifying
+      simulation nor necessarily inside a four-lap consistent run.
     unit: null
     source: telemetry_20m lap metadata, config/lap_classification.yaml
     derivation: Causal rule evaluation at lap completion; one label per lap.

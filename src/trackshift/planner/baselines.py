@@ -4,14 +4,15 @@ from __future__ import annotations
 from typing import Any, Callable, Mapping, Sequence
 
 from trackshift.rules import api as c3
+from trackshift.value.dp import required_state_inputs
 from trackshift.value.state import c3_candidate_actions, c3_excluded_actions
 
 BASELINE_NAMES = ("greedy_attack", "longest_straight", "lap_time_only", "dp", "beam_dp", "oracle_rival_state")
 
 
 def _deploy(action: Mapping[str, Any]) -> float:
-    try: return float(action.get("deploy_level", 0.0))
-    except (TypeError, ValueError): return 0.0
+    try: return float(action["deploy_level"])
+    except (KeyError, TypeError, ValueError): raise ValueError("C3 action has no finite deploy_level")
 
 
 def _choose(name: str, actions: Sequence[Mapping[str, Any]], segment: Mapping[str, Any]) -> Mapping[str, Any]:
@@ -42,6 +43,11 @@ def generate_baseline_plans(
     """Generate comparable legal action traces for every M25 baseline."""
     if not segments:
         return {"status": "UNAVAILABLE", "reason": "no segments", "baselines": []}
+    inputs = required_state_inputs(state)
+    if not inputs["ok"]:
+        return {"status": "UNAVAILABLE", "provenance": "DERIVED", "reason": inputs["reason"], "baselines": [], "excluded_actions": {}}
+    if not isinstance(event_rules, Mapping) or not event_rules:
+        return {"status": "UNAVAILABLE", "provenance": "RULE", "reason": "C3 event rules unavailable", "baselines": [], "excluded_actions": {}}
     action_fn = legal_actions_fn or c3.legal_actions
     plans = {name: [] for name in BASELINE_NAMES}
     exclusions: dict[str, list[dict[str, Any]]] = {}

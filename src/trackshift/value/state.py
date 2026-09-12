@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -47,7 +48,25 @@ def c3_candidate_actions(action_set: Mapping[str, Any] | None) -> list[dict[str,
     for key in ("actions", "legal_actions"):
         actions = action_set.get(key)
         if isinstance(actions, list):
-            return actions
+            valid: list[dict[str, Any]] = []
+            for action in actions:
+                if not isinstance(action, Mapping):
+                    continue
+                if "deploy_level" not in action or "lift_amount" not in action:
+                    continue
+                try:
+                    if not all(math.isfinite(float(action[key])) for key in ("deploy_level", "lift_amount")):
+                        continue
+                except (TypeError, ValueError):
+                    continue
+                clean = dict(action)
+                clean["deploy_level"] = float(action["deploy_level"])
+                clean["lift_amount"] = float(action["lift_amount"])
+                try:
+                    valid.append(json.loads(json.dumps(clean, allow_nan=False)))
+                except (TypeError, ValueError):
+                    continue
+            return valid
     return []
 
 

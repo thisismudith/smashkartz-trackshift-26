@@ -15,10 +15,11 @@ from typing import Any, Iterable, Mapping
 import pandas as pd
 import yaml
 
-LAP_CLASSIFIER_SCHEMA_VERSION = "m01_practice_lap_class_v1"
+LAP_CLASSIFIER_SCHEMA_VERSION = "m01_practice_lap_class_v2"
 LAP_CLASS_PROVENANCE = "DERIVED"
 LAP_CLASSES = (
-    "PUSH", "LONG_RUN", "COOLDOWN", "OUT_LAP", "IN_LAP", "INTERRUPTED", "INVALID", "UNKNOWN",
+    "PUSH", "LONG_RUN", "RACE_PACE", "COOLDOWN", "OUT_LAP", "IN_LAP",
+    "INTERRUPTED", "INVALID", "UNKNOWN",
 )
 KEY_COLUMNS = ("year", "event", "session", "driver", "lap")
 REQUIRED_INPUT_COLUMNS = (
@@ -238,6 +239,22 @@ def classify_practice_laps(
                 and float(tyre_life) <= cfg.push_tyre_life_laps_max
             )
             long_run = preliminary == "UNKNOWN" and len(run) >= cfg.long_run_min_consecutive_laps
+            # RACE_PACE closes a documented gap in the section 9 label set. A lap
+            # inside the PUSH time band but on a tyre older than the PUSH life
+            # limit is ordinary race-pace running: too old to be a qualifying
+            # simulation, and not necessarily inside a four-lap consistent run.
+            # Before this label existed, 2,074 such laps fell to UNKNOWN, which
+            # said "we could not tell" about laps whose character is plain from
+            # the source fields. It is causal -- lap time, tyre life and the
+            # running best are all known at lap completion.
+            race_pace = (
+                preliminary == "UNKNOWN"
+                and running_best is not None
+                and _valid_positive_number(lap_time)
+                and float(lap_time) <= running_best * cfg.push_session_best_ratio_max
+                and _valid_positive_number(tyre_life)
+                and float(tyre_life) > cfg.push_tyre_life_laps_max
+            )
             cooldown = (
                 preliminary == "UNKNOWN"
                 and running_best is not None
@@ -254,6 +271,7 @@ def classify_practice_laps(
                 "OUT_LAP": pout or previous_pin,
                 "PUSH": push,
                 "LONG_RUN": long_run,
+                "RACE_PACE": race_pace,
                 "COOLDOWN": cooldown,
                 "UNKNOWN": True,
             }
@@ -262,6 +280,8 @@ def classify_practice_laps(
                 reason = "within_causal_session_best_and_low_tyre_life"
             elif label == "LONG_RUN":
                 reason = "causal_green_run_meets_length_life_and_spread"
+            elif label == "RACE_PACE":
+                reason = "within_causal_session_best_band_on_tyre_older_than_push_limit"
             elif label == "COOLDOWN":
                 reason = "slow_lap_immediately_after_push"
 
