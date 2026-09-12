@@ -186,6 +186,8 @@ def build_circuit(circuit: str, year: str, output_root: Path, fuel_kg: float) ->
                 "p_wheel_kw": power.p_wheel_kw, "p_drag_kw": power.p_drag_kw,
                 "p_rolling_kw": power.p_rolling_kw, "p_gradient_kw": power.p_gradient_kw,
                 "p_inertial_kw": power.p_inertial_kw,
+                "p_ice_est_kw": power.p_ice_est_kw,
+                "ice_work_est_mj": integrate_segment(power.p_ice_est_kw, duration),
                 "ers_energy_used_est_mj": state.ers_energy_used_est_mj,
                 "ers_energy_harvested_est_mj": state.ers_energy_harvested_est_mj,
                 "ers_soc_est_mj": state.ers_soc_est_mj,

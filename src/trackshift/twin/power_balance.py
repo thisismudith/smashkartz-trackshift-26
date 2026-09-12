@@ -117,6 +117,10 @@ class SegmentPower:
     p_inertial_kw: float
     ers_deploy_power_est_kw: float
     ers_harvest_power_est_kw: float
+    #: Internal-combustion power actually used, which is min(available, demand)
+    #: rather than the maximum. CP-19 integrates this to get fuel burned, so
+    #: reporting the cap here would burn fuel the car never used.
+    p_ice_est_kw: float = 0.0
     envelope_cap_kw: float | None = None
     envelope_violation: bool = False
     violation_margin_kw: float | None = None
@@ -248,10 +252,14 @@ def segment_power(
     # Under braking the wheel power is negative and the ICE contributes nothing
     # to be offset, so the shortfall is recovery rather than a negative demand.
     if total >= 0:
-        p_k = total / parameters.eta_drivetrain - max(0.0, ice)
-        deploy = max(0.0, p_k)
+        demand = total / parameters.eta_drivetrain
+        # The engine supplies what is demanded, up to what it has. Recording the
+        # maximum instead would have CP-19 burn fuel the car never used.
+        ice_used = min(max(0.0, ice), demand)
+        deploy = max(0.0, demand - ice_used)
         harvest = 0.0
     else:
+        ice_used = 0.0
         deploy = 0.0
         harvest = -total * parameters.eta_drivetrain
 
@@ -270,6 +278,7 @@ def segment_power(
         p_wheel_kw=total,
         ers_deploy_power_est_kw=deploy,
         ers_harvest_power_est_kw=harvest,
+        p_ice_est_kw=ice_used,
         envelope_cap_kw=cap,
         envelope_violation=violation,
         violation_margin_kw=margin,
