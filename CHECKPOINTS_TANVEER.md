@@ -56,7 +56,7 @@ Each checkpoint has the same shape:
 | 03 | Rule config skeleton + **speed-dependent power envelope**, all tracks | M18 | ✅ |
 | 04 | Build the 20 m lake | Phase 2 | ✅ |
 | 05 | **Track segmentation — freeze `segment_id`** | M03 | ✅ |
-| 06 | Track-relative weather | M33 | ◐ |
+| 06 | Track-relative weather | M33 | ✅ |
 | 07 | Practice lap classifier | M01 | ☐ |
 | 08 | Tyre degradation and normalised pace | M30 | ◐ |
 | 09 | Segment baselines | M04 | ✅ |
@@ -806,12 +806,17 @@ wet_track_flag           = bool(wR)
 
 ### ✅ Completed
 
-2026 Australian Grand Prix Race deterministic local build: **29,508** C1-keyed
-overlay rows, **0** pre-first extrapolations and **0** post-final holds; one C1
-row without an entry clock is explicitly `MISSING_SEGMENT_ENTRY_TIME`, never
-filled. British GP Race was used only for final deterministic feature validation
-(34,173 rows; 0/0 extrapolation/hold; all available rows dry). Full suite:
-**446 passed, 7 skipped** (`.venv/bin/python -m pytest -q`).
+Revalidated 2026 Australian Grand Prix Race with
+`m33_segment_weather_overlay_v1` at `c681dad002fa0c932465db84dba8b2295d760351`:
+**29,508** C1-keyed overlay rows, **0** pre-first extrapolations and **0**
+post-final holds; one C1 row without an entry clock is explicitly
+`MISSING_SEGMENT_ENTRY_TIME`, never filled. Air-density proxy was 1.180692 to
+1.187100 kg/m³ and the wind-vector identity error was 8.9e-16. British GP Race
+was used only for final deterministic feature validation (34,173 rows; 0/0
+extrapolation/hold; all available rows dry; density 1.171139 to 1.178409
+kg/m³). Both circuits have positive and negative headwind components over the
+lap; raw wind bearing remains non-model/live-safe. Full suite: **618 passed,
+7 skipped** (`.venv/bin/python -m pytest -q`).
 
 ---
 
@@ -862,8 +867,8 @@ Record `provenance: DERIVED` for all of these, and store the thresholds in `conf
 
 ### Validation — not complete
 
-2026 local Practice 1 validation covered 17 lake partitions / 9,488 accepted
-laps (British GP included only as deterministic validation). M01 v2 uses PUSH
+Revalidated 2026 local Practice 1 on 17 lake partitions / 9,488 accepted laps
+(British GP included only as deterministic validation). M01 v2 uses PUSH
 ≤108% of the causal driver-session best with tyre life ≤5, a one-UNKNOWN
 candidate bridge only where its own green/time/life values preserve the actual
 run, LONG_RUN ≥4 consecutive green laps with strictly increasing life and <3%
@@ -872,12 +877,20 @@ precede source timing-quality flags so pit transitions remain auditable.
 
 The permitted PUSH relaxation changed 1,095 → 1,099 PUSH laps (11.54% →
 11.58%); LONG_RUN remained 880 (9.27%) because the strict causal run rules
-admit no arbitrary slow/missing bridge. Pit labels now reconcile at 1,430/1,430
-IN_LAP and 1,607/1,607 OUT_LAP; INVALID fell 27.41% → 5.47% and INTERRUPTED
-3.28% → 3.05%. UNKNOWN only fell 34.57% → 34.53%. CP-07 remains unchecked:
-UNKNOWN is not <15% and LONG_RUN is not within 20–50% without non-causal
-backfill or labels unsupported by the documented rules. Five PUSH spot checks
-passed; 458 passed, 7 skipped.
+admit no arbitrary slow/missing bridge. Pit labels reconcile at 1,430/1,430
+IN_LAP and 1,607/1,607 OUT_LAP; INVALID is 5.47% and INTERRUPTED 3.05%.
+UNKNOWN remains 3,276 (34.53%): 2,901 are high-life laps without a qualifying
+causal long run, 370 are low-life laps outside the PUSH band or before a run is
+established, and 5 lack positive tyre life. The corresponding causal long-run
+rejection audit is 1,369 spread failures, 1,059 run starts/resets, 825 runs
+shorter than four laps, 18 lap-number gaps, and 5 missing tyre-life values.
+CP-07 remains unchecked: UNKNOWN is not <15% and LONG_RUN is not within
+20–50% without non-causal backfill or labels unsupported by the documented
+rules. No source-quality exclusion was proposed: all 17 partitions contain
+laps, while raw incomplete/non-green evidence remains represented by existing
+labels. The next action is a separately specified, source-supported clean-run
+category or a documented contract revision—not threshold relaxation. Full
+suite: **618 passed, 7 skipped**.
 
 ---
 
@@ -923,6 +936,20 @@ Normalise by the driver's clean-air reference for the circuit so it is comparabl
 ### Deliverables
 
 `src/trackshift/features/tyre_pace.py`, `tests/test_tyre.py`, `tyre_degradation_proxy` on `segments`, registry entries.
+
+### Validation — remains partial
+
+Revalidated `m30_tyre_pace_overlay_v1` at
+`c681dad002fa0c932465db84dba8b2295d760351` over 2026 Race/Sprint C1 rows,
+with British GP excluded: 408,078 segment rows, 15,038 laps, 5,663 reconstructed
+stints, 873 usable stints, and 7,258 laps with normalised pace available.
+There are 2,101 explicit insufficient-causal-history rows; rolling resets are
+recorded for session start, C7 race-control transition, lap gap, pit metadata,
+pit transition, and invalid timing metadata. Fuel context remains
+`UNAVAILABLE_C5`: the public C5 module exposes a pure inferred fuel curve but
+does not yet materialise a C1-keyed, decision-point-valid fuel input for M30.
+No fuel correction was added. CP-08 remains partial because CP-07 remains
+incomplete, despite its causal, C7-aware core and passing tests.
 
 ---
 
