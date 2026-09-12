@@ -82,6 +82,10 @@ def load_opportunities(root: Path) -> tuple[Any, list[str]]:
     """
     import pandas as pd
 
+    # ``argparse`` preserves a relative --opportunities-root as relative.  The
+    # manifest provenance below is repository-relative, so resolve both the
+    # root and each discovered partition before calling ``relative_to``.
+    root = root.expanduser().resolve()
     paths = sorted(root.glob("event=*/opportunities.parquet"))
     if not paths:
         raise SystemExit(
@@ -95,7 +99,7 @@ def load_opportunities(root: Path) -> tuple[Any, list[str]]:
         frames.append(frame)
         # posix separators so a manifest written on Windows compares byte-for-byte
         # against one written on Linux (MODELS.md section 6.3).
-        sources.append(path.relative_to(ROOT).as_posix())
+        sources.append(path.resolve().relative_to(ROOT.resolve()).as_posix())
     if len(schemas) > 1:
         raise SystemExit(
             f"opportunity partitions under {root} disagree on their columns; "
