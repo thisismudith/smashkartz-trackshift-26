@@ -181,3 +181,56 @@ def test_label_appears_and_is_width_bounded():
     p.set_label("short")
     # Padding keeps the line a stable width so redraws do not leave debris.
     assert len(first) == len(p.render())
+
+
+# --------------------------------------------------------------- heartbeat
+def test_heartbeat_redraws_without_advancing():
+    """Long gaps between ticks must still look alive.
+
+    The lake build ticks once per finished session, so a five-session stage
+    printed nothing for a minute -- indistinguishable from a hang.
+    """
+    stream = io.StringIO()
+    p = Progress(100, stream=stream, min_interval=0)
+    p.heartbeat()
+    assert p.done == 0
+    assert stream.getvalue()
+
+
+def test_heartbeat_is_rate_limited_like_tick():
+    stream = io.StringIO()
+    p = Progress(100, stream=stream, min_interval=3600)
+    for _ in range(20):
+        p.heartbeat()
+    assert stream.getvalue().count("\n") <= 1
+
+
+def test_heartbeat_is_silent_when_disabled():
+    stream = io.StringIO()
+    p = Progress(100, enabled=False, stream=stream)
+    p.heartbeat()
+    assert stream.getvalue() == ""
+
+
+def test_eta_shows_placeholder_before_the_first_tick():
+    """An ETA computed from zero progress would be meaningless."""
+    p = Progress(100, stream=io.StringIO())
+    assert "ETA --" in p.render()
+    p.tick(10)
+    assert "ETA --" not in p.render()
+
+
+def test_elapsed_is_shown_on_the_line():
+    """With chunky ticks, elapsed is the reassurance ETA cannot give yet."""
+    p = Progress(100, stream=io.StringIO())
+    assert "elapsed" in p.render()
+
+
+def test_weighted_ticks_move_the_bar_proportionally():
+    """The lake build ticks by lap count, not session count, because sessions
+    differ by an order of magnitude."""
+    p = Progress(2644, stream=io.StringIO())
+    p.tick(521)
+    assert "19.7%" in p.render()
+    p.tick(965)
+    assert "56.2%" in p.render()
