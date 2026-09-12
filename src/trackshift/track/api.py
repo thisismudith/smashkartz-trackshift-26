@@ -11,6 +11,15 @@ from .baselines import (
     build_segment_baselines,
     residual_at_use_time,
 )
+from .weather import (
+    WEATHER_KEY_COLUMNS,
+    WEATHER_OVERLAY_COLUMNS,
+    WEATHER_OVERLAY_SCHEMA_VERSION,
+    WeatherOverlayError,
+    build_weather_overlay,
+    join_weather_overlay,
+    load_weather_overlay,
+)
 
 __all__ = [
     "BASELINE_LEVELS",
@@ -19,4 +28,11 @@ __all__ = [
     "BaselineBuildResult",
     "build_segment_baselines",
     "residual_at_use_time",
+    "WEATHER_KEY_COLUMNS",
+    "WEATHER_OVERLAY_COLUMNS",
+    "WEATHER_OVERLAY_SCHEMA_VERSION",
+    "WeatherOverlayError",
+    "build_weather_overlay",
+    "join_weather_overlay",
+    "load_weather_overlay",
 ]

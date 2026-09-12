@@ -48,7 +48,7 @@ datasets:
     partitioning: year / event / session
     primary_key: [year, event, session, driver, lap, segment_id]
     producer: scripts/features/build_segments.py
-    consumers: [M04, M05, M06, M08, M14, M16, M19, M22]
+    consumers: [M04, M05, M06, M08, M14, M16, M19, M22, M33]
     live_status: MIXED
     status: planned
     notes: >-
@@ -56,6 +56,25 @@ datasets:
       the join key for every downstream table, so changing it invalidates them
       all. Full-segment summaries are OFFLINE_ONLY; live columns are aligned to
       segment entry.
+
+  - name: segment_weather_overlay
+    description: >-
+      Versioned weather overlay keyed one-to-one to C1 segment rows. It aligns
+      raw session weather to the causal segment-entry clock and projects wind
+      relative to track heading without mutating the C1 table.
+    source: segments, data/raw[/tracinginsights]/<year>/<event>/<session>/weather.json
+    schema_version: m33_segment_weather_overlay_v1
+    partitioning: circuit / year / session
+    primary_key: [year, event, session, driver, lap, segment_id, geometry_version, boundary_hash]
+    producer: scripts/features/build_weather_overlay.py
+    consumers: [M06, M08, M14, M15, M16]
+    live_status: MIXED
+    status: built
+    notes: >-
+      Contract M33 / CP-06. Raw air, track, humidity, pressure, rain, speed and
+      bearing context retain OBSERVED provenance where present. wind_direction_deg
+      is not LIVE_SAFE; only the heading-relative wind components are live model
+      inputs. Pre-first observations and post-final holds are explicit row flags.
 
   - name: driver_segment_baselines
     description: Per-driver median reference per track segment (section 14).

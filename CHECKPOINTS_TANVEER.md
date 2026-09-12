@@ -56,7 +56,7 @@ Each checkpoint has the same shape:
 | 03 | Rule config skeleton + **speed-dependent power envelope**, all tracks | M18 | ✅ |
 | 04 | Build the 20 m lake | Phase 2 | ☐ |
 | 05 | **Track segmentation — freeze `segment_id`** | M03 | ☐ |
-| 06 | Track-relative weather | M33 | ☐ |
+| 06 | Track-relative weather | M33 | ✅ |
 | 07 | Practice lap classifier | M01 | ☐ |
 | 08 | Tyre degradation and normalised pace | M30 | ☐ |
 | 09 | Segment baselines | M04 | ☐ |
@@ -790,7 +790,17 @@ wet_track_flag           = bool(wR)
 
 ### Deliverables
 
-`src/trackshift/track/weather.py`, `tests/test_weather.py`, weather columns on `segments`, registry entries.
+`src/trackshift/track/weather.py`, `scripts/features/build_weather_overlay.py`,
+`tests/test_weather.py`, versioned C1-keyed weather overlay, registry entries.
+
+### ✅ Completed
+
+2026 Australian Grand Prix Race deterministic local build: **29,508** C1-keyed
+overlay rows, **0** pre-first extrapolations and **0** post-final holds; one C1
+row without an entry clock is explicitly `MISSING_SEGMENT_ENTRY_TIME`, never
+filled. British GP Race was used only for final deterministic feature validation
+(34,173 rows; 0/0 extrapolation/hold; all available rows dry). Full suite:
+**446 passed, 7 skipped** (`.venv/bin/python -m pytest -q`).
 
 ---
 

@@ -29,6 +29,24 @@
 
 schema_version: 1
 
+weather_alignment_defaults: &weather_alignment_defaults
+  source: C1 segment-entry clock and raw session weather.json
+  derivation: scripts/features/build_weather_overlay.py
+  allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+  supported_years: [2022, 2023, 2024, 2025, 2026]
+  live_safe: false
+  provenance: DERIVED
+  availability_scope: partial
+  source_gated: false
+  decision_checkpoint: null
+  uncertainty_field: null
+  causal_status: CAUSAL
+  counterfactual_safe: true
+  regulation_version: null
+  regulation_source: null
+  interaction_group: [weather, audit]
+  consuming_models: []
+
 # Defaults for the C8/M06 pairwise-table columns added in CP-04.  Individual
 # entries override availability/provenance when the public C2/C5 contract is
 # not yet materialised.  YAML merges keep this generated-table schema readable
@@ -52,6 +70,12 @@ pairwise_feature_defaults: &pairwise_feature_defaults
   consuming_models: [M06, M08]
 
 features:
+
+  # ------------------------------------------------------- M33 weather overlay
+  # C1 remains immutable. These columns are emitted in its keyed overlay by
+  # scripts/features/build_weather_overlay.py. Raw weather channels retain the
+  # source's OBSERVED provenance; time alignment and physical projections are
+  # explicitly DERIVED.
 
   # ------------------------------------------------------------------ keys
   - name: year
@@ -2039,3 +2063,142 @@ features:
     regulation_source: observed DRS channel and race-control messages
     interaction_group: [historical_drs]
     consuming_models: [M07, M10, M13]
+
+  # ------------------------------------------------------- M33 / CP-06 weather
+  - <<: *weather_alignment_defaults
+    name: segment_entry_session_time_s
+    definition: Causal session clock at segment entry, used as the weather alignment key.
+    unit: s
+    live_safe: true
+    interaction_group: [weather, time]
+    consuming_models: [M33]
+
+  - <<: *weather_alignment_defaults
+    name: weather_sample_time_before_s
+    definition: Timestamp of the weather observation at or before the aligned segment entry.
+    unit: s
+
+  - <<: *weather_alignment_defaults
+    name: weather_sample_time_after_s
+    definition: Timestamp of the weather observation at or after the aligned segment entry.
+    unit: s
+
+  - <<: *weather_alignment_defaults
+    name: weather_available
+    definition: Whether a usable weather time series was available for the C1 row's session.
+    unit: null
+
+  - <<: *weather_alignment_defaults
+    name: weather_alignment_status
+    definition: "Alignment verdict: MATCHED_SAMPLE, INTERPOLATED, PRE_FIRST_EXTRAPOLATED, POST_FINAL_HELD, or an explicit missing reason."
+    unit: null
+
+  - <<: *weather_alignment_defaults
+    name: weather_missing_reason
+    definition: Explicit reason for unavailable weather values; never silently represented as numeric zero or NaN.
+    unit: null
+
+  - <<: *weather_alignment_defaults
+    name: weather_extrapolated
+    definition: True when segment entry precedes the first weather sample and the first sample is held.
+    unit: null
+
+  - <<: *weather_alignment_defaults
+    name: weather_post_final_sample
+    definition: True when segment entry follows the final weather sample and the final sample is held.
+    unit: null
+
+  - <<: *weather_alignment_defaults
+    name: air_temperature_c
+    definition: Raw weather-feed air temperature (wAT), aligned to segment entry.
+    unit: degC
+    provenance: OBSERVED
+    live_safe: true
+    interaction_group: [weather]
+    consuming_models: [M08, M15, M16]
+
+  - <<: *weather_alignment_defaults
+    name: track_temperature_c
+    definition: Raw weather-feed track temperature (wTT), aligned to segment entry.
+    unit: degC
+    provenance: OBSERVED
+    live_safe: true
+    interaction_group: [weather]
+    consuming_models: [M08, M15, M16]
+
+  - <<: *weather_alignment_defaults
+    name: humidity_pct
+    definition: Raw weather-feed relative humidity (wH), aligned to segment entry.
+    unit: pct
+    provenance: OBSERVED
+    live_safe: true
+    interaction_group: [weather]
+    consuming_models: [M15, M16]
+
+  - <<: *weather_alignment_defaults
+    name: air_pressure_hpa
+    definition: Raw weather-feed air pressure (wP), aligned to segment entry.
+    unit: hPa
+    provenance: OBSERVED
+    live_safe: true
+    interaction_group: [weather]
+    consuming_models: [M14, M15, M16]
+
+  - <<: *weather_alignment_defaults
+    name: rain_observed
+    definition: Raw weather-feed rain indicator (wR), held causally between observations.
+    unit: null
+    provenance: OBSERVED
+    live_safe: true
+    interaction_group: [weather]
+    consuming_models: [M08, M15, M16]
+
+  - <<: *weather_alignment_defaults
+    name: wind_speed_mps
+    definition: Raw weather-feed wind speed (wWS), aligned to segment entry and retained for audit; live wind models use only heading-relative components.
+    unit: m/s
+    provenance: OBSERVED
+    live_safe: false
+    interaction_group: [weather]
+    consuming_models: []
+
+  - <<: *weather_alignment_defaults
+    name: wind_direction_deg
+    definition: Raw weather-feed compass bearing wind comes FROM (wWD), retained for audit only and never a live model feature.
+    unit: deg
+    provenance: OBSERVED
+    live_safe: false
+    interaction_group: [weather, raw_bearing]
+    consuming_models: []
+
+  - <<: *weather_alignment_defaults
+    name: wind_head_component_mps
+    definition: Wind speed projected along travel direction; positive means headwind.
+    unit: m/s
+    live_safe: true
+    interaction_group: [weather, track_relative_wind]
+    consuming_models: [M06, M08, M14, M15, M16]
+
+  - <<: *weather_alignment_defaults
+    name: wind_cross_component_mps
+    definition: Wind speed projected across travel direction; positive means wind from the right.
+    unit: m/s
+    live_safe: true
+    interaction_group: [weather, track_relative_wind]
+    consuming_models: [M06, M08, M14, M15, M16]
+
+  - <<: *weather_alignment_defaults
+    name: air_density_proxy
+    definition: Ideal-gas air-density proxy from aligned raw pressure and air temperature.
+    unit: kg/m3
+    live_safe: true
+    interaction_group: [weather, physics]
+    consuming_models: [M14, M15, M16]
+
+  - <<: *weather_alignment_defaults
+    name: wet_track_flag
+    definition: Boolean wetness context derived from the aligned raw rain indicator.
+    unit: null
+    live_safe: true
+    interaction_group: [weather]
+    consuming_models: [M08, M15, M16]
