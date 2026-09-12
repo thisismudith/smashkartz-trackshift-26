@@ -5,9 +5,22 @@ Execution plan for **Owner B (Tanveer)**: Chain R (rules), Chain P (pass probabi
 - `TrackShift AGENTS.md` — engineering contract (what the system is). Section refs below are `§N` in that file.
 - `MODELS.md` — ownership split, inventory IDs (M01–M34), interface contracts (C1–C10).
 - `API.md` — the UI-facing surface every model must eventually expose.
+- `CHECKPOINTS_RISHABH.md` — Owner A's plan (Chains S and V, foundations M02, M05, M06, M29).
+- `CHECKPOINTS_INTEGRATION.md` — the joint integration plan, owned by Rishabh.
 - **`CHECKPOINTS_TANVEER.md`** (this file) — the ordered checkpoints to actually build them.
 
-**Scope: Owner B only.** Every checkpoint here is Tanveer's to build. Rishabh's items (M02, M05, M06, M08, M09, M22–M27, M29) appear only where they block or unblock you, and are labelled as such. His equivalent plan, if written, belongs in a separate file.
+**Scope: Owner B only.** Every checkpoint here is Tanveer's to build. Rishabh's items (M02, M05, M06, M08, M09, M22–M27, M29) appear only where they block or unblock you, and are labelled as such.
+
+> ⚠️ **CP numbers are per-owner and they collide.** Each plan numbers its own
+> checkpoints from CP-00, so the same number means different work in each file.
+> Rishabh's CP-01 is race-context and the C7 contract; **this file's CP-01 is the
+> local data audit.** They are unrelated.
+>
+> Never read a completed CP-N in `CHECKPOINTS_RISHABH.md` as progress against
+> CP-N here. Always name the owner ("Rishabh's CP-04", "Tanveer's CP-04").
+> Rishabh's work matters to this plan only where it delivers a named contract
+> (C7, C8, C9) that a checkpoint here depends on — cite the **contract**, never
+> his checkpoint number. Tick boxes only in the tracker below.
 
 Written against `TrackShift AGENTS.md` at commit `7d2f5fd`.
 
