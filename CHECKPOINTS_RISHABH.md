@@ -45,7 +45,7 @@ Each checkpoint uses the same structure.
 | 03 | Dynamic pairs and battle episodes | M05, C8 | ☑ |
 | 04 | Causal pairwise features | M06, C8 | ☑ |
 | 05 | Rival-state feature dataset | M08 | ☐ |
-| 06 | Synthetic labelled trajectories | M09b | ☐ |
+| 06 | Synthetic labelled trajectories | M09b | ☑ |
 | 07 | Rival-state benchmark | M09, C10 | ☐ |
 | 08 | Rival-side regulation-era evaluation | M13 | ☐ |
 | 09 | Strategic-state adapter and stubs | C3 to C6 | ☑ |
@@ -256,6 +256,14 @@ backfill was used. Validation: `.venv/bin/python -m pytest -q` → 555 passed,
 
 **src/trackshift/features/rival_state_features.py**, **scripts/features/build_rival_features.py**, processed feature dataset, tests, manifest.
 
+### Validation — not complete
+
+M08 producer and causal/provenance tests exist. A non-British Australian Race
+materialisation produced 6,572 C7-eligible C8/M06/M08 rows from 29,508 C7 rows
+and 746 persisted C9 battle assignments (`/tmp/chain-s`). C5 and C6 have no
+joined decision-point materialisation and remain null with explicit reasons.
+The all-event spine remains outstanding, so CP-05 remains unchecked.
+
 ---
 
 # CP-06: Synthetic labelled trajectories
@@ -284,6 +292,14 @@ backfill was used. Validation: `.venv/bin/python -m pytest -q` → 555 passed,
 ### Deliverables
 
 **src/trackshift/rival/synthetic.py**, **tests/test_rival_synthetic.py**, synthetic validation artifacts.
+
+### ✅ Completed
+
+Seeded M09b regression and benchmark artifacts were generated locally with
+seeds 1701 and 2903. All four declared synthetic states occur with variable
+2–7 segment dwell durations; merged CONSERVING/DERATING scenarios are explicit.
+Separate-seed recovery was 1.00 versus 0.25 chance, with CPU inference about
+0.0063 ms/row. Labels are `SYNTHETIC`, never real-driver tactical truth.
 
 ---
 
@@ -323,6 +339,13 @@ backfill was used. Validation: `.venv/bin/python -m pytest -q` → 555 passed,
 
 **src/trackshift/rival/api.py**, HMM, HSMM, GBM, neural modules, training and evaluation scripts, rival artifacts, rival report.
 
+### Validation — not complete
+
+CPU-only interpretable candidate comparison returns a normalised C10
+distribution on synthetic data. Australian Race now has C9-assigned M08 rows,
+but no real tactical labels exist for likelihood/calibration or next-step
+validation; the simple baseline is not promoted to production.
+
 ---
 
 # CP-08: Rival-side regulation-era evaluation
@@ -347,6 +370,13 @@ backfill was used. Validation: `.venv/bin/python -m pytest -q` → 555 passed,
 ### Deliverables
 
 **src/trackshift/rival/era.py**, comparison in rival report, selected strategy in manifest.
+
+### Validation — not complete
+
+The era harness explicitly excludes historical DRS from 2026 Overtake inputs
+and defaults to 2026-only until held-out 2026 evidence exists. Australian M08
+is materialised, but historical M08 has not been built, so no regulation-era
+comparison can yet be reported.
 
 ---
 

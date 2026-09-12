@@ -25,7 +25,11 @@ from simdata.track import (GRID_DUP_STATION_M, LATERAL_REJECT_M, MAX_PIT_LAT_M,
                             geometry_lap_reject, grid, pick_geometry_laps, pit_lane,
                             pit_lane_path, pit_runs, timing_lines)
 
+# Support both the simulator's historical export and TrackShift's documented
+# raw-mirror layout.  These are real-data tests, not tests of a personal path.
 DATA_ROOT = pathlib.Path(__file__).resolve().parent.parent.parent / "data" / "2026"
+if not DATA_ROOT.exists():
+    DATA_ROOT = pathlib.Path(__file__).resolve().parent.parent.parent / "data" / "raw" / "2026"
 
 
 def _session(event: str, name: str = "Race"):

@@ -239,14 +239,17 @@ datasets:
   - name: rival_state_features
     description: Per-battle-segment features for latent rival tactical state (section 24).
     source: segments, pairwise_segment_features, baselines
-    schema_version: null
+    schema_version: m08_rival_state_features_v1
     partitioning: year / event
     primary_key: [battle_id, segment_index]
     producer: scripts/features/build_rival_features.py
     consumers: [M09]
     live_status: LIVE_SAFE
     status: planned
-    notes: Contract C8 input, owned by Rishabh. Normal-race-eligible segments only.
+    notes: >-
+      Contract C8/M06 input, owned by Rishabh. Normal-race-eligible segments
+      only; C5/C6 stay null with reason until causal public materialisations
+      are available. C9 split reference is recorded in the manifest.
 
   - name: physics_calibration
     description: >-
