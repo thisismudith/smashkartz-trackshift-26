@@ -122,3 +122,91 @@
   border-top: 1px solid var(--haas-grey);
   padding-top: 1rem;
 }
+
+/* --- hub additions ------------------------------------------------------ */
+
+.buttonQuiet {
+  display: inline-block;
+  padding: 0.7rem 1.4rem;
+  border: 1px solid #2a2a2a;
+  color: var(--haas-grey);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-size: 0.8rem;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.buttonQuiet:hover,
+.buttonQuiet:focus-visible {
+  color: var(--haas-white);
+  border-color: var(--haas-grey);
+  outline: none;
+}
+
+.nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+/* Stat tiles: a single headline number each. Not charts -- there is nothing to compare. */
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: 1px;
+  background: #2a2a2a;
+  border: 1px solid #2a2a2a;
+}
+
+.stat {
+  background: var(--haas-black);
+  padding: 1rem 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.statValue {
+  font-family: var(--font-display), Impact, sans-serif;
+  font-weight: 900;
+  font-stretch: 118%;
+  font-size: clamp(1.6rem, 3.4vw, 2.4rem);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--haas-white);
+}
+
+.approx {
+  color: var(--haas-grey);
+  font-size: 0.6em;
+  margin-right: 0.12em;
+}
+
+.statLabel {
+  font-size: 0.64rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--haas-grey);
+}
+
+/* the card is now a link, so it needs its own hover affordance */
+.card:hover,
+.card:focus-visible {
+  border-color: var(--haas-white);
+  outline: none;
+}
+
+.card:hover h2 {
+  color: var(--haas-red);
+}
+
+.badgePending {
+  align-self: flex-start;
+  margin-top: auto;
+  font-size: 0.6rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #d0a608;
+  border: 1px solid #a88606;
+  padding: 0.12rem 0.45rem;
+}

@@ -1,6 +1,13 @@
 # Raw and derived data is regenerable by the build scripts and can reach
 # many GB once the 20 m lake is built (AGENTS.md sections 10, 48). Never commit it.
-data/
+#
+# ANCHORED with a leading slash on purpose. Unanchored, "data/" matches a directory
+# named data at ANY depth, which silently excluded 12 SOURCE files from version
+# control: frontend/src/sim/data/ (the entire Python->browser data seam: codec.ts,
+# manifest.ts, source.ts and their tests) and scripts/data/ (build_lake.py,
+# verify_lake.py, inventory.py and the download scripts). They were never committed and
+# a `git clean -xdf` would have deleted them with no trace in history.
+/data/
 frontend/public/sim/
 env_sim/
 artifacts/schema_audit/*.csv

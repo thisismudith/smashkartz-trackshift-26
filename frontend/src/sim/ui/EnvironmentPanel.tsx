@@ -1,6 +1,10 @@
 "use client";
 
+import { Fragment } from "react";
 import type { NeutralisationInterval, WeatherSeries } from "../contract/types";
+import {
+  describePositionIntegrity, positionIntegrityUnknown, type SessionPositionIntegrity,
+} from "../replay/dashboard";
 import styles from "./panels.module.css";
 
 /** Index of the last weather reading at or before `t`. The feed samples roughly once
@@ -34,17 +38,23 @@ function show(v: number | undefined, digits: number, unit: string): string {
  * ERS estimate in the driver panel reads the way it does.
  */
 export function EnvironmentPanel({
-  weather, sessionTime, duration, totalLaps, neutralisation,
+  weather, sessionTime, duration, totalLaps, neutralisation, positionIntegrity,
 }: {
   weather: WeatherSeries | null;
   sessionTime: number;
   duration: number;
   totalLaps: number | null;
   neutralisation: NeutralisationInterval | null;
+  /** What the build reports about the positions it could and could not measure in this
+   * session. Undefined means the build did not report it -- which the panel prints as
+   * "unknown", never as "none". */
+  positionIntegrity?: SessionPositionIntegrity | null;
 }) {
   const i = weather ? readingAt(weather.tS, sessionTime) : -1;
   const raining = i >= 0 && weather!.rain[i] === true;
   const bearing = i >= 0 ? weather!.windFromDeg?.[i] : undefined;
+  const integrity = describePositionIntegrity(positionIntegrity);
+  const integrityUnknown = positionIntegrityUnknown(positionIntegrity);
 
   return (
     <div className={styles.panel}>
@@ -94,6 +104,34 @@ export function EnvironmentPanel({
         <p className={styles.provNote}>This session carries no weather series.</p>
       )}
 
+      {/* Whether this session's positions are measurements at all is a property of the
+          session, not of any one car, so it belongs here beside the flag and the clock.
+          A build that does not report the counts leaves them UNKNOWN: printing "none"
+          would turn a missing measurement into a clean bill of health. */}
+      <div className={styles.provRow}>
+        <span className={styles.provPill} data-kind={integrityUnknown ? "missing" : "observed"}>
+          Position data
+        </span>
+        <span>what this build could measure</span>
+      </div>
+
+      <dl className={styles.grid}>
+        {integrity.map((line) => (
+          <Fragment key={line.label}>
+            <dt>{line.label}</dt>
+            <dd className={line.alert ? styles.flagActive : undefined}>{line.value}</dd>
+          </Fragment>
+        ))}
+      </dl>
+
+      {integrityUnknown ? (
+        <p className={styles.provNote}>
+          This build does not report how many position samples it withdrew or how many
+          laps it placed from the distance channel, so neither is known. Unknown is not
+          zero.
+        </p>
+      ) : null}
+
       <details className={styles.noteFold}>
         <summary>Why these matter</summary>
         <p className={styles.provNote}>
@@ -101,6 +139,14 @@ export function EnvironmentPanel({
           they drive the drag term behind the ERS estimate rather than merely describing
           the day. The feed samples weather about once a minute, so the values step
           rather than glide; the last reading is held, not interpolated.
+        </p>
+        <p className={styles.provNote}>
+          Withdrawn samples are positions the feed reported but the build refused: the
+          car&apos;s own speed channel says it moved while its x/y did not, so the
+          coordinate is a stuck placeholder rather than a place. Derived laps are laps
+          with no usable x/y at all, positioned by stretching the wheel-speed distance
+          channel onto the ring — the car is on the centreline because nothing measured
+          says otherwise, and no gap is computed from it.
         </p>
       </details>
     </div>

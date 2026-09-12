@@ -1,0 +1,344 @@
+/* Filter kit. Same surface language as the rest of the app: square corners, 1px borders,
+   uppercase letter-spaced micro-labels, flat alpha blends of the Haas palette. No blur, no
+   drop shadows, no gradients -- the one exception is the panel, which needs a solid ground so
+   it is readable over a chart. */
+
+.root {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+/* --- trigger ------------------------------------------------------------- */
+
+.trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: none;
+  border: 1px solid #2a2a2a;
+  color: var(--haas-white);
+  font: inherit;
+  font-size: 0.72rem;
+  padding: 0.4rem 0.6rem;
+  cursor: pointer;
+  transition: border-color 0.12s ease;
+  max-width: 100%;
+}
+
+.trigger:hover:not(:disabled),
+.trigger[aria-expanded="true"] {
+  border-color: var(--haas-grey);
+}
+
+.trigger:focus-visible {
+  outline: 1px solid var(--haas-red);
+  outline-offset: -2px;
+}
+
+.trigger:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.triggerLabel {
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--haas-grey);
+  font-size: 0.64rem;
+  white-space: nowrap;
+}
+
+.triggerValue {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.caret {
+  width: 0;
+  height: 0;
+  margin-left: auto;
+  border-left: 3.5px solid transparent;
+  border-right: 3.5px solid transparent;
+  border-top: 4px solid var(--haas-grey);
+  flex: none;
+}
+
+/* --- panel --------------------------------------------------------------- */
+
+.panel {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 30;
+  width: min(22rem, calc(100vw - 2rem));
+  background: #111111;
+  border: 1px solid var(--haas-grey);
+  padding: 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.search {
+  background: #0b0b0b;
+  border: 1px solid #2a2a2a;
+  color: var(--haas-white);
+  font: inherit;
+  font-size: 0.78rem;
+  padding: 0.4rem 0.55rem;
+  border-radius: 0;
+  width: 100%;
+}
+
+.search:focus-visible {
+  outline: none;
+  border-color: var(--haas-red);
+}
+
+.search::placeholder {
+  color: #5a5a5a;
+}
+
+.bulk {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.bulkBtn {
+  background: none;
+  border: 1px solid #2a2a2a;
+  color: var(--haas-grey);
+  font: inherit;
+  font-size: 0.62rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  padding: 0.18rem 0.45rem;
+  cursor: pointer;
+}
+
+.bulkBtn:hover,
+.bulkBtn:focus-visible {
+  color: var(--haas-white);
+  border-color: var(--haas-grey);
+  outline: none;
+}
+
+.bulkCount {
+  margin-left: auto;
+  font-size: 0.6rem;
+  color: #5a5a5a;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.panelNote {
+  font-size: 0.66rem;
+  line-height: 1.45;
+  color: #d0a608;
+  border-left: 2px solid #a88606;
+  padding-left: 0.5rem;
+}
+
+/* --- list ---------------------------------------------------------------- */
+
+.list {
+  list-style: none;
+  max-height: 17rem;
+  overflow-y: auto;
+  margin: 0;
+  padding: 0;
+}
+
+.groupList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.groupHead {
+  font-size: 0.58rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #5a5a5a;
+  padding: 0.45rem 0 0.2rem;
+  position: sticky;
+  top: 0;
+  background: #111111;
+}
+
+.option {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  width: 100%;
+  background: none;
+  border: 0;
+  color: var(--haas-white);
+  font: inherit;
+  font-size: 0.76rem;
+  padding: 0.26rem 0.3rem;
+  cursor: pointer;
+  text-align: left;
+}
+
+.option:hover:not(:disabled) {
+  background: rgba(174, 174, 174, 0.12);
+}
+
+.option:focus-visible {
+  outline: 1px solid var(--haas-red);
+  outline-offset: -1px;
+}
+
+.option:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* A square that fills red when selected -- reads at a glance and needs no icon font. */
+.check {
+  width: 0.7rem;
+  height: 0.7rem;
+  border: 1px solid var(--haas-grey);
+  flex: none;
+}
+
+.check[data-on="true"] {
+  background: var(--haas-red);
+  border-color: var(--haas-red);
+}
+
+.optSwatch {
+  width: 0.75rem;
+  height: 0.2rem;
+  flex: none;
+}
+
+.optSwatch[data-dashed="true"] {
+  -webkit-mask-image: linear-gradient(90deg, #000 0 40%, transparent 40% 62%, #000 62% 100%);
+  mask-image: linear-gradient(90deg, #000 0 40%, transparent 40% 62%, #000 62% 100%);
+}
+
+.optLabel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.optMeta {
+  margin-left: auto;
+  font-size: 0.62rem;
+  color: #5a5a5a;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.noMatch {
+  font-size: 0.72rem;
+  color: var(--haas-grey);
+  padding: 0.8rem 0.3rem;
+}
+
+/* --- chips --------------------------------------------------------------- */
+
+.chips {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin: 0;
+  padding: 0;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  background: none;
+  border: 1px solid #2a2a2a;
+  color: var(--haas-grey);
+  font: inherit;
+  font-size: 0.64rem;
+  letter-spacing: 0.06em;
+  padding: 0.14rem 0.35rem;
+  cursor: pointer;
+  font-variant-numeric: tabular-nums;
+}
+
+.chip:hover,
+.chip:focus-visible {
+  color: var(--haas-white);
+  border-color: var(--haas-grey);
+  outline: none;
+}
+
+.chipX {
+  color: #5a5a5a;
+  font-size: 0.8rem;
+  line-height: 1;
+}
+
+.chip:hover .chipX {
+  color: var(--haas-red);
+}
+
+/* --- filter bar ---------------------------------------------------------- */
+
+.bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 0.5rem 0.7rem;
+  padding: 0.7rem 0;
+  border-top: 1px solid #2a2a2a;
+  border-bottom: 1px solid #2a2a2a;
+}
+
+.barActions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-left: auto;
+}
+
+.barReset {
+  background: none;
+  border: 1px solid #2a2a2a;
+  color: var(--haas-grey);
+  font: inherit;
+  font-size: 0.62rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  padding: 0.3rem 0.55rem;
+  cursor: pointer;
+}
+
+.barReset:hover,
+.barReset:focus-visible {
+  color: var(--haas-white);
+  border-color: var(--haas-grey);
+  outline: none;
+}
+
+.barSummary {
+  font-size: 0.64rem;
+  color: #5a5a5a;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 560px) {
+  .trigger {
+    width: 100%;
+  }
+  .root {
+    width: 100%;
+  }
+  .panel {
+    width: 100%;
+  }
+}

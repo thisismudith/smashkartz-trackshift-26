@@ -44,6 +44,16 @@
  *      car is parked nothing about it is being measured any more, so the classification
  *      is the only thing left that can rank it -- measured on the real pack, every one
  *      of the 52 adjacent pairs of classified cars matches the official result.
+ *      A placement owns BOTH of its coordinates: station AND lateral. Telemetry fills in
+ *      speed, gear, throttle and brake on a placed car, never its position.
+ *   4. A DERIVED POSITION IS NOT A MEASURED ONE. A lap the feed had no x/y for is written
+ *      in position-frame B (see `PositionFrame`): its station is the driver's own
+ *      integrated wheel-speed distance linearly rescaled onto one lap of the ring, with
+ *      the lateral hard-zeroed. Those cars are tagged DERIVED, which keeps them out of
+ *      the measured re-ordering in (2) and out of the gap column entirely -- a
+ *      per-driver rescaled integral cannot answer "how long ago was the leader here".
+ *      Measured: every built session is 100 % frame A except monaco-grand-prix/Race,
+ *      which is 91.2 % frame B.
  *
  * Measured effect on the real pack: 96.96 % of adjacent pairs of RUNNING cars are in
  * the same order as the official classification, and the 3 % that are not are live
@@ -62,7 +72,11 @@ import type {
 } from "../contract/types";
 import { type DecodedLap, decodeLap, sampleLap } from "../data/codec";
 import type { RawDriverEntry, RawLapEntry, RawSessionManifest } from "../data/manifest";
-import { trackPointAt } from "../data/manifest";
+import { halfWidthAt, trackPointAt } from "../data/manifest";
+// The two-column grid stagger and the parked queue are PRESENTATION placements, so they
+// legitimately take the presentation layer's car width -- the same 2.0 m the renderer
+// actually draws. Nothing else in this file depends on the renderer.
+import { CAR_RENDER_WIDTH_M } from "../render/presentation";
 
 interface DriverLaps {
   entry: RawDriverEntry;
@@ -77,11 +91,35 @@ interface DriverLaps {
  *            parked queue) -- these are never given a gap either. */
 export type OrderSource = "OFFICIAL" | "MEASURED" | "RULE";
 
+/**
+ * Which coordinate frame the drawn position came from, straight off the lap row the
+ * sample was taken from (`RawLapEntry.positionFrame`, written by scripts/simdata/replay.py).
+ *
+ *   A     the car's own x/y projected onto the ring. A measurement.
+ *   B     NO usable x/y for that lap. replay.py falls back to
+ *         `station = (d - d[0]) / span * ringLength` with `lateral = 0`, i.e. the
+ *         per-driver integrated wheel-speed distance channel linearly rescaled onto one
+ *         lap of the ring, which places the car single-file on the centreline. That is
+ *         a DERIVED quantity, not telemetry.
+ *   null  the position is a RULE placement (grid slot, pit-lane start, parked queue),
+ *         so it came from neither frame.
+ *
+ * Measured across the 18 built packs: every session is 100 % frame A except
+ * monaco-grand-prix/Race, which is 1324 frame-B laps to 128 frame-A (91.2 %). This tag
+ * was carried all the way into RawLapEntry and then read by nobody, so 91 % of Monaco
+ * was presented as measured position and given measured gaps.
+ */
+export type PositionFrame = "A" | "B";
+
 /** What ReplayTimeline actually emits: the shared CarState plus the label saying which
  * signal decided the row's place. Structurally still a CarState, so every consumer
  * written against the contract keeps working. */
 export interface RankedCarState extends CarState {
   orderSource: OrderSource;
+  /** The frame the drawn position came from; null for a RULE placement. Surfaced so a
+   * renderer or panel can mark a frame-B car as not-measured without re-deriving it.
+   * `positionProvenance` already says DERIVED for frame B. */
+  positionFrame: PositionFrame | null;
 }
 
 /** The official classification recorded for a lap, when the feed has one. `pos` is the
@@ -151,13 +189,58 @@ function lapDistanceFraction(
   // The trace covers almost exactly one lap, so one station matches both its start and
   // its end. Lap-relative TIME breaks the tie: past halfway a car cannot be back at the
   // few metres it set off from.
+  //
+  // The tie only EXISTS inside that overlap -- the few tens of metres the trace starts
+  // before the line and therefore drives over twice. Testing `travelled < L/2` instead
+  // applied the correction across the whole first half of the lap, so any car whose lap
+  // was slower early than late (a safety car, traffic, an in/out lap) gained a phantom
+  // whole lap: measured across all 16 packs, 7734 / 294451 running car-instants reported
+  // a lapProgress above 1.02, the board's P1 carried a phantom lap at 48.0 % of sampled
+  // instants at Monza, and 32.0 % of Monza's reported gaps were the clamped value +0.0.
+  // Restricting the window to the real overlap takes those to 836 / 294451, 0.1 % and
+  // 0.0 % respectively, and improves every pack on every one of those measures.
+  const OVERLAP_FRACTION = 0.02; // ~66 m at Monaco, ~140 m at Spa; the trace overlap is tens of metres
   const dur = lap.tS[lap.n - 1];
-  if (dur > 0 && relT > dur * 0.5 && travelled < trackLength * 0.5) travelled += trackLength;
+  if (dur > 0 && relT > dur * 0.5 && travelled < trackLength * OVERLAP_FRACTION) travelled += trackLength;
   return (signedFromLine(lap.stationM[0], trackLength, sfStation) + travelled) / trackLength;
 }
 
-/** Half the lateral separation between the two starting-grid columns, metres. */
-const GRID_LATERAL_M = 1.8;
+/**
+ * Where a two-column placement puts its columns, as a fraction of the road's own
+ * MEASURED half-width: each column's centre sits midway between the racing line and the
+ * edge of the tarmac, so the two columns are separated by one half-width.
+ *
+ * Not a chosen distance. The feed carries no lateral at all on the grid (audit:
+ * observedLateralStd 0.07 m -- every car snapped to the centreline), so the stagger is a
+ * labelled RULE placement, and the only honest thing to scale it by is the width the
+ * track model actually measured at that station. Measured over the 13 built track
+ * models, half-width at the grid slots runs 6.02-7.50 m, so the columns land at
+ * +/-3.01..3.75 m and are 6.02-7.50 m apart -- against the flat +/-1.8 m (3.6 m apart)
+ * this replaced, which read as a single file on screen.
+ */
+const GRID_COLUMN_FRACTION = 0.5;
+
+/** Used only when the track model carries no usable half-width at all (no built pack
+ * does -- every one measures 6.0-7.5 m). Keeps a degenerate model from stacking the
+ * whole field on one line; it is the pre-existing flat stagger, tagged DEFAULT in spirit. */
+const GRID_LATERAL_FALLBACK_M = 1.8;
+
+/**
+ * Signed lateral offset for `slot` of a two-column placement at `stationM`, metres.
+ * Even slots sit on one side, odd on the other, as a real starting grid does.
+ *
+ * Clamped so the car always FITS: the outer edge of a CAR_RENDER_WIDTH_M car may not
+ * pass the measured edge of the road. On a narrow road that pulls the columns in, and on
+ * a road narrower than a car it collapses to a single file (0) rather than drawing cars
+ * off the tarmac.
+ */
+function columnLateral(track: TrackModel, stationM: number, slot: number): number {
+  const sign = slot % 2 === 0 ? -1 : 1;
+  const half = halfWidthAt(track, stationM);
+  if (!Number.isFinite(half) || half <= 0) return sign * GRID_LATERAL_FALLBACK_M;
+  const fits = half - CAR_RENDER_WIDTH_M / 2;
+  return sign * Math.max(0, Math.min(half * GRID_COLUMN_FRACTION, fits));
+}
 
 
 function decodeAll(bin: ArrayBuffer, drivers: RawDriverEntry[]): Map<string, DriverLaps> {
@@ -324,6 +407,19 @@ export class ReplayTimeline implements RaceTimeline {
       % this.track.lengthMetres;
   }
 
+  /** The parked queue's lateral, laid out in the same two columns as the grid.
+   *
+   * It has to be placed explicitly. A finished or retired car used to get a RULE STATION
+   * from parkedStation() and no lateral at all, so sampleAt painted it with the last
+   * lateral its telemetry happened to carry -- measured at the flag on the shipped
+   * packs: 327.00 m at Hungary (the replay.py clip), 60.19 m at Miami, 34.93 m at
+   * Canada, 35.55 m at Monaco, 34.90 m at Britain. Cars drawn tens to hundreds of metres
+   * beside the queue they are supposed to be sitting in. */
+  private parkedLateral(driver: string): number {
+    const idx = this.parkIndex.get(driver) ?? 0;
+    return columnLateral(this.track, this.parkedStation(driver), idx);
+  }
+
   /** The last real sample of a lap: used for the brief, effectively-instantaneous
    * "gap" state between one lap's sesT and the next lap's lST (see currentLap),
    * rather than snapping every such car to the same canonical line point. */
@@ -354,7 +450,7 @@ export class ReplayTimeline implements RaceTimeline {
     lapsDone: number; lapProgress: number; rankProgress: number; stationM: number;
     lapEntry: RawLapEntry | null;
     kind: CarState["status"]; lateralOverride?: number; cur?: { lap: RawLapEntry; idx: number } | null;
-    posProvenance: Provenance; officialPos: number | null;
+    posProvenance: Provenance; officialPos: number | null; positionFrame: PositionFrame | null;
   } {
     const cur = this.currentLap(dl, t);
     // Grid slots sit BEHIND the start/finish line, and a car on the run to the line
@@ -377,27 +473,35 @@ export class ReplayTimeline implements RaceTimeline {
           stationM: pit.exitStation ?? 0,
           lapEntry: first ?? null, kind: "pit", officialPos: null,
           lateralOverride: pit.loopLateral ?? 0,
-          posProvenance: "RULE",
+          posProvenance: "RULE", positionFrame: null,
         };
       }
       const safeSlot = slot >= 0 ? slot : this.gridOrder.length;
       const gridStation = (safeSlot + 1) * -this.track.grid.pitchMetres;
+      const slotStation = ((gridStation % this.track.lengthMetres) + this.track.lengthMetres)
+        % this.track.lengthMetres;
       // A real starting grid is two staggered columns, not a single file on the
       // centreline. The audit found the raw data gives a usable grid ORDER and ~8 m
       // spacing but no lateral at all (every car is snapped to one line), so the
-      // left/right stagger is a labelled RULE-style presentation choice.
-      const lateralOverride = (safeSlot % 2 === 0 ? -1 : 1) * GRID_LATERAL_M;
+      // left/right stagger is a labelled RULE-style presentation choice, scaled by the
+      // road's own measured half-width at that slot.
       return {
         lapsDone: 0, lapProgress: 0, rankProgress: slotFraction(safeSlot),
-        stationM: ((gridStation % this.track.lengthMetres) + this.track.lengthMetres)
-          % this.track.lengthMetres,
-        lapEntry: first ?? null, kind: "grid", lateralOverride, posProvenance: "RULE",
-        officialPos: null,
+        stationM: slotStation,
+        lapEntry: first ?? null, kind: "grid",
+        lateralOverride: columnLateral(this.track, slotStation, safeSlot),
+        posProvenance: "RULE", officialPos: null, positionFrame: null,
       };
     }
     const { lap, idx } = cur;
     const decoded = dl.decoded.get(lap.lap);
     const nonFf1gLapsBefore = dl.laps.slice(0, idx).filter((l) => !l.ff1G && l.sesT !== null).length;
+    // Which frame this lap's stations were written in, and therefore whether a station
+    // taken from it is a MEASUREMENT or a rescaled wheel-speed integral. See PositionFrame.
+    // Every observed branch below reads its station out of exactly this lap, so one test
+    // covers all of them.
+    const frame: PositionFrame = lap.positionFrame === "B" ? "B" : "A";
+    const framedProvenance: Provenance = frame === "B" ? "DERIVED" : "OBSERVED";
 
     if (lap.sesT !== null && t > lap.sesT) {
       // this lap is finished; are we between laps or at the end of the session?
@@ -410,14 +514,16 @@ export class ReplayTimeline implements RaceTimeline {
         return {
           lapsDone, lapProgress: 1, rankProgress: lapsDone,
           stationM: this.parkedStation(dl.entry.driver),
+          lateralOverride: this.parkedLateral(dl.entry.driver),
           lapEntry: lap, kind: isFinisher ? "finished" : "retired",
-          posProvenance: "RULE", officialPos: finishedOfficial,
+          posProvenance: "RULE", officialPos: finishedOfficial, positionFrame: null,
         };
       }
       return {
         lapsDone, lapProgress: 1, rankProgress: lapsDone,
         stationM: this.lastKnownPosition(dl, lap), lapEntry: lap,
-        kind: "gap", posProvenance: "OBSERVED", officialPos: finishedOfficial,
+        kind: "gap", posProvenance: framedProvenance, officialPos: finishedOfficial,
+        positionFrame: frame,
       };
     }
 
@@ -425,7 +531,7 @@ export class ReplayTimeline implements RaceTimeline {
       return {
         lapsDone: nonFf1gLapsBefore, lapProgress: 0, rankProgress: nonFf1gLapsBefore,
         stationM: this.lastKnownPosition(dl, lap),
-        lapEntry: lap, kind: "gap", posProvenance: "OBSERVED",
+        lapEntry: lap, kind: "gap", posProvenance: framedProvenance, positionFrame: frame,
         // the CURRENT lap is still running, so its own `pos` is the future: use the
         // last one this car has actually earned.
         officialPos: lastCompletedOfficial(dl.laps, idx, t),
@@ -443,13 +549,14 @@ export class ReplayTimeline implements RaceTimeline {
     const stationarySlot = this.gridIndex.get(dl.entry.driver) ?? -1;
     if (lap.lap === 1 && sample && sample.speedKph < 1 && stationarySlot >= 0) {
       const gridStation = (stationarySlot + 1) * -this.track.grid.pitchMetres;
+      const slotStation = ((gridStation % this.track.lengthMetres) + this.track.lengthMetres)
+        % this.track.lengthMetres;
       return {
         lapsDone: 0, lapProgress: 0, rankProgress: slotFraction(stationarySlot),
-        stationM: ((gridStation % this.track.lengthMetres) + this.track.lengthMetres)
-          % this.track.lengthMetres,
+        stationM: slotStation,
         lapEntry: lap, kind: "grid",
-        lateralOverride: (stationarySlot % 2 === 0 ? -1 : 1) * GRID_LATERAL_M,
-        posProvenance: "RULE",
+        lateralOverride: columnLateral(this.track, slotStation, stationarySlot),
+        posProvenance: "RULE", positionFrame: null,
         // lap 1 is in progress and nothing has been classified yet
         officialPos: lastCompletedOfficial(dl.laps, idx, t),
       };
@@ -473,7 +580,14 @@ export class ReplayTimeline implements RaceTimeline {
       lapProgress: frac,
       rankProgress: nonFf1gLapsBefore + frac,
       stationM: sample ? sample.stationM : this.track.timingLines.sf,
-      lapEntry: lap, kind: inPit ? "pit" : "track", cur, posProvenance: "OBSERVED",
+      lapEntry: lap, kind: inPit ? "pit" : "track", cur,
+      // Frame B has no x/y at all: the station is the driver's own integrated wheel-speed
+      // distance rescaled onto one lap of the ring and the lateral is hard-zeroed, so it
+      // is DERIVED. That is not cosmetic -- it drops the car out of `rank`'s measured
+      // pool and out of `gapUsable`, so a derived position stops being published as a
+      // measured gap. Measured at Monaco/Race: 10,574 of 12,148 reported gaps were
+      // computed from a rescaled wheel-speed integral.
+      posProvenance: framedProvenance, positionFrame: frame,
       // strictly causal: the classification at the end of the last COMPLETED lap.
       // Using the current lap's own pos would be reading the future.
       officialPos: lastCompletedOfficial(dl.laps, idx, t),
@@ -491,9 +605,9 @@ export class ReplayTimeline implements RaceTimeline {
    *    the board. That is a guarantee, not a hope.
    *  - it never has to match lap NUMBERS between two cars, which is what the previous
    *    closest-station-within-the-matching-lap scan did. That scan could not tell the
-   *    start of a lap from its end, because a decoded lap starts ~20 m before the line
-   *    and therefore contains the same station twice; picking the wrong one added a
-   *    whole lap to the gap (measured: 87.8 s).
+   *    start of a lap from its end, because a decoded lap starts a few metres before the
+   *    line (median 2.8 m on the Australian pack) and therefore contains the same station
+   *    twice; picking the wrong one added a whole lap to the gap (measured: 87.8 s).
    *
    * Returns null when x falls outside the stretch this driver's decoded laps cover
    * (a hole in the feed, or a progress this driver has not reached) -- the dashboard
@@ -614,6 +728,12 @@ export class ReplayTimeline implements RaceTimeline {
     //    classification gave it, while the on-track pack is ordered by what the viewer
     //    can actually see -- and, critically, by the same quantity the gaps are measured
     //    from, which is what makes the gap column monotone.
+    //
+    //    A frame-B car is DERIVED, not OBSERVED, so it stays on its official anchor too.
+    //    That is the point: its "measured distance" is its own integrated wheel speed
+    //    rescaled to one lap of the ring, which is not comparable car-to-car, and at
+    //    Monaco that is 91 % of the field. Ordering the race by the classification there
+    //    is the honest answer, not a degraded one.
     const slotted = new Map(anchor);
     const source = new Map<string, OrderSource>();
     const measurable = phys.filter(([, p]) => p.posProvenance === "OBSERVED");
@@ -668,7 +788,19 @@ export class ReplayTimeline implements RaceTimeline {
       const pt = trackPointAt(this.track, p.stationM);
       const { z, heading } = pt;
 
+      // A RULE placement carries its own lateral and TELEMETRY MUST NOT OVERWRITE IT.
+      // This used to be an unconditional `lateralM = s.lateralM`, which meant the placed
+      // grid slots, the pit-lane start and the parked queue kept their placed STATION
+      // while being painted with whatever lateral the car's own samples happened to
+      // carry -- and on a stationary car that lateral is a projection of an absent or
+      // frozen coordinate. Measured on the shipped packs, the median |lateral| drawn on
+      // a car whose status is "grid": Monaco 35.55 m, Monza 19.00 m, Silverstone Sprint
+      // 18.91 m, Hungary 13.83 m, Montreal 8.55 m -- a diagonal line of cars beside the
+      // circuit instead of a starting grid -- while the RULE stagger was silently lost
+      // on all 16 readable packs. Speed/gear/throttle/brake stay telemetry either way:
+      // they are measured even when the position is placed.
       let lateralM = p.lateralOverride ?? 0, speedKph = 0, gear = 0, throttlePct = 0, brake = false;
+      const placed = p.lateralOverride !== undefined;
       // reuse the lap progress() already located rather than scanning the lap list again
       const cur = p.cur !== undefined ? p.cur : this.currentLap(dl, t);
       if (cur && cur.lap.lST !== null) {
@@ -676,7 +808,7 @@ export class ReplayTimeline implements RaceTimeline {
         if (decoded) {
           const s = sampleLap(decoded, t - cur.lap.lST, this.track.lengthMetres);
           if (s) {
-            lateralM = s.lateralM;
+            if (!placed) lateralM = s.lateralM;
             speedKph = s.speedKph;
             gear = s.gear;
             throttlePct = s.throttlePct;
@@ -699,6 +831,10 @@ export class ReplayTimeline implements RaceTimeline {
       // coordinates onto the racing ring, so the time the leader passed "that station"
       // is not the time it passed this car. That is what reported a P2 car as +90 s
       // behind while P3 showed +4 s. The dashboard already prints PIT there.
+      //
+      // Requiring OBSERVED (not merely "not RULE") is what keeps a frame-B car out:
+      // its station is a rescaled wheel-speed integral, so `timeAtProgress` against it
+      // would answer in the units of a different quantity from the one being asked about.
       const gapUsable = (q: ReturnType<ReplayTimeline["progress"]>) =>
         q.posProvenance === "OBSERVED" && q.kind !== "pit";
       const leaderObserved = gapUsable(order[0][1]);
@@ -739,6 +875,7 @@ export class ReplayTimeline implements RaceTimeline {
         status: p.kind,
         provenance: "OBSERVED",
         positionProvenance: p.posProvenance,
+        positionFrame: p.positionFrame,
         orderSource: source.get(driver) ?? "RULE",
         energy: p.lapEntry?.energy ?? null,
       });

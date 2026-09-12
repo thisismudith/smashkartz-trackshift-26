@@ -1,0 +1,193 @@
+/* Session browser. Cards state their data quality before the user opens anything. */
+
+.main {
+  min-height: 100dvh;
+  padding: clamp(1.5rem, 5vw, 4rem) clamp(1rem, 6vw, 5rem) 4rem;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(1.6rem, 4vh, 2.6rem);
+  max-width: 84rem;
+  margin: 0 auto;
+}
+
+.head { max-width: 60rem; }
+
+.kicker {
+  font-size: 0.75rem;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--haas-grey);
+}
+
+.title {
+  font-family: var(--font-display), Impact, "Arial Narrow", sans-serif;
+  font-weight: 900;
+  font-stretch: 118%;
+  font-size: clamp(2.2rem, 6.5vw, 4.2rem);
+  line-height: 1;
+  letter-spacing: 0.015em;
+  text-transform: uppercase;
+  margin-top: 0.4rem;
+  transform: skewX(-8deg);
+  transform-origin: left center;
+}
+
+.title em { font-style: normal; color: var(--haas-red); }
+
+.lede {
+  margin-top: 1.1rem;
+  max-width: 48rem;
+  font-size: clamp(0.95rem, 1.4vw, 1.1rem);
+  line-height: 1.55;
+  color: var(--haas-grey);
+}
+
+.grid {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(20rem, 1fr));
+  gap: 1rem;
+  /* cards size to their own content; a long fault note must not stretch its whole row */
+  align-items: start;
+}
+
+.card {
+  border: 1px solid var(--haas-grey);
+  padding: 1rem 1.1rem 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  position: relative;
+}
+
+.card::before {
+  content: "";
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 3px;
+  background: var(--haas-red);
+}
+
+.cardHead {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+}
+
+.cardTitle {
+  font-size: 1rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--haas-white);
+  font-weight: 600;
+}
+
+.cardYear {
+  margin-left: auto;
+  font-size: 0.68rem;
+  letter-spacing: 0.14em;
+  color: #7a7a7a;
+  font-variant-numeric: tabular-nums;
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.4rem;
+}
+
+.facts > div { display: flex; flex-direction: column; gap: 0.1rem; }
+
+.facts dt {
+  font-size: 0.58rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #7a7a7a;
+}
+
+.facts dd {
+  font-size: 0.86rem;
+  color: var(--haas-white);
+  font-variant-numeric: tabular-nums;
+}
+
+.sessions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.sessionChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.64rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 0.22rem 0.5rem;
+  border: 1px solid #2a2a2a;
+  color: #6a6a6a;
+  transition: background-color 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+
+/* built and clean: the only chips that read as actionable */
+.sessionChip[data-state="built"],
+.sessionChip[data-state="caution"],
+.sessionChip[data-state="blocking"] {
+  border-color: var(--haas-grey);
+  color: var(--haas-white);
+}
+
+.sessionChip[data-state="built"]:hover,
+.sessionChip[data-state="caution"]:hover,
+.sessionChip[data-state="blocking"]:hover {
+  background: var(--haas-red);
+  border-color: var(--haas-red);
+}
+
+/* not built: present so the gap is visible, but plainly inert */
+.sessionChip[data-state="unbuilt"] {
+  border-style: dashed;
+  cursor: default;
+}
+
+.faultDot {
+  width: 4px; height: 4px; border-radius: 50%;
+  background: #a88606;
+  flex: none;
+}
+
+.sessionChip[data-state="blocking"] .faultDot { background: var(--haas-red); }
+
+.faults {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: auto;
+}
+
+.fault {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  border-left: 2px solid #a88606;
+  padding-left: 0.6rem;
+}
+
+.fault[data-severity="blocking"] { border-left-color: var(--haas-red); }
+
+.faultHead {
+  font-size: 0.6rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #d0a608;
+}
+
+.fault[data-severity="blocking"] .faultHead { color: var(--haas-red); }
+
+.faultText {
+  font-size: 0.7rem;
+  line-height: 1.5;
+  color: #8a8a8a;
+}

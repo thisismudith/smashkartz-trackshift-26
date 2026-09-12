@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { CarState } from "../contract/types";
 import { packPose, unpackPoseAt } from "./pose";
-import { POSE_STATUS } from "./protocol";
+import { POSE_FLOATS_PER_CAR, POSE_STATUS } from "./protocol";
 
 function makeState(overrides: Partial<CarState> = {}): CarState {
   return {
@@ -62,5 +62,35 @@ describe("pose packing", () => {
     const states = new Map([["AAA", makeState({ brake: true })]]);
     const buf = packPose(states, ["AAA"]);
     expect(unpackPoseAt(buf, 0).brake).toBe(true);
+  });
+});
+
+describe("pose scratch buffer reuse", () => {
+  // The worker allocates one scratch buffer per session and hands it back every tick so
+  // its hot path never allocates. packPose only reuses a buffer whose length matches
+  // EXACTLY, so a buffer sized with the wrong stride is silently rejected and the
+  // optimisation quietly stops existing -- which is what happened when sim.worker.ts
+  // sized it with a literal 12 against a 13-float layout. Nothing was corrupted, so
+  // nothing looked wrong; this test is what would have caught it.
+  it("reuses a buffer sized with POSE_FLOATS_PER_CAR, in place", () => {
+    const drivers = ["AAA", "BBB", "CCC"];
+    const states = new Map<string, CarState>(
+      drivers.map((d, i) => [d, makeState({ driver: d, stationM: 100 * (i + 1) })]),
+    );
+    const scratch = new Float32Array(drivers.length * POSE_FLOATS_PER_CAR);
+    const out = packPose(states, drivers, scratch);
+    expect(out).toBe(scratch);
+    expect(out[0]).toBeCloseTo(100);
+    expect(out[POSE_FLOATS_PER_CAR]).toBeCloseTo(200);
+    expect(out[2 * POSE_FLOATS_PER_CAR]).toBeCloseTo(300);
+  });
+
+  it("refuses a wrongly strided buffer rather than writing past its end", () => {
+    const drivers = ["AAA", "BBB", "CCC"];
+    const states = new Map<string, CarState>(drivers.map((d) => [d, makeState({ driver: d })]));
+    const tooSmall = new Float32Array(drivers.length * (POSE_FLOATS_PER_CAR - 1));
+    const out = packPose(states, drivers, tooSmall);
+    expect(out).not.toBe(tooSmall);
+    expect(out.length).toBe(drivers.length * POSE_FLOATS_PER_CAR);
   });
 });

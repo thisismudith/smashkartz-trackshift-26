@@ -61,8 +61,11 @@ export function buildDriverLabels(
     const tex = makeLabelTexture(code, teamColours[i] ?? HAAS.grey);
     const mat = new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true });
     const sprite = new THREE.Sprite(mat);
-    // keep the plate's aspect ratio; sized in world metres so it scales with distance
+    // The initial size is a placeholder: the renderer rescales every sprite each frame
+    // to hold a constant pixel height (see SimRenderer.applyPose). The aspect ratio is
+    // stashed here so that rescale never has to touch the texture again.
     const aspect = tex.image.width / tex.image.height;
+    sprite.userData.aspect = aspect;
     sprite.scale.set(heightM * aspect, heightM, 1);
     sprite.renderOrder = 10;
     sprite.frustumCulled = false;

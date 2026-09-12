@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "reac
 import { SimStore } from "../store/simStore";
 import { SimRenderer, type CameraMode } from "../render/scene";
 import { parseTrackModel, type RawTrackModel } from "../data/manifest";
+import { defaultSimSource, type RuleSet } from "../data/source";
 import { DriverPanel } from "./DriverPanel";
 import { GridBuilder } from "./GridBuilder";
 import { RaceControlFeed } from "./RaceControlFeed";
@@ -60,6 +61,7 @@ export default function NewRaceCanvas() {
   const [cameraMode, setCameraMode] = useState<CameraMode>("broadcast");
   const [selectedDriver, setSelectedDriver] = useState<string | null>(null);
   const [catalogue, setCatalogue] = useState<Catalogue | null>(null);
+  const [rules, setRules] = useState<RuleSet | null>(null);
   const [indexData, setIndexData] = useState<SimIndex | null>(null);
   const [trackSlug, setTrackSlug] = useState<string>("");
   const [laps, setLaps] = useState<number>(20);
@@ -90,6 +92,9 @@ export default function NewRaceCanvas() {
         if (disposed) return;
         setIndexData(index);
         setCatalogue(cat);
+        // NOTE: the fetches above predate the data seam and talk to /sim directly.
+        // This one goes through defaultSimSource, which is where they all belong.
+        setRules(await defaultSimSource.rules());
         const first = Object.keys(index.tracks)[0];
         setTrackSlug(first);
         const trackMeta = cat.tracks.find((t) => t.slug === first);
@@ -282,7 +287,7 @@ export default function NewRaceCanvas() {
                 </tbody>
               </table>
               <div className={styles.side}>
-                <DriverPanel row={selectedRow} />
+                <DriverPanel row={selectedRow} rules={rules} />
                 <RaceControlFeed events={meta?.events ?? []} sessionTime={dashboard.sessionTime} />
               </div>
             </div>

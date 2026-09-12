@@ -13,6 +13,7 @@ import { runRace } from "../engine/raceEngine";
 import { buildDashboardSnapshot } from "../replay/dashboard";
 import { ReplayTimeline } from "../replay/timeline";
 import { packPose } from "./pose";
+import { POSE_FLOATS_PER_CAR } from "./protocol";
 import type { GeneratedRaceRequest, MainToWorker, WorkerToMain } from "./protocol";
 
 const ctx = self as unknown as DedicatedWorkerGlobalScope;
@@ -46,7 +47,12 @@ function post(msg: WorkerToMain, transfer?: Transferable[]) {
 function afterTimelineReady() {
   if (!timeline) return;
   driverOrder = timeline.driverList;
-  poseScratch = new Float32Array(driverOrder.length * 12);
+  // MUST be POSE_FLOATS_PER_CAR, not a literal. This read 12 while the layout is 13
+  // floats wide, and packPose only reuses a buffer whose length matches exactly -- so
+  // the scratch was rejected and a fresh Float32Array was allocated on EVERY tick, 60
+  // times a second, which is the one thing the protocol's own docstring says this
+  // buffer exists to avoid. Nothing was corrupted, so nothing looked wrong.
+  poseScratch = new Float32Array(driverOrder.length * POSE_FLOATS_PER_CAR);
   sessionTime = 0;
   // a fresh timeline always starts paused; announce it, or the UI keeps showing
   // "Pause" from the previous session and its next click looks like a dead button

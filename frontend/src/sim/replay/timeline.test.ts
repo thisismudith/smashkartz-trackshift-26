@@ -3,8 +3,9 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { SAMPLE_BYTES } from "../data/codec";
 import type { RawLapEntry, RawSessionManifest, RawTrackModel } from "../data/manifest";
-import { parseTrackModel } from "../data/manifest";
+import { halfWidthAt, parseTrackModel } from "../data/manifest";
 import type { CarState, TrackModel } from "../contract/types";
+import { CAR_RENDER_WIDTH_M } from "../render/presentation";
 import { ReplayTimeline } from "./timeline";
 import { buildDashboardSnapshot } from "./dashboard";
 
@@ -236,6 +237,18 @@ const PIT_LOSS_S = 25;
 const PIT_START_DELAY_S = 12; // D06 is released from the lane after the field has gone
 const STANDING_START_S = 4;
 const RACE_SAMPLE_DT = 0.25; // the real packs sample at roughly 240 ms
+/**
+ * The lateral every sample of this synthetic race carries, centimetres.
+ *
+ * Deliberately absurd, and deliberately NOT zero. A stationary car's telemetry lateral
+ * is a projection of whatever coordinate the feed emitted while it sat still, and on the
+ * real packs that is a frozen or absent position: the median |lateral| measured on cars
+ * the board had already PLACED on a grid slot was 35.55 m at Monaco, 19.00 m at Monza,
+ * 18.91 m at the Silverstone sprint, 13.83 m at Hungary. Parked cars were worse -- 327.00 m
+ * at Hungary (replay.py's own clip limit), 60.19 m at Miami. A fixture whose lateral is 0
+ * cannot tell a placement that owns its lateral from one that is being overwritten.
+ */
+const BOGUS_LATERAL_CM = 3000; // 30.00 m, well outside the 6 m half-width of makeTrack()
 
 /** Station along the lap for a 0..1 fraction of the lap's MOVING time. Deliberately
  * non-uniform (a car is quicker on some parts of the lap than others) so the gap
@@ -316,7 +329,7 @@ function encodeRaceLap(p: PlanLap): ArrayBuffer {
     const o = i * SAMPLE_BYTES;
     view.setUint16(o, i === 0 ? 0 : Math.round(RACE_SAMPLE_DT * 1000), true);
     view.setFloat32(o + 2, station, true);
-    view.setInt16(o + 6, 0, true);
+    view.setInt16(o + 6, BOGUS_LATERAL_CM, true);
     view.setUint16(o + 8, Math.round(speedKph), true);
     view.setUint8(o + 10, 6);
     view.setUint8(o + 11, 100);
@@ -745,4 +758,322 @@ describe.skipIf(!realPack)("ReplayTimeline against a real 2026 race pack", () =>
       }
     }
   });
+});
+
+// ===========================================================================
+// PLACEMENTS OWN THEIR LATERAL, AND A DERIVED POSITION IS NOT A MEASURED ONE.
+//
+// Two defects that used to share one line of sampleAt():
+//
+//  (1) `lateralM = s.lateralM` ran unconditionally, so a car the board had already
+//      PLACED -- grid slot, pit-lane start, parked queue -- kept its placed station but
+//      was painted with the telemetry lateral of a car that is not where the telemetry
+//      says it is. That is the diagonal line of cars beside the circuit at Monaco, and
+//      it also deleted the two-column grid stagger on every pack.
+//  (2) `positionFrame` was carried into RawLapEntry and read by nobody, so a frame-B lap
+//      (no x/y at all; station = rescaled wheel-speed integral, lateral = 0) was tagged
+//      OBSERVED and handed measured gaps.
+//
+// Not the same bug and not the same fix, so they are tested separately.
+// ===========================================================================
+
+/** Does a car placed at `stationM` with `lateralM` fit inside the road the track model
+ * MEASURED there? Asserted as a property rather than by recomputing the production
+ * formula, so these tests cannot drift into agreeing with a wrong implementation. */
+function roadFits(track: TrackModel, stationM: number, lateralM: number): boolean {
+  return Math.abs(lateralM) + CAR_RENDER_WIDTH_M / 2 <= halfWidthAt(track, stationM) + 1e-6;
+}
+
+describe("RULE placements own their lateral", () => {
+  const track = raceTrack();
+  const { manifest, bin } = buildRaceManifest();
+  const timeline = new ReplayTimeline(manifest, track, bin);
+  const BOGUS_M = BOGUS_LATERAL_CM / 100;
+
+  it("the fixture really does feed a bogus telemetry lateral to every car", () => {
+    // Positive control: a car that is genuinely being MEASURED still reports the
+    // telemetry lateral, bogus or not. The fix must not blanket-zero laterals.
+    const running = [...timeline.sampleAt(300).values()].filter((c) => c.status === "track");
+    expect(running.length).toBeGreaterThan(4);
+    for (const c of running) expect(c.lateralM).toBeCloseTo(BOGUS_M, 2);
+  });
+
+  it("never paints a placed car with the telemetry lateral", () => {
+    let placed = 0;
+    for (let t = 0; t <= timeline.duration; t += 1) {
+      for (const car of timeline.sampleAt(t, false).values()) {
+        if (car.positionProvenance === "OBSERVED") continue;
+        placed++;
+        expect(Math.abs(car.lateralM), `${car.driver} @${t} (${car.status})`)
+          .toBeLessThan(BOGUS_M);
+      }
+    }
+    expect(placed).toBeGreaterThan(500);
+  });
+
+  it("keeps the grid in two staggered columns that fit the road", () => {
+    // the standing start: every car bar the pit-lane starter is on a RULE grid slot
+    const grid = [...timeline.sampleAt(2).values()].filter((c) => c.status === "grid");
+    expect(grid.length).toBe(RACE_DRIVERS.length - 1); // D06 is held in the pit lane
+    const bySlot = grid.sort((a, b) => b.stationM - a.stationM); // pole is nearest the line
+    for (const car of bySlot) {
+      expect(roadFits(track, car.stationM, car.lateralM), `${car.driver} off the road`).toBe(true);
+      expect(Math.abs(car.lateralM)).toBeGreaterThan(0);
+    }
+    // Two columns, and which column a car is in follows its SLOT, not its rank in this
+    // list -- D06 vacated one slot to start from the lane, so consecutive survivors are
+    // not necessarily consecutive slots.
+    const slotOf = (c: CarState) =>
+      Math.round((TRACK_LENGTH - c.stationM) / track.grid.pitchMetres) - 1;
+    for (const car of bySlot) {
+      expect(Math.sign(car.lateralM), `${car.driver} slot ${slotOf(car)}`)
+        .toBe(slotOf(car) % 2 === 0 ? -1 : 1);
+    }
+    // WIDER than the flat 1.8 m constant this replaced: the columns are separated by the
+    // road's own measured half-width (6 m here), not by 3.6 m.
+    const left = bySlot.find((c) => c.lateralM < 0)!;
+    const right = bySlot.find((c) => c.lateralM > 0)!;
+    const separation = right.lateralM - left.lateralM;
+    expect(separation).toBeGreaterThan(2 * 1.8);
+    expect(separation).toBeCloseTo(halfWidthAt(track, left.stationM), 6);
+  });
+
+  it("parks finished and retired cars in the queue, not beside it", () => {
+    const end = [...timeline.sampleAt(timeline.duration, false).values()]
+      .filter((c) => c.status === "finished" || c.status === "retired");
+    // every car bar the one whose own last lap ends exactly at `duration` (it has not
+    // crossed yet at that instant, so it is still being measured)
+    expect(end.length).toBeGreaterThanOrEqual(RACE_DRIVERS.length - 1);
+    for (const car of end) {
+      expect(car.positionProvenance).toBe("RULE");
+      expect(roadFits(track, car.stationM, car.lateralM), `${car.driver} parked off the road`)
+        .toBe(true);
+    }
+  });
+
+  it("clamps the columns onto a road too narrow to hold them", () => {
+    // A 1.6 m half-width leaves only 0.6 m of room for a 2.0 m car, which is LESS than
+    // the half-of-half-width the columns want. The clamp, not the fraction, must win.
+    const narrow: TrackModel = { ...raceTrack(), halfWidth: new Float32Array([1.6]) };
+    const tl = new ReplayTimeline(manifest, narrow, bin);
+    const grid = [...tl.sampleAt(2).values()].filter((c) => c.status === "grid");
+    expect(grid.length).toBeGreaterThan(4);
+    for (const car of grid) {
+      expect(roadFits(narrow, car.stationM, car.lateralM)).toBe(true);
+      expect(Math.abs(car.lateralM)).toBeCloseTo(1.6 - CAR_RENDER_WIDTH_M / 2, 6);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Position frame B
+// ---------------------------------------------------------------------------
+
+/** The same race with two drivers' laps written in position-frame B -- the state
+ * monaco-grand-prix/Race is in for 91.2 % of its laps. */
+function frameBManifest(base: RawSessionManifest, derived: string[]): RawSessionManifest {
+  return {
+    ...base,
+    drivers: base.drivers.map((d) => (derived.includes(d.driver)
+      ? { ...d, laps: d.laps.map((l) => ({ ...l, positionFrame: "B" as const })) }
+      : d)),
+  };
+}
+
+describe("position-frame B is DERIVED, not OBSERVED", () => {
+  const track = raceTrack();
+  const { manifest, bin } = buildRaceManifest();
+  const DERIVED_DRIVERS = ["D02", "D05"];
+  const timeline = new ReplayTimeline(frameBManifest(manifest, DERIVED_DRIVERS), track, bin);
+  const control = new ReplayTimeline(manifest, track, bin);
+  const instants: number[] = [];
+  for (let t = 0; t <= timeline.duration; t += 2) instants.push(t);
+
+  it("labels a frame-B position DERIVED and a frame-A position OBSERVED", () => {
+    let derived = 0, observed = 0;
+    for (const t of instants) {
+      for (const car of timeline.sampleAt(t, false).values()) {
+        if (car.positionProvenance === "RULE") { expect(car.positionFrame).toBeNull(); continue; }
+        if (DERIVED_DRIVERS.includes(car.driver)) {
+          expect(car.positionFrame, `${car.driver} @${t}`).toBe("B");
+          expect(car.positionProvenance).toBe("DERIVED");
+          derived++;
+        } else {
+          expect(car.positionFrame).toBe("A");
+          expect(car.positionProvenance).toBe("OBSERVED");
+          observed++;
+        }
+      }
+    }
+    expect(derived).toBeGreaterThan(500);
+    expect(observed).toBeGreaterThan(2000);
+  });
+
+  it("never publishes a gap or an interval computed from a rescaled wheel-speed integral", () => {
+    let suppressed = 0;
+    for (const t of instants) {
+      for (const car of timeline.sampleAt(t).values()) {
+        if (car.positionFrame !== "B") continue;
+        expect(car.gapToLeaderS, `${car.driver} @${t}`).toBeNull();
+        expect(car.intervalS).toBeNull();
+        expect(car.orderSource).not.toBe("MEASURED");
+        suppressed++;
+      }
+    }
+    // ...and the same cars DID carry published gaps before the frame tag was read.
+    let before = 0;
+    for (const t of instants) {
+      for (const car of control.sampleAt(t).values()) {
+        if (DERIVED_DRIVERS.includes(car.driver) && car.gapToLeaderS !== null) before++;
+      }
+    }
+    console.log(`frame-B gap suppression: ${before} gaps were published from a derived`
+      + ` position, ${suppressed} car-instants now report none`);
+    expect(before).toBeGreaterThan(400);
+  });
+
+  it("still gives every car a distinct position and a monotone gap column", () => {
+    let worstDrop = 0, checked = 0;
+    for (const t of instants) {
+      const rows = [...timeline.sampleAt(t).values()].sort((a, b) => a.position - b.position);
+      expect(rows.map((r) => r.position)).toEqual(rows.map((_, i) => i + 1));
+      let previous = -Infinity;
+      for (const r of rows) {
+        if (r.gapToLeaderS === null) continue;
+        checked++;
+        worstDrop = Math.max(worstDrop, previous - r.gapToLeaderS);
+        previous = r.gapToLeaderS;
+      }
+    }
+    expect(checked).toBeGreaterThan(1000);
+    expect(worstDrop).toBeLessThanOrEqual(1e-6);
+  });
+});
+
+// ===========================================================================
+// The same two rules, measured against every real 2026 pack on disk.
+// ===========================================================================
+
+interface PackFiles {
+  slug: string; session: string; track: TrackModel; manifest: RawSessionManifest; bin: ArrayBuffer;
+}
+
+function loadAllPacks(): PackFiles[] {
+  const dir = join(process.cwd(), "public", "sim");
+  if (!existsSync(join(dir, "index.json"))) return [];
+  const latest = (JSON.parse(readFileSync(join(dir, "index.json"), "utf-8")) as { latest: string }).latest;
+  if (!existsSync(join(dir, latest))) return [];
+  const index = JSON.parse(readFileSync(join(dir, latest), "utf-8")) as {
+    tracks: Record<string, string>;
+    sessions: Record<string, Record<string, { manifest: string; bin: string }>>;
+  };
+  const out: PackFiles[] = [];
+  for (const slug of Object.keys(index.sessions)) {
+    for (const session of Object.keys(index.sessions[slug])) {
+      const s = index.sessions[slug][session];
+      const files = [index.tracks[slug], s.manifest, s.bin];
+      if (!files.every((f) => f && existsSync(join(dir, f)))) continue;
+      try {
+        const raw = readFileSync(join(dir, s.bin));
+        out.push({
+          slug,
+          session,
+          // the shipped Chinese track model contains a literal NaN and is not valid JSON;
+          // that is a pack-build defect owned elsewhere, so it is skipped, not failed.
+          track: parseTrackModel(JSON.parse(readFileSync(join(dir, files[0]), "utf-8")) as RawTrackModel),
+          manifest: JSON.parse(readFileSync(join(dir, s.manifest), "utf-8")) as RawSessionManifest,
+          bin: raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength) as ArrayBuffer,
+        });
+      } catch { /* unreadable artifact */ }
+    }
+  }
+  return out;
+}
+
+const allPacks = loadAllPacks();
+
+describe.skipIf(allPacks.length === 0)("placement and frame on every real 2026 pack", () => {
+  it("draws every placed car on the road, at the start and at the flag", () => {
+    const lines: string[] = [];
+    let checked = 0;
+    for (const pack of allPacks) {
+      const tl = new ReplayTimeline(pack.manifest, pack.track, pack.bin);
+      const gridLat: number[] = [];
+      let worstOff = -Infinity;
+      let worstWho = "-";
+      const check = (car: CarState) => {
+        // A pit-lane START is placed on the pit road, which is legitimately tens of
+        // metres off the racing line, so it is not expected to fit the track ribbon.
+        if (car.positionProvenance === "OBSERVED" || car.status === "pit") return;
+        checked++;
+        const half = halfWidthAt(pack.track, car.stationM);
+        const over = Math.abs(car.lateralM) + CAR_RENDER_WIDTH_M / 2 - half;
+        if (over > worstOff) { worstOff = over; worstWho = `${car.driver}/${car.status}`; }
+        expect(over, `${pack.slug}/${pack.session} ${car.driver} (${car.status}) lateral`
+          + ` ${car.lateralM.toFixed(2)} m on a ${half.toFixed(2)} m half-width road`)
+          .toBeLessThanOrEqual(1e-6);
+      };
+      for (let t = 0; t <= 90; t += 0.25) {
+        for (const car of tl.sampleAt(t, false).values()) {
+          check(car);
+          if (car.status === "grid") gridLat.push(Math.abs(car.lateralM));
+        }
+      }
+      const parked: number[] = [];
+      for (let t = Math.max(0, tl.duration - 240); t <= tl.duration; t += 2) {
+        for (const car of tl.sampleAt(t, false).values()) {
+          check(car);
+          if (car.status === "finished" || car.status === "retired") parked.push(Math.abs(car.lateralM));
+        }
+      }
+      gridLat.sort((a, b) => a - b);
+      parked.sort((a, b) => a - b);
+      const med = gridLat.length ? gridLat[Math.floor(gridLat.length / 2)] : NaN;
+      lines.push(`${pack.slug}/${pack.session}: grid |lat| median ${med.toFixed(2)} m over`
+        + ` ${gridLat.length} car-instants; parked |lat| max`
+        + ` ${(parked[parked.length - 1] ?? NaN).toFixed(2)} m;`
+        + ` worst overhang ${worstOff.toFixed(3)} m (${worstWho})`);
+    }
+    console.log(`placed cars on the road (${checked} placed car-instants checked):\n  `
+      + lines.join("\n  "));
+    expect(checked).toBeGreaterThan(10000);
+  }, 300_000);
+
+  it("never publishes a gap for a frame-B car, and says so on every pack", () => {
+    const lines: string[] = [];
+    let bTotal = 0, aTotal = 0;
+    for (const pack of allPacks) {
+      const tl = new ReplayTimeline(pack.manifest, pack.track, pack.bin);
+      let a = 0, b = 0, rule = 0, aGaps = 0;
+      for (let t = 0; t <= tl.duration; t += 5) {
+        for (const car of tl.sampleAt(t).values()) {
+          if (car.positionFrame === null) {
+            rule++;
+            expect(car.positionProvenance).toBe("RULE");
+            continue;
+          }
+          if (car.positionFrame === "B") {
+            b++;
+            expect(car.positionProvenance, `${pack.slug} ${car.driver}`).toBe("DERIVED");
+            expect(car.gapToLeaderS).toBeNull();
+            expect(car.intervalS).toBeNull();
+            expect(car.orderSource).not.toBe("MEASURED");
+          } else {
+            a++;
+            expect(car.positionProvenance).toBe("OBSERVED");
+            if (car.gapToLeaderS !== null) aGaps++;
+          }
+        }
+      }
+      aTotal += a;
+      bTotal += b;
+      if (b > 0) {
+        lines.push(`${pack.slug}/${pack.session}: frame A ${a} car-instants (${aGaps} gaps),`
+          + ` frame B ${b} (0 gaps), placed ${rule}`);
+      }
+    }
+    console.log(`frame-B car-instants across ${allPacks.length} packs: A ${aTotal}, B ${bTotal}\n  `
+      + (lines.join("\n  ") || "(no frame-B laps on disk)"));
+    expect(aTotal).toBeGreaterThan(100000);
+  }, 300_000);
 });

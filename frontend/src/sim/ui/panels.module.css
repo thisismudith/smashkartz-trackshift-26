@@ -200,3 +200,64 @@
 .noteFold[open] summary::before { content: "− "; }
 .noteFold summary:hover { color: var(--haas-white); }
 .noteFold .provNote { margin-top: 0.25rem; }
+
+/* Energy meters. Four discrete bands rather than a gradient, because the limits they
+   grade against are unverified placeholders -- see DriverPanel. Colours stay inside the
+   Haas tokens: blue = comfortable, white = normal, yellow = close to the limit,
+   red = over it. */
+.meterRow {
+  display: grid;
+  grid-template-columns: 4.4rem 1fr;
+  grid-template-areas: "label value" "track track";
+  align-items: baseline;
+  gap: 0.1rem 0.4rem;
+  margin: 0.28rem 0;
+}
+
+.meterLabel {
+  grid-area: label;
+  font-size: 0.66rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--haas-grey);
+}
+
+.meterValue {
+  grid-area: value;
+  font-size: 0.95rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--haas-white);
+}
+
+/* --haas-blue (#1b40a6) is too dark to read as text on the near-black panel, so the
+   "comfortable" band is carried by the bar alone and its number stays white. */
+.meterValue[data-level="high"] { color: var(--haas-yellow); }
+.meterValue[data-level="over"] { color: var(--haas-red); font-weight: 600; }
+
+.meterUnit {
+  font-size: 0.6rem;
+  color: var(--haas-grey);
+  margin-left: 0.2rem;
+  text-transform: uppercase;
+}
+
+.meterTrack {
+  grid-area: track;
+  height: 0.3rem;
+  background: rgba(174, 174, 174, 0.18);
+  display: block;
+}
+
+.meterFill { height: 100%; display: block; background: var(--haas-white); }
+.meterFill[data-level="low"] { background: var(--haas-blue); }
+.meterFill[data-level="high"] { background: var(--haas-yellow); }
+.meterFill[data-level="over"] { background: var(--haas-red); }
+
+.meterAside {
+  margin: -0.12rem 0 0.35rem 4.8rem;
+  font-size: 0.62rem;
+  line-height: 1.35;
+  color: var(--haas-grey);
+}
+
+.meterAside code { font-size: 0.95em; }

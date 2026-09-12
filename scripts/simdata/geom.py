@@ -9,6 +9,8 @@ the signed area is negative). Lateral offset is signed with + to the LEFT of tra
 """
 from __future__ import annotations
 
+import math
+
 import numpy as np
 from scipy.spatial import cKDTree
 
@@ -60,11 +62,24 @@ class Ring:
     """A closed centreline sampled every `ds` metres, with projection."""
 
     def __init__(self, x, y, z, ds: float = 1.0):
-        self.ds = ds
         self.x, self.y, self.z = x, y, z
         self.n = len(x)
-        self.length = self.n * ds
-        self.s = np.arange(self.n, dtype=np.float64) * ds
+        # MEASURED, never asserted. This used to read `self.length = self.n * ds`, which
+        # DECLARES the ring to be one metre per vertex. It is not: build_ring smooths the
+        # ring AFTER the arc-length resample, so the vertex count is fixed against the
+        # pre-smoothing curve while the geometry actually drawn is the shorter smoothed
+        # one. Measured declared/true: 1.0003-1.0024 on eleven circuits, 1.0050 at Monaco
+        # and 1.0637 at Hungary -- and Hungary's is not a scale you can divide out, its
+        # local index-to-arclength ratio runs 0.804..1.000 with 274.5 m of cumulative
+        # drift. Deriving `ds` FROM the measured length instead restores the invariant
+        # `n * ds == length` by construction, which is exactly what the frontend assumes
+        # when it computes `ds = lengthMetres / n` (manifest.ts).
+        self.ds_nominal = ds
+        seg = np.hypot(np.diff(x), np.diff(y))
+        wrap = math.hypot(float(x[0] - x[-1]), float(y[0] - y[-1]))
+        self.length = float(np.nansum(seg) + wrap)
+        self.ds = self.length / self.n if self.n else ds
+        self.s = np.arange(self.n, dtype=np.float64) * self.ds
         self._tree = cKDTree(np.column_stack((x, y)))
         self._tangent()
 
@@ -123,6 +138,85 @@ class Ring:
             best_l = np.where(better, sign * d, best_l)
         st[ok] = best_s % self.length
         lat[ok] = best_l
+        return st, lat
+
+    def project_path(self, px, py, max_step_m: float | None = None):
+        """Projection for a TIME-ORDERED trace, with continuity.
+
+        `project` is a stateless nearest-point query, which is wrong on a ring that
+        passes close to itself. Suzuka is the only self-crossing circuit in the 2026
+        set: 529 vertex pairs lie within 12 m of each other while being more than 150 m
+        apart in station, closest approach 0.37 m. A car on one branch of the crossover
+        therefore snaps to the other branch whenever it drifts a few centimetres --
+        measured, ALB lap 51 samples 291-293 read 2516.3 -> 4881.5 -> 2525.7 m, a 2365 m
+        round trip in two samples, which is exactly the branch separation.
+
+        Here each sample keeps the nearest candidate that is REACHABLE from the previous
+        accepted station. Continuity is dropped (and re-seeded from the globally nearest
+        point) when no candidate is reachable, so a genuine gap in the feed cannot lock
+        the projection onto a wrong branch for the rest of the lap.
+
+        Returns (station_m, lateral_m), same shape and units as `project`.
+        """
+        px = np.asarray(px, dtype=np.float64)
+        py = np.asarray(py, dtype=np.float64)
+        st = np.full(px.shape, np.nan)
+        lat = np.full(px.shape, np.nan)
+        ok = np.isfinite(px) & np.isfinite(py)
+        if not ok.any() or self.n < 2:
+            return st, lat
+        if max_step_m is None:
+            # 250 m is ~10 samples of slack at 350 km/h with the feed's ~0.25 s spacing,
+            # so it never rejects honest motion, while the Suzuka alias is 2365 m.
+            max_step_m = min(250.0, 0.25 * self.length)
+
+        qx, qy = px[ok], py[ok]
+        k = int(min(8, self.n))
+        _, idx = self._tree.query(np.column_stack((qx, qy)), k=k)
+        idx = np.atleast_2d(idx)
+        if idx.shape[0] != qx.shape[0]:
+            idx = idx.T
+
+        # Evaluate every candidate vertex's two adjacent segments, vectorised.
+        cand_s, cand_l, cand_d = [], [], []
+        for col in range(idx.shape[1]):
+            base = idx[:, col]
+            for off in (-1, 0):
+                i0 = (base + off) % self.n
+                i1 = (i0 + 1) % self.n
+                ax, ay = self.x[i0], self.y[i0]
+                ex, ey = self.x[i1] - ax, self.y[i1] - ay
+                seg2 = ex * ex + ey * ey
+                seg2 = np.where(seg2 == 0, 1e-12, seg2)
+                t = np.clip(((qx - ax) * ex + (qy - ay) * ey) / seg2, 0.0, 1.0)
+                cx, cy = ax + t * ex, ay + t * ey
+                d = np.hypot(qx - cx, qy - cy)
+                cross = ex * (qy - ay) - ey * (qx - ax)
+                cand_s.append(((i0.astype(np.float64) + t) * self.ds) % self.length)
+                cand_l.append(np.where(cross >= 0, 1.0, -1.0) * d)
+                cand_d.append(d)
+        cand_s = np.column_stack(cand_s)
+        cand_l = np.column_stack(cand_l)
+        cand_d = np.column_stack(cand_d)
+
+        half = self.length / 2.0
+        out_s = np.empty(qx.shape[0])
+        out_l = np.empty(qx.shape[0])
+        prev = None
+        for i in range(qx.shape[0]):
+            d_row = cand_d[i]
+            if prev is None:
+                j = int(np.argmin(d_row))
+            else:
+                gap = np.abs((cand_s[i] - prev + half) % self.length - half)
+                reach = gap <= max_step_m
+                j = int(np.argmin(np.where(reach, d_row, np.inf))) if reach.any()                     else int(np.argmin(d_row))
+            out_s[i] = cand_s[i, j]
+            out_l[i] = cand_l[i, j]
+            prev = out_s[i]
+
+        st[ok] = out_s
+        lat[ok] = out_l
         return st, lat
 
     def point_at(self, station):

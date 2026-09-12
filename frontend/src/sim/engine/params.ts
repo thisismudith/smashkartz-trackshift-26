@@ -3,7 +3,16 @@
  * out the `value` the engine composes with, but keeps the object around so the UI can
  * still show provenance/n/se for any parameter it surfaces. */
 
-export interface Leaf { value: number; se?: number; n?: number; provenance: string; note?: string }
+export interface Leaf {
+  value: number;
+  se?: number;
+  /** 95% interval as [low, high]. Present on every fitted leaf; the UI is expected to draw
+   * it rather than collapse the estimate to its point value. */
+  ci95?: [number, number];
+  n?: number;
+  provenance: string;
+  note?: string;
+}
 
 export interface FittedParams {
   sessionPaceTrendPerLap: { pooled: Leaf; perTrack: Record<string, Leaf> };
@@ -13,6 +22,11 @@ export interface FittedParams {
   };
   driverOffsetSeconds: Record<string, Leaf>;
   teamOffsetSeconds: Record<string, Leaf>;
+  /** R-squared of the two offset fits and the lap counts behind them. Shown next to the
+   * offsets so a reader can see how much of lap-time variation the model actually explains.
+   * OPTIONAL on purpose: the race engine never reads it, and requiring it would force every
+   * engine test fixture to carry a field its subject does not use. */
+  modelFitR2?: { driver: number; team: number; n_driver: number; n_team: number };
   noise: {
     coreSigma: Leaf;
     incidentProbability: Leaf;

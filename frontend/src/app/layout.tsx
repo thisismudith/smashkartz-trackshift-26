@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Archivo } from "next/font/google";
 import RaceLoader from "@/components/loader/RaceLoader";
+import SiteNav from "@/components/nav/SiteNav";
 import { HAAS } from "@/lib/palette";
 import "./globals.css";
 
@@ -34,6 +35,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         {/* Lives in the root layout: renders once per full load, persists across client navigation. */}
         <RaceLoader />
+        <SiteNav />
         {children}
       </body>
     </html>

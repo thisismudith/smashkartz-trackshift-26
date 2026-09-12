@@ -1,0 +1,350 @@
+/**
+ * Chart furniture. Flat alpha blends of the Haas palette, square corners, 1px grey borders --
+ * the same surface language as panels.module.css and gridBuilder.module.css.
+ *
+ * Series colours never appear here; they come from src/lib/palette.ts CHART.series (or a team
+ * colour) and are set inline by the mark. Text in this file always wears a text token, never a
+ * series colour (UI.md section 7.2).
+ */
+
+.figure {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  min-width: 0;
+}
+
+.head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.title {
+  font-size: 0.85rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--haas-white);
+}
+
+.units {
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--haas-grey);
+}
+
+.prov {
+  margin-left: auto;
+  font-size: 0.62rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  padding: 0.1rem 0.4rem;
+  border: 1px solid var(--haas-grey);
+  color: var(--haas-grey);
+  white-space: nowrap;
+}
+
+.prov[data-kind="observed"] {
+  border-color: var(--haas-white);
+  color: var(--haas-white);
+}
+
+.prov[data-kind="simulated"],
+.prov[data-kind="inferred"] {
+  border-color: #a88606;
+  color: #a88606;
+}
+
+.prov[data-kind="rule"] {
+  border-color: #3a63d6;
+  color: #7f9ce8;
+}
+
+.prov[data-kind="missing"] {
+  border-style: dashed;
+}
+
+.note {
+  font-size: 0.72rem;
+  line-height: 1.45;
+  color: var(--haas-grey);
+  max-width: 58ch;
+}
+
+/* --- legend ------------------------------------------------------------- */
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem 1rem;
+  font-size: 0.72rem;
+  color: var(--haas-grey);
+}
+
+.legendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.legendItem[aria-pressed="false"] {
+  opacity: 0.4;
+}
+
+.swatch {
+  width: 0.8rem;
+  height: 0.2rem;
+  flex: none;
+}
+
+.swatch[data-shape="dot"] {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+}
+
+/* --- plot --------------------------------------------------------------- */
+
+.plotWrap {
+  position: relative;
+  width: 100%;
+}
+
+.plot {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.tickLabel {
+  fill: var(--haas-grey);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.axisLabel {
+  fill: var(--haas-grey);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.gridLine {
+  stroke: #2a2a2a;
+  stroke-width: 1;
+  shape-rendering: crispEdges;
+}
+
+.axisLine {
+  stroke: #5a5a5a;
+  stroke-width: 1;
+  shape-rendering: crispEdges;
+}
+
+.refLine {
+  stroke: var(--haas-grey);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+
+.refLabel {
+  fill: var(--haas-grey);
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.directLabel {
+  fill: var(--haas-white);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  paint-order: stroke;
+  stroke: var(--haas-black);
+  stroke-width: 3px;
+  stroke-linejoin: round;
+}
+
+/* --- empty / gated states ----------------------------------------------- */
+
+.empty {
+  border: 1px dashed var(--haas-grey);
+  padding: 1.6rem 1.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  color: var(--haas-grey);
+  min-height: 8rem;
+  justify-content: center;
+}
+
+.emptyHead {
+  font-size: 0.72rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: #a88606;
+}
+
+.emptyBody {
+  font-size: 0.8rem;
+  line-height: 1.5;
+  max-width: 46ch;
+}
+
+.emptyMeta {
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+  color: #5a5a5a;
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+
+/* --- table fallback ----------------------------------------------------- */
+
+.tableToggle {
+  align-self: flex-start;
+  background: none;
+  border: 1px solid var(--haas-grey);
+  color: var(--haas-grey);
+  font: inherit;
+  font-size: 0.66rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  padding: 0.2rem 0.5rem;
+  cursor: pointer;
+}
+
+.tableToggle:hover,
+.tableToggle:focus-visible {
+  color: var(--haas-white);
+  border-color: var(--haas-white);
+  outline: none;
+}
+
+.tableWrap {
+  max-height: 18rem;
+  overflow: auto;
+  border: 1px solid #2a2a2a;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.table th,
+.table td {
+  text-align: right;
+  padding: 0.25rem 0.6rem;
+  border-bottom: 1px solid #2a2a2a;
+  white-space: nowrap;
+}
+
+.table th {
+  position: sticky;
+  top: 0;
+  background: var(--haas-black);
+  color: var(--haas-grey);
+  font-weight: 400;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  font-size: 0.64rem;
+}
+
+.table td:first-child,
+.table th:first-child {
+  text-align: left;
+}
+
+/* --- tooltip ------------------------------------------------------------ */
+
+.tooltip {
+  position: absolute;
+  pointer-events: none;
+  background: rgba(17, 17, 17, 0.94);
+  border: 1px solid var(--haas-grey);
+  padding: 0.4rem 0.6rem;
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--haas-white);
+  white-space: nowrap;
+  z-index: 2;
+}
+
+.tooltipRow {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.tooltipRow + .tooltipRow {
+  margin-top: 0.15rem;
+}
+
+.tooltipKey {
+  color: var(--haas-grey);
+}
+
+.tooltipVal {
+  margin-left: auto;
+}
+
+.crosshair {
+  stroke: var(--haas-grey);
+  stroke-width: 1;
+  stroke-dasharray: 2 2;
+  pointer-events: none;
+}
+
+/* --- hover layer --------------------------------------------------------- */
+
+/* Plot owns this wrapper so the HTML tooltip can be positioned against the rendered SVG box.
+   ChartFrame's .plotWrap is the outer positioning context; this is the inner one. */
+.plotInner {
+  position: relative;
+  width: 100%;
+}
+
+.plot:focus-visible {
+  outline: 1px solid var(--haas-grey);
+  outline-offset: 2px;
+}
+
+.hoverLayer {
+  pointer-events: none;
+}
+
+/* The capture surface is the <svg> itself, so marks must not eat the pointer. */
+.plot * {
+  pointer-events: none;
+}
+
+/* A dashed swatch for a dashed series (the second car of a team). */
+.swatch[data-dashed="true"] {
+  background-image: linear-gradient(
+    90deg,
+    currentColor 0 40%,
+    transparent 40% 60%,
+    currentColor 60% 100%
+  );
+  background-blend-mode: destination-in;
+  -webkit-mask-image: linear-gradient(90deg, #000 0 40%, transparent 40% 60%, #000 60% 100%);
+  mask-image: linear-gradient(90deg, #000 0 40%, transparent 40% 60%, #000 60% 100%);
+}
+
+/* Chart-local controls docked under the frame header. */
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.8rem;
+}

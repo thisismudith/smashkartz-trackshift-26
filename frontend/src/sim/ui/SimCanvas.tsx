@@ -6,7 +6,7 @@ import {
   SimRenderer, type CameraMode, type GpuInfo, type GpuPreference, type PerfStats,
 } from "../render/scene";
 import { parseTrackModel, type RawTrackModel } from "../data/manifest";
-import { defaultSimSource } from "../data/source";
+import { defaultSimSource, type RuleSet } from "../data/source";
 import { DriverPanel } from "./DriverPanel";
 import { EnvironmentPanel } from "./EnvironmentPanel";
 import { GpuBadge } from "./GpuBadge";
@@ -56,11 +56,13 @@ export default function SimCanvas() {
   const [gpuPref, setGpuPref] = useState<GpuPreference>("high-performance");
   const [hasPitLane, setHasPitLane] = useState(false);
   const [showTags, setShowTags] = useState(true);
+  const [dimField, setDimField] = useState(false);
   const [speed, setSpeed] = useState(1);
   const [cameraLocked, setCameraLocked] = useState(true);
   /** driver code -> car number / team colour, for the compact leaderboard */
   const [driverMeta, setDriverMeta] = useState<Map<string, { num: string | null; colour: string | null }>>(new Map());
 
+  const [rules, setRules] = useState<RuleSet | null>(null);
   const [index, setIndex] = useState<SimIndex | null>(null);
   const [catalogue, setCatalogue] = useState<Catalogue | null>(null);
   const [selection, setSelection] = useState<Selection | null>(null);
@@ -112,10 +114,16 @@ export default function SimCanvas() {
         // everything Python-side arrives through the one seam (data/source.ts), so
         // swapping the static artifacts for the HTTP API later touches only that file
         const idx = await defaultSimSource.index();
-        const cat = await defaultSimSource.catalogue<Catalogue>();
+        const [cat, ruleSet] = await Promise.all([
+          defaultSimSource.catalogue<Catalogue>(),
+          // null when the artifacts predate the rule engine; the panel then shows
+          // numbers with no threshold colouring rather than inventing limits.
+          defaultSimSource.rules(),
+        ]);
         if (disposed) return;
         setIndex(idx);
         setCatalogue(cat);
+        setRules(ruleSet);
         const colourByTeam = new Map(cat.teams.map((t) => [t.team, `#${t.colour}`]));
         setDriverMeta(new Map(cat.drivers.map((d) => [d.code, {
           num: d.number, colour: d.team ? colourByTeam.get(d.team) ?? null : null,
@@ -161,6 +169,7 @@ export default function SimCanvas() {
         rendererRef.current?.dispose();
         const renderer = new SimRenderer(canvasRef.current, store, gpuPref);
         renderer.setTrack(track);
+        renderer.setDimUnfocused(dimField);
         const teamColours: (string | null)[] = manifestRaw.drivers.map(
           (d) => (d.team ? teamColourBySlug.get(d.team) ?? null : null),
         );
@@ -268,6 +277,18 @@ export default function SimCanvas() {
           >
             tags
           </button>
+          <button
+            type="button"
+            data-active={dimField}
+            title="Fade every car except the one in focus, so it is easy to pick out of a pack"
+            onClick={() => {
+              const next = !dimField;
+              setDimField(next);
+              rendererRef.current?.setDimUnfocused(next);
+            }}
+          >
+            dim field
+          </button>
           {CAMERA_MODES.map((m) => (
             <button
               key={m}
@@ -291,19 +312,22 @@ export default function SimCanvas() {
           />
         </details>
 
-        {/* The focused car and the session's environment variables. These sit in the
-            top-left flow rather than nested under the leaderboard, where a 20-row table
-            pushed them below the fold and they were, in practice, invisible. */}
+        {/* The focused car takes every pixel the controls above leave, because its
+            energy readout is the densest thing on screen. The environment panel is
+            pinned to the bottom of the same column: it is short, fixed-height, and
+            wanted at a glance rather than scrolled to. Both used to be nested under the
+            leaderboard, where a 20-row table pushed them below the fold. */}
         <div className={styles.leftDock}>
-          <DriverPanel row={selectedRow} />
-          <EnvironmentPanel
-            weather={meta?.weather ?? null}
-            sessionTime={dashboard?.sessionTime ?? 0}
-            duration={state.duration}
-            totalLaps={state.totalLaps}
-            neutralisation={dashboard?.activeNeutralisation ?? null}
-          />
+          <DriverPanel row={selectedRow} rules={rules} />
         </div>
+
+        <EnvironmentPanel
+          weather={meta?.weather ?? null}
+          sessionTime={dashboard?.sessionTime ?? 0}
+          duration={state.duration}
+          totalLaps={state.totalLaps}
+          neutralisation={dashboard?.activeNeutralisation ?? null}
+        />
       </div>
 
       {/* bottom centre: transport, the way a player behaves */}

@@ -55,6 +55,31 @@ export interface NeutralisationInterval {
   end: number;
 }
 
+/**
+ * One corner of the circuit.
+ *
+ * markerLateral and labelAngleDeg used to be parsed away and dropped, and that is why
+ * nothing on screen ever contradicted a mirrored render frame: markerLateral is the
+ * ONLY shipped quantity that states which SIDE of the road something is on. A
+ * direction-aware overlay has to be built against it, so it is part of the contract.
+ */
+export interface TrackCorner {
+  /** Corner number as the circuit publishes it (1-based, not an index). OBSERVED. */
+  number: number;
+  /** Station along the ring's arc length, metres. DERIVED: the corner marker's X/Y
+   * projected onto the ring, never the feed's own Distance field. */
+  station: number;
+  /** Signed perpendicular offset of the corner marker from the racing line, metres.
+   * Positive is to the LEFT of travel -- the same convention as every other lateral
+   * in the pipeline (scripts/simdata/geom.py). Null when the source carried none;
+   * undefined when the producer of this TrackModel does not supply corner metadata
+   * at all. Neither is a zero. */
+  markerLateral?: number | null;
+  /** Bearing for the corner's number plate on the OFFICIAL MAP, degrees. Display
+   * metadata: it belongs to the printed map, not to the telemetry frame. */
+  labelAngleDeg?: number | null;
+}
+
 export interface TrackModel {
   slug: string;
   event: string;
@@ -66,7 +91,21 @@ export interface TrackModel {
   halfWidth: Float32Array; // per 25 m bin; index via (station / binMetres) % bins
   widthBinMetres: number;
   timingLines: { sf: number; s1: number | null; s2: number | null };
-  corners: { number: number; station: number }[];
+  /** The circuit's corners, with the metadata the artifacts actually carry. Read a
+   * corner's side of the road from markerLateral; see TrackCorner. */
+  corners: TrackCorner[];
+  /**
+   * The OFFICIAL CIRCUIT MAP'S DISPLAY ORIENTATION, degrees, straight from the
+   * feed's corners.json `Rotation`. Null when the source did not carry one.
+   *
+   * IT IS NOT A FRAME OFFSET AND MUST NEVER BE APPLIED AS A ROTATION to the ring,
+   * the cars, the pit lane or the camera. It only states how this circuit is
+   * conventionally PRINTED (Monaco 315 deg, Barcelona 303 deg, Dutch 0 deg), and
+   * rotating the world by it would move every car off its own measured coordinates.
+   * Exposed so a map-style view can match the official artwork on request, and so
+   * that nobody has to guess what the number in the artifact means.
+   */
+  mapRotationDeg?: number | null;
   pitLane: {
     entryStation: number | null;
     exitStation: number | null;
