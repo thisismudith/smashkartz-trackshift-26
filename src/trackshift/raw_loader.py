@@ -11,6 +11,33 @@ class RawLap:
     year: str; event: str; session: str; driver: str; lap: int; path: Path
 
 def _unwrap(value: Any, key: str) -> Any: return value.get(key, value) if isinstance(value, dict) else value
+
+def _records(value: Any, key: str) -> list[dict[str, Any]]:
+    """Normalise a TracingInsights JSON document to a list of per-row dicts.
+
+    The source is inconsistent: some files are a list of records, some wrap that
+    list under a key, and laptimes.json is *columnar* -- a dict of equal-length
+    lists keyed by field name. Handling only the first two shapes silently
+    produced empty metadata for every lap, because a columnar dict is not a
+    list and the old guard simply returned nothing.
+
+    Scalar entries alongside the lists (a session-wide constant) are broadcast
+    to every row rather than dropped.
+    """
+    value = _unwrap(value, key)
+    if isinstance(value, list):
+        return [row for row in value if isinstance(row, dict)]
+    if isinstance(value, dict):
+        columns = {name: column for name, column in value.items() if isinstance(column, list)}
+        if not columns:
+            return []
+        scalars = {name: v for name, v in value.items() if not isinstance(v, list)}
+        rows = max(len(column) for column in columns.values())
+        return [
+            {**scalars, **{name: (column[i] if i < len(column) else None) for name, column in columns.items()}}
+            for i in range(rows)
+        ]
+    return []
 def _lap_number(path: Path) -> int | None:
     match = re.match(r"(\d+)_tel\.json$", path.name); return int(match.group(1)) if match else None
 
@@ -30,15 +57,53 @@ def load_raw_lap(raw_lap: RawLap) -> tuple[dict[str, Any] | None, ValidationResu
     except OSError as exc: return None, ValidationResult("REJECTED", "MALFORMED_JSON", str(exc))
     return payload, validate_telemetry_object(payload)
 
-METADATA_ALIASES = {"lap_time_s": ("time", "lap_time", "lapTime"), "session_time_s": ("sesT", "session_time", "sessionTime"), "lap_start_session_s": ("lap_start_session_s", "lapStartSession", "start_time", "startTime"), "sector_1_s": ("s1", "sector_1", "sector1"), "sector_2_s": ("s2", "sector_2", "sector2"), "sector_3_s": ("s3", "sector_3", "sector3"), "race_position": ("pos", "position"), "tyre_compound": ("compound", "tyre_compound"), "tyre_life_laps": ("life", "tyre_life"), "stint": ("stint",), "team": ("team",), "track_status": ("status", "track_status"), "is_accurate": ("is_accurate", "accurate"), "pit_in_session_s": ("pit_in_time", "pitInTime", "pit_in_session_s"), "pit_out_session_s": ("pit_out_time", "pitOutTime", "pit_out_session_s")}
+# Canonical name -> the raw keys it may appear under, first match wins.
+# The short codes (lST, iacc, pin, pout, del, ...) are the names TracingInsights
+# actually uses, documented in each season's data_dictionary.json. Four canonical
+# fields previously listed only guessed spellings and so never resolved.
+METADATA_ALIASES = {
+    "lap_time_s": ("time", "lap_time", "lapTime"),
+    "session_time_s": ("sesT", "session_time", "sessionTime"),
+    "lap_start_session_s": ("lST", "lap_start_session_s", "lapStartSession", "start_time", "startTime"),
+    "sector_1_s": ("s1", "sector_1", "sector1"),
+    "sector_2_s": ("s2", "sector_2", "sector2"),
+    "sector_3_s": ("s3", "sector_3", "sector3"),
+    "race_position": ("pos", "position"),
+    "tyre_compound": ("compound", "tyre_compound"),
+    "tyre_life_laps": ("life", "tyre_life"),
+    "tyre_is_new": ("fresh",),
+    "stint": ("stint",),
+    "team": ("team",),
+    "driver_number": ("dNum",),
+    "track_status": ("status", "track_status"),
+    "is_accurate": ("iacc", "is_accurate", "accurate"),
+    "is_personal_best": ("pb",),
+    "lap_deleted": ("del",),
+    "lap_deleted_reason": ("delR",),
+    "speed_trap_kmh": ("vst",),
+    "qualifying_segment": ("qs",),
+    "pit_in_session_s": ("pin", "pit_in_time", "pitInTime", "pit_in_session_s"),
+    "pit_out_session_s": ("pout", "pit_out_time", "pitOutTime", "pit_out_session_s"),
+}
 
 def load_lap_metadata(raw_lap: RawLap) -> dict[str, Any]:
     empty = {name: None for name in METADATA_ALIASES}; path = raw_lap.path.parent / "laptimes.json"
     if not path.exists(): return empty
     try:
-        with path.open(encoding="utf-8") as handle: entries = _unwrap(json.load(handle), "laptimes")
+        with path.open(encoding="utf-8-sig") as handle: entries = _records(json.load(handle), "laptimes")
     except (OSError, json.JSONDecodeError): return empty
-    if not isinstance(entries, list): return empty
+    if not entries: return empty
     entry = next((item for item in entries if isinstance(item, dict) and str(item.get("lap", item.get("lap_number", ""))) == str(raw_lap.lap)), None)
     if entry is None: return empty
-    return {target: next((entry[key] for key in aliases if key in entry), None) for target, aliases in METADATA_ALIASES.items()}
+    return {target: _clean(next((entry[key] for key in aliases if key in entry), None))
+            for target, aliases in METADATA_ALIASES.items()}
+
+
+def _clean(value: Any) -> Any:
+    """Map the source's sentinels to a real None.
+
+    TracingInsights writes the literal string "None" for an absent value. Left
+    alone it is truthy, so `if pit_out_session_s:` would read a missing pit exit
+    as a real one. Missing must be missing (AGENTS.md section 11).
+    """
+    return None if value in (None, "None", "", "nan", "NaN") else value
