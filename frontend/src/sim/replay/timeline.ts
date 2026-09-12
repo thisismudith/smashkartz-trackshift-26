@@ -25,6 +25,9 @@ interface DriverLaps {
   decoded: Map<number, DecodedLap>;
 }
 
+/** Half the lateral separation between the two starting-grid columns, metres. */
+const GRID_LATERAL_M = 1.8;
+
 function decodeAll(bin: ArrayBuffer, drivers: RawDriverEntry[]): Map<string, DriverLaps> {
   const out = new Map<string, DriverLaps>();
   for (const d of drivers) {
@@ -190,18 +193,35 @@ export class ReplayTimeline implements RaceTimeline {
    * plus fractional progress through the current lap, 0..1. */
   private progress(dl: DriverLaps, t: number): {
     lapsDone: number; lapProgress: number; stationM: number; lapEntry: RawLapEntry | null;
-    kind: CarState["status"];
+    kind: CarState["status"]; lateralOverride?: number;
   } {
     const cur = this.currentLap(dl, t);
     if (!cur) {
       const first = dl.laps[0];
-      const gridStation = (this.track.grid.order.indexOf(dl.entry.driver) + 1)
-        * -this.track.grid.pitchMetres;
+      const slot = this.track.grid.order.indexOf(dl.entry.driver);
+      if (slot < 0) {
+        // Not on the grid at all: this driver started from the pit lane (measured:
+        // ALO at the 2026 British GP). Putting them at station 0 dropped them on the
+        // start line among the front row; the pit lane is where they actually were.
+        const pit = this.track.pitLane;
+        return {
+          lapsDone: 0, lapProgress: 0,
+          stationM: pit.exitStation ?? 0,
+          lapEntry: first ?? null, kind: "pit",
+          lateralOverride: pit.loopLateral ?? 0,
+        };
+      }
+      const gridStation = (slot + 1) * -this.track.grid.pitchMetres;
+      // A real starting grid is two staggered columns, not a single file on the
+      // centreline. The audit found the raw data gives a usable grid ORDER and ~8 m
+      // spacing but no lateral at all (every car is snapped to one line), so the
+      // left/right stagger is a labelled RULE-style presentation choice.
+      const lateralOverride = (slot % 2 === 0 ? -1 : 1) * GRID_LATERAL_M;
       return {
         lapsDone: 0, lapProgress: 0,
         stationM: ((gridStation % this.track.lengthMetres) + this.track.lengthMetres)
           % this.track.lengthMetres,
-        lapEntry: first ?? null, kind: "grid",
+        lapEntry: first ?? null, kind: "grid", lateralOverride,
       };
     }
     const { lap, idx } = cur;
@@ -250,27 +270,39 @@ export class ReplayTimeline implements RaceTimeline {
     // order: lapsDone desc, then lapProgress desc, retired appended in retirement order
     const active = [...progressByDriver.entries()].filter(([d]) => !this.retiredOrder.includes(d)
       || progressByDriver.get(d)!.kind !== "retired");
+    const gridOrder = this.track.grid.order;
     const ranked = active.slice().sort((a, b) => {
       const sa = a[1], sb = b[1];
       if (sa.kind === "grid" && sb.kind !== "grid") return 1;
       if (sb.kind === "grid" && sa.kind !== "grid") return -1;
       const scoreA = sa.lapsDone + sa.lapProgress;
       const scoreB = sb.lapsDone + sb.lapProgress;
-      return scoreB - scoreA;
+      if (scoreA !== scoreB) return scoreB - scoreA;
+      // Before the start every car is at lapsDone 0 / progress 0, so the score ties
+      // and the order fell back to whatever the manifest happened to list first
+      // (alphabetical). The grid IS the running order at that point.
+      const ga = gridOrder.indexOf(a[0]);
+      const gb = gridOrder.indexOf(b[0]);
+      if (ga >= 0 && gb >= 0) return ga - gb;
+      return ga >= 0 ? -1 : gb >= 0 ? 1 : 0;
     });
     const retiredRanked = this.retiredOrder
       .filter((d) => progressByDriver.get(d)?.kind === "retired")
       .map((d) => [d, progressByDriver.get(d)!] as const);
     const order = [...ranked, ...retiredRanked];
 
-    const leaderLapsDone = order.length ? order[0][1].lapsDone : 0;
+    // Total progress, not the integer lap count: the instant the leader crosses the
+    // line their lapsDone jumps by one, and every car still a few seconds behind on
+    // the same lap would otherwise be reported "+1 LAP" down. A car is only really
+    // lapped once it is a FULL lap of progress behind.
+    const leaderProgress = order.length ? order[0][1].lapsDone + order[0][1].lapProgress : 0;
 
     order.forEach(([driver, p], i) => {
       const dl = this.byDriver.get(driver)!;
       const pt = trackPointAt(this.track, p.stationM);
       const { z, heading } = pt;
 
-      let lateralM = 0, speedKph = 0, gear = 0, throttlePct = 0, brake = false;
+      let lateralM = p.lateralOverride ?? 0, speedKph = 0, gear = 0, throttlePct = 0, brake = false;
       const cur = this.currentLap(dl, t);
       if (cur && cur.lap.lST !== null) {
         const decoded = dl.decoded.get(cur.lap.lap);
@@ -288,7 +320,9 @@ export class ReplayTimeline implements RaceTimeline {
 
       let gapToLeaderS: number | null = null;
       let intervalS: number | null = null;
-      const lapsDownFromLeader = leaderLapsDone - p.lapsDone;
+      const lapsDownFromLeader = Math.max(
+        0, Math.floor(leaderProgress - (p.lapsDone + p.lapProgress)),
+      );
       if (i > 0 && lapsDownFromLeader === 0) {
         const leaderDriver = order[0][0];
         const leaderDl = this.byDriver.get(leaderDriver)!;

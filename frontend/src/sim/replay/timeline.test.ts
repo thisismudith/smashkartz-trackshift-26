@@ -23,6 +23,7 @@ function makeTrack(): TrackModel {
     corners: [],
     pitLane: { entryStation: null, exitStation: null, mergeStation: null, loopLateral: null },
     grid: { order: ["AAA", "BBB"], pitchMetres: 8 },
+    pitLanePath: null,
     referenceProfile: { binMetres: TRACK_LENGTH, speedKph: new Float32Array([250]), gear: new Uint8Array([6]) },
   };
 }
@@ -140,7 +141,24 @@ describe("ReplayTimeline", () => {
     expect(a.lapsDone).toBe(1);
     expect(b.lapsDone).toBe(0);
     expect(a.position).toBe(1);
-    expect(b.lapsDownFromLeader).toBe(1);
+  });
+
+  it("does NOT call a car lapped merely because the leader crossed the line", () => {
+    // At t=102 AAA is 2 s into lap 2 and BBB is ~97 % through lap 1: a few seconds
+    // apart, not a lap. Comparing bare lap NUMBERS used to report "+1 LAP" here.
+    const b = timeline.sampleAt(102).get("BBB")!;
+    expect(b.lapsDownFromLeader).toBe(0);
+  });
+
+  it("does report a car lapped once it is a full lap of progress behind", () => {
+    // AAA finishes its 2 laps at t=200; BBB is only ~90 % through lap 2 at t=200,
+    // so pick a time where the gap in total progress really does exceed one lap.
+    const states = timeline.sampleAt(205);
+    const a = states.get("AAA")!;
+    const b = states.get("BBB")!;
+    const progressA = a.lapsDone + a.lapProgress;
+    const progressB = b.lapsDone + b.lapProgress;
+    expect(b.lapsDownFromLeader).toBe(Math.max(0, Math.floor(progressA - progressB)));
   });
 
   it("computes a non-negative gap when both cars are on the same lap", () => {

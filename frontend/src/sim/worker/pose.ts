@@ -1,5 +1,5 @@
 import type { CarState } from "../contract/types";
-import { POSE_FLOATS_PER_CAR } from "./protocol";
+import { POSE_FLOATS_PER_CAR, poseStatusCode } from "./protocol";
 
 /** Pack a frame's car states into one flat Float32Array, in a fixed driver order (so
  * the main thread can index by position without re-parsing driver codes every frame).
@@ -30,6 +30,7 @@ export function packPose(
     buf[o + 9] = s.lapProgress;
     buf[o + 10] = s.position;
     buf[o + 11] = i;
+    buf[o + 12] = poseStatusCode(s.status);
   });
   return buf;
 }
@@ -37,7 +38,7 @@ export function packPose(
 export interface UnpackedPose {
   stationM: number; lateralM: number; elevationM: number; headingRad: number;
   speedKph: number; gear: number; throttlePct: number; brake: boolean;
-  lapsDone: number; lapProgress: number; position: number;
+  lapsDone: number; lapProgress: number; position: number; status: number;
 }
 
 export function unpackPoseAt(buf: Float32Array | ArrayBuffer, carIndex: number): UnpackedPose {
@@ -46,6 +47,6 @@ export function unpackPoseAt(buf: Float32Array | ArrayBuffer, carIndex: number):
   return {
     stationM: f[o + 0], lateralM: f[o + 1], elevationM: f[o + 2], headingRad: f[o + 3],
     speedKph: f[o + 4], gear: f[o + 5], throttlePct: f[o + 6], brake: f[o + 7] === 1,
-    lapsDone: f[o + 8], lapProgress: f[o + 9], position: f[o + 10],
+    lapsDone: f[o + 8], lapProgress: f[o + 9], position: f[o + 10], status: f[o + 12],
   };
 }

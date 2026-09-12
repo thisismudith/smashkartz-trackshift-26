@@ -8,8 +8,21 @@
  *   [0] stationM  [1] lateralM  [2] elevationM  [3] headingRad  [4] speedKph
  *   [5] gear      [6] throttlePct  [7] brake(0/1)  [8] lapsDone  [9] lapProgress
  *   [10] position [11] driverIndex (index into the driver list sent once at Init)
+ *   [12] status   (POSE_STATUS_*): the renderer must know a car is on the grid, in
+ *                 the pit lane or parked, because those are placed deliberately and
+ *                 must not be shoved sideways by the on-track declutter pass.
  */
-export const POSE_FLOATS_PER_CAR = 12;
+export const POSE_FLOATS_PER_CAR = 13;
+
+export const POSE_STATUS = {
+  grid: 0, track: 1, pit: 2, finished: 3, retired: 4, gap: 5,
+} as const;
+
+export type PoseStatusName = keyof typeof POSE_STATUS;
+
+export function poseStatusCode(status: PoseStatusName): number {
+  return POSE_STATUS[status];
+}
 
 export interface GeneratedRaceRequest {
   trackUrl: string;

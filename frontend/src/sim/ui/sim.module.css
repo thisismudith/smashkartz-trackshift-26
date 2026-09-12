@@ -175,3 +175,109 @@
 .gpuFps[data-low="true"] {
   color: var(--haas-red);
 }
+
+.gpuBadge {
+  position: relative;
+  flex-wrap: wrap;
+}
+
+.gpuPref {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: var(--haas-grey);
+}
+
+.gpuPref select {
+  background: rgba(17, 17, 17, 0.9);
+  border: 1px solid var(--haas-grey);
+  color: var(--haas-white);
+  font-size: 0.7rem;
+  padding: 0.1rem 0.2rem;
+}
+
+.gpuWarn {
+  background: transparent;
+  border: 1px solid var(--haas-red);
+  color: var(--haas-red);
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0.15rem 0.4rem;
+  cursor: pointer;
+}
+
+.gpuHelp {
+  position: absolute;
+  top: calc(100% + 0.4rem);
+  left: 0;
+  width: min(34rem, 80vw);
+  background: rgba(17, 17, 17, 0.97);
+  border: 1px solid var(--haas-grey);
+  padding: 0.8rem 1rem;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  text-transform: none;
+  letter-spacing: normal;
+  color: var(--haas-white);
+  z-index: 10;
+}
+
+.gpuHelp p {
+  margin: 0 0 0.5rem;
+}
+
+.gpuHelp ol {
+  margin: 0 0 0.5rem;
+  padding-left: 1.2rem;
+}
+
+.gpuHelp code {
+  color: var(--haas-red);
+}
+
+.legend {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-self: flex-start;
+  background: rgba(17, 17, 17, 0.75);
+  border: 1px solid var(--haas-grey);
+  padding: 0.3rem 0.7rem;
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--haas-grey);
+}
+
+.legendTitle {
+  color: var(--haas-white);
+  border-right: 1px solid rgba(174, 174, 174, 0.4);
+  padding-right: 0.7rem;
+}
+
+.legendItem {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--haas-white);
+}
+
+.legendItem i {
+  width: 0.9rem;
+  height: 0.55rem;
+  flex: none;
+  border: 1px solid rgba(174, 174, 174, 0.5);
+}
+
+.swatchTrack { background: #2a2a2a; }
+.swatchPit { background: #4e4e4e; }
+.swatchCar { background: var(--haas-red); }
+
+.legendNote {
+  color: var(--haas-grey);
+  text-transform: none;
+  letter-spacing: normal;
+  font-size: 0.65rem;
+}

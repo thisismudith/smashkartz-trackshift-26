@@ -4,15 +4,24 @@ import * as THREE from "three";
 import type { TrackModel } from "../contract/types";
 import { CAR } from "@/components/loader/physics/constants";
 import { HAAS } from "@/lib/palette";
-import { POSE_FLOATS_PER_CAR } from "../worker/protocol";
-import { applyShadowPriceOverlay, buildTrackMesh, buildTrackOutline, toRenderFrame } from "./trackMesh";
+import { halfWidthAt } from "../data/manifest";
+import { POSE_FLOATS_PER_CAR, POSE_STATUS } from "../worker/protocol";
+import {
+  CAR_RENDER_HEIGHT_M, CAR_RENDER_LENGTH_M, CAR_RENDER_WIDTH_M, PRESENTATION_SCALE,
+} from "./presentation";
+import {
+  applyShadowPriceOverlay, buildPitLaneMesh, buildTrackMesh, buildTrackOutline, toRenderFrame,
+} from "./trackMesh";
 
 export type CameraMode = "broadcast" | "orbit" | "onboard" | "helicopter";
+
+export type GpuPreference = "high-performance" | "low-power" | "default";
 
 export interface GpuInfo {
   renderer: string;
   vendor: string;
   isSoftware: boolean;
+  isIntegrated: boolean;
   maxTextureSize: number;
 }
 
@@ -23,6 +32,9 @@ export interface PerfStats {
 }
 
 const SOFTWARE_MARKERS = ["swiftshader", "llvmpipe", "software", "microsoft basic render"];
+/** Integrated-GPU families. Used only to tell the user the discrete GPU did not get
+ * picked; it is never used to change behaviour. */
+const INTEGRATED_MARKERS = ["intel", "uhd graphics", "iris", "radeon(tm) graphics", "vega 8"];
 
 /** WEBGL_debug_renderer_info exposes the actual GPU string behind ANGLE, which is
  * the only reliable way from JS to tell "rendering on the GPU" from "rendering in a
@@ -36,6 +48,7 @@ export function readGpuInfo(gl: WebGLRenderingContext | WebGL2RenderingContext):
   return {
     renderer, vendor,
     isSoftware: SOFTWARE_MARKERS.some((m) => lower.includes(m)),
+    isIntegrated: INTEGRATED_MARKERS.some((m) => lower.includes(m)),
     maxTextureSize: gl.getParameter(gl.MAX_TEXTURE_SIZE) as number,
   };
 }
@@ -72,6 +85,8 @@ export class SimRenderer {
   private qualityTier: 0 | 1 | 2 = 0; // 0 = full, 1 = no AA, 2 = capped DPR too
   private lastNow = 0;
   private cameraTarget = new THREE.Vector3();
+  /** Centre of the circuit in render space; what the orbit camera looks at. */
+  private orbitCentre = new THREE.Vector3();
   private cameraPos = new THREE.Vector3();
   private orbitYaw = Math.PI / 4;
   private orbitPitch = 0.6;
@@ -89,13 +104,22 @@ export class SimRenderer {
   private stationScratch: Float32Array | null = null;
   private lateralScratch: Float32Array | null = null;
   private headingScratch: Float32Array | null = null;
+  /** Eased lateral actually drawn, so a lane change slides instead of snapping. */
+  private smoothedLateral: Float32Array | null = null;
+  private smoothedValid = false;
 
-  constructor(private canvas: HTMLCanvasElement, private poseSource: PoseSource) {
-    // powerPreference: "high-performance" asks the browser to pick the discrete GPU
-    // on a hybrid-graphics laptop rather than the integrated one it may default to
-    // for a low-power WebGL context -- this was previously unset.
+  constructor(
+    private canvas: HTMLCanvasElement,
+    private poseSource: PoseSource,
+    powerPreference: GpuPreference = "high-performance",
+  ) {
+    // A HINT ONLY. On a hybrid-graphics laptop "high-performance" asks the browser
+    // for the discrete GPU, but the browser's GPU process, the Windows per-app
+    // graphics preference and the NVIDIA control panel all outrank it -- WebGL has
+    // no API to pick a physical adapter. getGpuInfo() reports what was actually
+    // handed over, so the UI can show the truth rather than the request.
     this.renderer = new THREE.WebGLRenderer({
-      canvas, antialias: true, alpha: false, powerPreference: "high-performance",
+      canvas, antialias: true, alpha: false, powerPreference,
     });
     this.renderer.setClearColor(new THREE.Color(HAAS.black), 1);
     this.camera = new THREE.PerspectiveCamera(55, 1, 1, 20000);
@@ -119,13 +143,24 @@ export class SimRenderer {
     const outline = buildTrackOutline(track);
     this.scene.add(surface, outline);
     this.trackSurface = surface;
-    // fit the initial orbit distance to the track's own bounding box
-    let maxR = 0;
+    const pit = buildPitLaneMesh(track);
+    if (pit) this.scene.add(pit);
+    // Frame the orbit view on the CIRCUIT's own centre, not the telemetry origin:
+    // the coordinate origin is an arbitrary point in the feed's frame and can sit
+    // well outside the track, which left the circuit off-centre and clipped.
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity, sumZ = 0;
     for (let i = 0; i < track.x.length; i++) {
-      maxR = Math.max(maxR, Math.hypot(track.x[i], track.y[i]));
+      if (track.x[i] < minX) minX = track.x[i];
+      if (track.x[i] > maxX) maxX = track.x[i];
+      if (track.y[i] < minY) minY = track.y[i];
+      if (track.y[i] > maxY) maxY = track.y[i];
+      sumZ += track.z[i];
     }
-    this.orbitDist = maxR * 1.6;
-    this.cameraTarget.set(0, 0, 0);
+    const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+    const radius = Math.max(maxX - minX, maxY - minY) / 2;
+    this.orbitCentre.set(...toRenderFrame(cx, cy, sumZ / track.x.length));
+    this.orbitDist = radius * 2.2;
+    this.cameraTarget.copy(this.orbitCentre);
   }
 
   setDrivers(driverCount: number, teamColours: (string | null)[]) {
@@ -135,7 +170,9 @@ export class SimRenderer {
       this.cars.geometry.dispose();
       (this.cars.material as THREE.Material).dispose();
     }
-    const geom = new THREE.BoxGeometry(CAR.lengthM, 0.9, CAR.widthM);
+    const geom = new THREE.BoxGeometry(
+      CAR_RENDER_LENGTH_M, CAR_RENDER_HEIGHT_M, CAR_RENDER_WIDTH_M,
+    );
     const mat = new THREE.MeshStandardMaterial({ vertexColors: false, roughness: 0.5, metalness: 0.3 });
     const mesh = new THREE.InstancedMesh(geom, mat, Math.max(1, driverCount));
     // InstancedMesh computes its frustum-culling bounding sphere from the LOCAL
@@ -239,40 +276,88 @@ export class SimRenderer {
    * almost the same (station, lateral) even though they are plainly not occupying the
    * same patch of track. It never touches gaps, lap counts, or any other reported
    * value -- only where the box is drawn. */
-  private declutterLateral(n: number) {
-    const MIN_SEP_M = 2.4;
-    const STATION_WINDOW_M = 7;
-    const half = MIN_SEP_M / 2;
+  /**
+   * Assigns each car a lane offset so cars running within a rendered car-length of
+   * each other never draw on top of one another.
+   *
+   * The earlier pairwise "push both apart" version oscillated badly: on the grid, 20
+   * cars sit single file ~8 m apart, every car is inside its neighbours' window, and
+   * each frame's pairwise passes resolved to a different answer -- which is exactly
+   * the cars darting left and right. This version is stable instead: cars are grouped
+   * into clusters by station, and within a cluster each car gets a FIXED lane index
+   * derived from its running order, so the same situation always yields the same
+   * lanes. The result is then eased over time (see updateCars) so even a genuine lane
+   * change slides rather than snaps.
+   */
+  private declutterLateral(n: number, pose: Float32Array) {
     const station = this.stationScratch!, lateral = this.lateralScratch!;
-    const trackLen = this.track!.lengthMetres;
-    for (let a = 0; a < n; a++) {
-      for (let b = a + 1; b < n; b++) {
-        let ds = Math.abs(station[a] - station[b]);
-        if (ds > trackLen / 2) ds = trackLen - ds;
-        if (ds >= STATION_WINDOW_M) continue;
-        const dl = lateral[a] - lateral[b];
-        if (Math.abs(dl) >= MIN_SEP_M) continue;
-        // push both away from their current midpoint, keeping a's real side of b's
-        // (or a stable a-before-b order if they are exactly tied) so they visually
-        // pass on the correct side rather than swapping
-        const mid = (lateral[a] + lateral[b]) / 2;
-        const sign = dl !== 0 ? Math.sign(dl) : (a < b ? 1 : -1);
-        lateral[a] = mid + sign * half;
-        lateral[b] = mid - sign * half;
+    const track = this.track!;
+    const trackLen = track.lengthMetres;
+    // Everything here is in REAL metres, the same units the pose carries. The render
+    // scale is applied later, once, when the world position is computed -- an earlier
+    // version mixed the two and multiplied the lane offsets twice, fanning cars up to
+    // ~90 m off the road.
+    const windowM = CAR.lengthM * 1.15;
+    const laneStepM = CAR.widthM * 1.15;
+
+    const onTrack: number[] = [];
+    for (let i = 0; i < n; i++) {
+      // Grid, pit-lane, finished and retired cars are all placed deliberately (a
+      // staggered grid, the real pit-lane geometry, a parking queue). Shoving them
+      // sideways is what produced the fan of cars sitting off the circuit.
+      if (pose[i * POSE_FLOATS_PER_CAR + 12] !== POSE_STATUS.track) continue;
+      onTrack.push(i);
+    }
+    // station order makes clusters contiguous; position breaks ties identically
+    // every frame so the lane assignment is stable rather than oscillating
+    const asArray = onTrack.sort((a, b) => (station[a] - station[b])
+      || (pose[a * POSE_FLOATS_PER_CAR + 10] - pose[b * POSE_FLOATS_PER_CAR + 10]));
+
+    let clusterStart = 0;
+    for (let k = 1; k <= asArray.length; k++) {
+      const prev = asArray[k - 1];
+      const cur = k < asArray.length ? asArray[k] : -1;
+      let gap = Infinity;
+      if (cur >= 0) {
+        gap = Math.abs(station[cur] - station[prev]);
+        if (gap > trackLen / 2) gap = trackLen - gap;
       }
+      if (gap < windowM) continue; // still inside the same cluster
+
+      const size = k - clusterStart;
+      if (size > 1) {
+        let mean = 0;
+        for (let m = clusterStart; m < k; m++) mean += lateral[asArray[m]];
+        mean /= size;
+        // A road only holds so many cars abreast: clamp the fan to the real half
+        // width at this point of the circuit, so a big pack bunches up visually
+        // instead of spilling onto the grass.
+        const halfW = halfWidthAt(track, station[asArray[clusterStart]]);
+        const maxOffset = Math.max(0, halfW - CAR.widthM / 2);
+        for (let m = 0; m < size; m++) {
+          const car = asArray[clusterStart + m];
+          const rank = Math.ceil(m / 2) * (m % 2 === 1 ? 1 : -1);
+          const want = mean + rank * laneStepM;
+          lateral[car] = Math.max(-maxOffset, Math.min(maxOffset, want));
+        }
+      }
+      clusterStart = k;
     }
   }
 
-  private updateCars(pose: Float32Array) {
+  private updateCars(pose: Float32Array, dtWall: number) {
     if (!this.cars || !this.track) return;
     const n = this.driverCount;
     if (!this.stationScratch || this.stationScratch.length !== n) {
       this.stationScratch = new Float32Array(n);
       this.lateralScratch = new Float32Array(n);
       this.headingScratch = new Float32Array(n);
+      this.smoothedLateral = new Float32Array(n);
+      this.smoothedValid = false;
     }
     const station = this.stationScratch, lateral = this.lateralScratch!;
     const headings = this.headingScratch!;
+    const smoothed = this.smoothedLateral!;
     for (let i = 0; i < n; i++) {
       const o = i * POSE_FLOATS_PER_CAR;
       station[i] = pose[o + 0];
@@ -282,7 +367,15 @@ export class SimRenderer {
     // finished/retired cars are already queued nose-to-tail along the station axis
     // (see timeline.ts's parkedStation), well outside this window, so no separate
     // "is this car still racing" check is needed here.
-    this.declutterLateral(n);
+    this.declutterLateral(n, pose);
+
+    // ease toward the assigned lane; the first frame snaps so cars do not fly in
+    const k = this.smoothedValid ? 1 - Math.exp(-dtWall * 6) : 1;
+    for (let i = 0; i < n; i++) {
+      smoothed[i] += (lateral[i] - smoothed[i]) * k;
+      lateral[i] = smoothed[i];
+    }
+    this.smoothedValid = true;
 
     for (let i = 0; i < n; i++) {
       if (!this.track) break;
@@ -299,8 +392,16 @@ export class SimRenderer {
       const cz = track.z[i0] + (track.z[i1] - track.z[i0]) * frac;
       const heading = headings[i];
       const nx = -Math.sin(heading), ny = Math.cos(heading);
-      const [rx, ry, rz] = toRenderFrame(cx + nx * lateral[i], cy + ny * lateral[i], cz);
-      this.posScratch.set(rx, ry, rz);
+      // lateral is scaled with the road (presentation.ts), so a car sitting halfway
+      // to the kerb in the data still sits halfway to the kerb on the widened ribbon
+      const lat = lateral[i] * PRESENTATION_SCALE;
+      const [rx, ry, rz] = toRenderFrame(cx + nx * lat, cy + ny * lat, cz);
+      // BoxGeometry is centred on its own origin, so placing that origin on the road
+      // surface buries the bottom half of every car in the tarmac. Lift it by half
+      // its height (plus a hair, to stay off the ribbon's z-fighting plane) so the
+      // wheels sit ON the track. The telemetry point itself is the car's reference
+      // position, which we treat as its centre in plan view.
+      this.posScratch.set(rx, ry + CAR_RENDER_HEIGHT_M / 2 + 0.05, rz);
       this.quatScratch.setFromAxisAngle(this.upVec, -heading);
       this.matrixScratch.compose(this.posScratch, this.quatScratch, this.scaleScratch);
       this.cars.setMatrixAt(i, this.matrixScratch);
@@ -334,8 +435,8 @@ export class SimRenderer {
         const x = this.orbitDist * Math.sin(this.orbitPitch) * Math.cos(this.orbitYaw);
         const y = this.orbitDist * Math.cos(this.orbitPitch);
         const z = this.orbitDist * Math.sin(this.orbitPitch) * Math.sin(this.orbitYaw);
-        desired.set(x, y, z);
-        lookAt = this.cameraTarget;
+        desired.set(this.orbitCentre.x + x, this.orbitCentre.y + y, this.orbitCentre.z + z);
+        lookAt = this.orbitCentre;
         break;
       }
       case "helicopter": {
@@ -410,7 +511,7 @@ export class SimRenderer {
 
       const pose = this.poseSource.getLatestPose();
       if (pose) {
-        this.updateCars(pose.floats);
+        this.updateCars(pose.floats, dtWall);
         this.updateCamera(pose.floats, dtWall);
       }
       this.renderer.render(this.scene, this.camera);

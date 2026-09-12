@@ -57,13 +57,9 @@ export class GeneratedTimeline implements RaceTimeline {
       return { entry, idx };
     });
 
-    const ranked = progress.slice().sort((a, b) => {
-      const scoreA = a.idx < 0 ? -1e9 : a.entry.laps[a.idx].lap
-        + (t > a.entry.laps[a.idx].sesT ? 1 : (t - a.entry.laps[a.idx].lST) / (a.entry.laps[a.idx].sesT - a.entry.laps[a.idx].lST));
-      const scoreB = b.idx < 0 ? -1e9 : b.entry.laps[b.idx].lap
-        + (t > b.entry.laps[b.idx].sesT ? 1 : (t - b.entry.laps[b.idx].lST) / (b.entry.laps[b.idx].sesT - b.entry.laps[b.idx].lST));
-      return scoreB - scoreA;
-    });
+    const ranked = progress.slice().sort(
+      (a, b) => GeneratedTimeline.progressOf(b, t) - GeneratedTimeline.progressOf(a, t),
+    );
 
     ranked.forEach(({ entry, idx }, i) => {
       if (idx < 0) {
@@ -86,8 +82,8 @@ export class GeneratedTimeline implements RaceTimeline {
         lapsDone: idx + (t > lapRow.sesT ? 1 : 0),
         lapProgress: Math.max(0, Math.min(0.9999, relT / Math.max(1e-6, lapRow.sesT - lapRow.lST))),
         position: i + 1,
-        gapToLeaderS: i === 0 ? null : this.gapToLeader(ranked, i),
-        lapsDownFromLeader: this.lapsDownFromLeader(ranked, i),
+        gapToLeaderS: i === 0 ? null : this.gapToLeader(ranked, i, t),
+        lapsDownFromLeader: this.lapsDownFromLeader(ranked, i, t),
         intervalS: i === 0 ? null : this.intervalToAhead(ranked, i),
         inPit: lapRow.pin !== null && t >= lapRow.pin,
         status: finished ? "finished" : (lapRow.pin !== null && t >= lapRow.pin ? "pit" : "track"),
@@ -106,10 +102,27 @@ export class GeneratedTimeline implements RaceTimeline {
     };
   }
 
-  private lapsDownFromLeader(ranked: { entry: GeneratedRaceResult["entries"][number]; idx: number }[], i: number): number {
-    const leaderLap = ranked[0].idx < 0 ? 0 : ranked[0].entry.laps[ranked[0].idx].lap;
-    const thisLap = ranked[i].idx < 0 ? 0 : ranked[i].entry.laps[ranked[i].idx].lap;
-    return Math.max(0, leaderLap - thisLap);
+  /** Laps + fraction of the current lap: the car's true position in the race. */
+  private static progressOf(
+    p: { entry: GeneratedRaceResult["entries"][number]; idx: number }, t: number,
+  ): number {
+    if (p.idx < 0) return -1e9;
+    const row = p.entry.laps[p.idx];
+    const span = row.sesT - row.lST;
+    const frac = t > row.sesT ? 1 : (span > 0 ? (t - row.lST) / span : 0);
+    return row.lap + frac;
+  }
+
+  /** A car is only lapped once it is a FULL lap of progress behind. Comparing bare
+   * lap NUMBERS reported every car that had not yet crossed the line as "+1 LAP"
+   * the moment the leader crossed it, even when it was a second behind. */
+  private lapsDownFromLeader(
+    ranked: { entry: GeneratedRaceResult["entries"][number]; idx: number }[], i: number, t: number,
+  ): number {
+    const lead = GeneratedTimeline.progressOf(ranked[0], t);
+    const mine = GeneratedTimeline.progressOf(ranked[i], t);
+    if (mine < -1e8) return 0;
+    return Math.max(0, Math.floor(lead - mine));
   }
 
   /** Gap to the leader, in seconds, for a car on the SAME lap number as the leader.
@@ -118,9 +131,9 @@ export class GeneratedTimeline implements RaceTimeline {
    * (plan section 4), since both cars are, by construction, on self-consistent
    * generated laps rather than real telemetry with its per-car distance-frame noise. */
   private gapToLeader(
-    ranked: { entry: GeneratedRaceResult["entries"][number]; idx: number }[], i: number,
+    ranked: { entry: GeneratedRaceResult["entries"][number]; idx: number }[], i: number, t: number,
   ): number | null {
-    if (this.lapsDownFromLeader(ranked, i) > 0) return null;
+    if (this.lapsDownFromLeader(ranked, i, t) > 0) return null;
     const leader = ranked[0];
     const leaderLap = leader.idx < 0 ? null : leader.entry.laps[leader.idx];
     const mine = ranked[i].entry.laps[ranked[i].idx];

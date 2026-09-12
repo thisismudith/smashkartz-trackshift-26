@@ -148,6 +148,8 @@ def corner_stations(session_dir, ring: Ring):
 
 
 ON_TRACK_LAT_M = 3.0     # inside this the car is on the racing line, not in the lane
+MAX_PIT_LAT_M = 60.0     # beyond this it is a projection artefact, not a pit lane
+                          # (measured lane offsets: -35 Silverstone, -12 Spa/Zandvoort)
 MERGE_RUN = 30           # consecutive on-track samples that end an out-lap head
 CAR_WIDTH_M = 2.0        # HaasCarTop footprint, already in the loader constants
 WIDTH_FLOOR_M = CAR_WIDTH_M / 2 + 0.25
@@ -389,4 +391,89 @@ def reference_speed_profile(ring: Ring, laps, bin_m: float = 5.0):
         "provenance": "DERIVED: per-station median speed/gear/rpm across many clean laps "
                       "(the synthetic spine the engine warps by sector time), never a "
                       "single fast lap",
+    }
+
+def _resample_run(x, y, z, n_pts):
+    """Resample one pit-lane run onto n_pts evenly spaced by its own arc length."""
+    d = np.concatenate([[0.0], np.cumsum(np.hypot(np.diff(x), np.diff(y)))])
+    if d[-1] <= 1.0:
+        return None
+    t = np.linspace(0.0, d[-1], n_pts)
+    return np.interp(t, d, x), np.interp(t, d, y), np.interp(t, d, z)
+
+
+def pit_lane_path(session_dir, table: LapTable, ring: Ring, pit: dict,
+                   n_pts: int = 80, max_laps: int = 60):
+    """A drawable pit lane, as an explicit XY(Z) polyline in the same frame as the ring.
+
+    NOT a lateral offset against station: a real pit lane shortcuts the corner it
+    bypasses (measured at Silverstone, the lane runs >60 m from the centreline at the
+    same station because the circuit loops around Club while the lane goes straight),
+    so an offset profile cannot describe it. Instead the off-track runs are resampled
+    by their OWN arc length and median-averaged across laps, exactly as the racing
+    ring is built.
+
+    Two segments are stitched: in-lap tails cover entry -> box, out-lap heads cover
+    box -> merge. The car is stationary in the box, so the feed traces nothing there
+    and the join is a straight interpolation.
+    """
+    ins, outs = [], []
+    used = 0
+    for r in table.rows():
+        if used > max_laps:
+            break
+        is_in, is_out = r["pin"] != "None", r["pout"] != "None"
+        if not (is_in or is_out):
+            continue
+        l = load_lap(session_dir, r["drv"], r["lap"])
+        if l is None or not l.has_xy:
+            continue
+        _st, lat = ring.project(l.x, l.y)
+        on = np.isfinite(lat) & (np.abs(lat) < ON_TRACK_LAT_M)
+        if is_in:
+            idx_on = np.where(on)[0]
+            if idx_on.size and int(idx_on[-1]) < l.n - 4:
+                k = int(idx_on[-1])
+                run = _resample_run(l.x[k:], l.y[k:], l.z[k:], n_pts)
+                if run is not None:
+                    ins.append(run); used += 1
+        if is_out:
+            run_len, merge_i = 0, None
+            for i in range(l.n):
+                run_len = run_len + 1 if on[i] else 0
+                if run_len >= MERGE_RUN:
+                    merge_i = i - MERGE_RUN + 1
+                    break
+            if merge_i and merge_i > 4:
+                run = _resample_run(l.x[:merge_i], l.y[:merge_i], l.z[:merge_i], n_pts)
+                if run is not None:
+                    outs.append(run); used += 1
+
+    if not ins and not outs:
+        return None
+
+    def median_path(runs):
+        if not runs:
+            return None
+        xs = np.median(np.array([r[0] for r in runs]), axis=0)
+        ys = np.median(np.array([r[1] for r in runs]), axis=0)
+        zs = np.median(np.array([r[2] for r in runs]), axis=0)
+        return xs, ys, zs
+
+    seg_in, seg_out = median_path(ins), median_path(outs)
+    parts = [p for p in (seg_in, seg_out) if p is not None]
+    x = np.concatenate([p[0] for p in parts])
+    y = np.concatenate([p[1] for p in parts])
+    z = np.concatenate([p[2] for p in parts])
+    length = float(np.sum(np.hypot(np.diff(x), np.diff(y))))
+
+    return {
+        "xCm": [int(round(v * 100)) for v in x],
+        "yCm": [int(round(v * 100)) for v in y],
+        "zCm": [int(round(v * 100)) for v in z],
+        "lengthMetres": round(length, 1),
+        "entrySegmentPoints": 0 if seg_in is None else n_pts,
+        "lapsUsed": used,
+        "provenance": ("DERIVED: per-point median of real pit in/out telemetry, resampled "
+                        "by arc length; the stationary-in-box join is INFERRED"),
     }

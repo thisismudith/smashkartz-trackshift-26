@@ -2,13 +2,16 @@
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { SimStore } from "../store/simStore";
-import { SimRenderer, type CameraMode, type GpuInfo, type PerfStats } from "../render/scene";
+import {
+  SimRenderer, type CameraMode, type GpuInfo, type GpuPreference, type PerfStats,
+} from "../render/scene";
 import { parseTrackModel, type RawTrackModel } from "../data/manifest";
 import { DriverPanel } from "./DriverPanel";
 import { GpuBadge } from "./GpuBadge";
 import { RaceControlFeed } from "./RaceControlFeed";
 import { type CatalogueTrack, type Selection, SessionSelector } from "./SessionSelector";
 import { TimelineScrubber } from "./TimelineScrubber";
+import { TrackLegend } from "./TrackLegend";
 import { WeatherStrip } from "./WeatherStrip";
 import styles from "./sim.module.css";
 
@@ -42,6 +45,8 @@ export default function SimCanvas() {
   const [selectedDriver, setSelectedDriver] = useState<string | null>(null);
   const [gpuInfo, setGpuInfo] = useState<GpuInfo | null>(null);
   const [perf, setPerf] = useState<PerfStats | null>(null);
+  const [gpuPref, setGpuPref] = useState<GpuPreference>("high-performance");
+  const [hasPitLane, setHasPitLane] = useState(false);
 
   const [index, setIndex] = useState<SimIndex | null>(null);
   const [catalogue, setCatalogue] = useState<Catalogue | null>(null);
@@ -125,8 +130,9 @@ export default function SimCanvas() {
 
         const teamColourBySlug = new Map(cat.teams.map((t) => [t.team, `#${t.colour}`]));
         const track = parseTrackModel(trackRaw);
+        setHasPitLane(track.pitLanePath !== null);
         rendererRef.current?.dispose();
-        const renderer = new SimRenderer(canvasRef.current, store);
+        const renderer = new SimRenderer(canvasRef.current, store, gpuPref);
         renderer.setTrack(track);
         const teamColours: (string | null)[] = manifestRaw.drivers.map(
           (d) => (d.team ? teamColourBySlug.get(d.team) ?? null : null),
@@ -149,7 +155,7 @@ export default function SimCanvas() {
     return () => { disposed = true; };
     // cameraMode intentionally excluded: it is applied via the dedicated effect below
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [index, selection, store]);
+  }, [index, selection, store, gpuPref]);
 
   useEffect(() => () => {
     rendererRef.current?.dispose();
@@ -184,7 +190,13 @@ export default function SimCanvas() {
             onChange={changeSelection}
           />
         ) : null}
-        <GpuBadge gpu={gpuInfo} perf={perf} />
+        <TrackLegend hasPitLane={hasPitLane} />
+        <GpuBadge
+          gpu={gpuInfo}
+          perf={perf}
+          preference={gpuPref}
+          onPreferenceChange={setGpuPref}
+        />
         <div className={styles.controls}>
           <button type="button" onClick={() => store.play()}>Play</button>
           <button type="button" onClick={() => store.pause()}>Pause</button>

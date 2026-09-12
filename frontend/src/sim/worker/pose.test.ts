@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { CarState } from "../contract/types";
 import { packPose, unpackPoseAt } from "./pose";
+import { POSE_STATUS } from "./protocol";
 
 function makeState(overrides: Partial<CarState> = {}): CarState {
   return {
@@ -40,9 +41,21 @@ describe("pose packing", () => {
 
   it("reuses a supplied buffer without reallocating when the size matches", () => {
     const states = new Map([["AAA", makeState()]]);
-    const scratch = new Float32Array(12);
+    const scratch = new Float32Array(13);
     const buf = packPose(states, ["AAA"], scratch);
     expect(buf).toBe(scratch);
+  });
+
+  it("packs the car status code so the renderer can tell grid/pit/parked apart", () => {
+    const states = new Map([
+      ["AAA", makeState({ status: "track" })],
+      ["BBB", makeState({ driver: "BBB", status: "pit" })],
+      ["CCC", makeState({ driver: "CCC", status: "grid" })],
+    ]);
+    const buf = packPose(states, ["AAA", "BBB", "CCC"]);
+    expect(unpackPoseAt(buf, 0).status).toBe(POSE_STATUS.track);
+    expect(unpackPoseAt(buf, 1).status).toBe(POSE_STATUS.pit);
+    expect(unpackPoseAt(buf, 2).status).toBe(POSE_STATUS.grid);
   });
 
   it("preserves brake=true", () => {

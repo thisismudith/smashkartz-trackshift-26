@@ -65,6 +65,9 @@ export interface TrackModel {
     mergeStation: number | null;
     loopLateral: number | null;
   };
+  /** Explicit XY(Z) polyline of the pit lane, metres, in the ring's own frame.
+   * Null when a session has too few pit laps to trace one. */
+  pitLanePath: { x: Float32Array; y: Float32Array; z: Float32Array } | null;
   grid: { order: string[]; pitchMetres: number };
   referenceProfile: { binMetres: number; speedKph: Float32Array; gear: Uint8Array };
 }

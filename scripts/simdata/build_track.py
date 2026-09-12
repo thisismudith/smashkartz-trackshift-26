@@ -18,8 +18,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from simdata.rawio import LapTable
 from simdata.track import (build_ring, corner_stations, grid, pick_geometry_laps,
-                            pit_lane, reference_speed_profile, timing_lines,
-                            width_estimate)
+                            pit_lane, pit_lane_path, reference_speed_profile,
+                            timing_lines, width_estimate)
 
 DATA_ROOT = Path(__file__).resolve().parent.parent.parent / "data" / "2026"
 SCHEMA_VERSION = 1
@@ -74,6 +74,7 @@ def build_track_model(event: str) -> dict:
 
     corners = corner_stations(sdir, ring)
     pit = pit_lane(sdir, table, ring)
+    pit_path = pit_lane_path(sdir, table, ring, pit)
     grid_model = grid(sdir, table, ring, 0.0)
     width = width_estimate(sdir, table, ring, laps, corners, pit)
     profile = reference_speed_profile(ring, laps)
@@ -100,6 +101,7 @@ def build_track_model(event: str) -> dict:
         "timingLines": tl,
         "corners": corners,
         "pitLane": pit,
+        "pitLanePath": pit_path,
         "grid": grid_model,
         "width": width,
         "referenceProfile": profile,

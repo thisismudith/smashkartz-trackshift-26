@@ -2,6 +2,7 @@ import * as THREE from "three";
 import type { TrackModel } from "../contract/types";
 import { HAAS } from "@/lib/palette";
 import { halfWidthAt } from "../data/manifest";
+import { PRESENTATION_SCALE } from "./presentation";
 
 /** Telemetry frame is X/Y horizontal, Z vertical; three.js scenes are conventionally
  * Y-up, so every conversion from track-frame to render-frame swaps Y and Z here, in
@@ -29,7 +30,9 @@ export function buildTrackMesh(track: TrackModel): THREE.Mesh {
     const dy = track.y[i1] - track.y[i];
     const len = Math.hypot(dx, dy) || 1;
     const nx = -dy / len, ny = dx / len; // left normal in track-frame XY
-    const hw = halfWidthAt(track, i * (track.lengthMetres / n));
+    // widened by the same factor the cars are (see presentation.ts), so the
+    // car-to-road proportion on screen stays the real one
+    const hw = halfWidthAt(track, i * (track.lengthMetres / n)) * PRESENTATION_SCALE;
 
     const lx = track.x[i] + nx * hw, ly = track.y[i] + ny * hw;
     const rx = track.x[i] - nx * hw, ry = track.y[i] - ny * hw;
@@ -121,7 +124,9 @@ export function buildTrackOutline(track: TrackModel): THREE.LineSegments {
     const dy = track.y[i1] - track.y[i];
     const len = Math.hypot(dx, dy) || 1;
     const nx = -dy / len, ny = dx / len;
-    const hw = halfWidthAt(track, i * (track.lengthMetres / n));
+    // widened by the same factor the cars are (see presentation.ts), so the
+    // car-to-road proportion on screen stays the real one
+    const hw = halfWidthAt(track, i * (track.lengthMetres / n)) * PRESENTATION_SCALE;
     for (const side of [1, -1]) {
       const [rx, ry, rz] = toRenderFrame(track.x[i] + side * nx * hw, track.y[i] + side * ny * hw, track.z[i]);
       const [rx1, ry1, rz1] = toRenderFrame(
@@ -134,4 +139,55 @@ export function buildTrackOutline(track: TrackModel): THREE.LineSegments {
   geom.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
   const mat = new THREE.LineBasicMaterial({ color: new THREE.Color(HAAS.grey), transparent: true, opacity: 0.6 });
   return new THREE.LineSegments(geom, mat);
+}
+
+/** Real pit-lane width is not in the telemetry any more than track width is, so this
+ * is a documented RULE constant (F1 pit lanes are ~12 m wide including the box side). */
+export const PIT_LANE_WIDTH_M = 12;
+
+/**
+ * The pit lane as its own ribbon, built from the explicit XY polyline the track model
+ * carries (NOT a lateral offset from the racing line -- a pit lane shortcuts the
+ * corner it bypasses, so no station-offset description of it is possible). Drawn in a
+ * lighter grey than the racing surface so it reads as a separate piece of road.
+ */
+export function buildPitLaneMesh(track: TrackModel): THREE.Mesh | null {
+  const path = track.pitLanePath;
+  if (!path || path.x.length < 2) return null;
+  const n = path.x.length;
+  const half = (PIT_LANE_WIDTH_M / 2) * PRESENTATION_SCALE;
+  const positions = new Float32Array(n * 2 * 3);
+  const indices: number[] = [];
+
+  for (let i = 0; i < n; i++) {
+    // forward difference, clamped at the ends (the lane is open, not a loop)
+    const i0 = i === n - 1 ? i - 1 : i;
+    const i1 = i === n - 1 ? i : i + 1;
+    const dx = path.x[i1] - path.x[i0];
+    const dy = path.y[i1] - path.y[i0];
+    const len = Math.hypot(dx, dy) || 1;
+    const nx = -dy / len, ny = dx / len;
+    const [lx, ly, lz] = toRenderFrame(path.x[i] + nx * half, path.y[i] + ny * half, path.z[i]);
+    const [rx, ry, rz] = toRenderFrame(path.x[i] - nx * half, path.y[i] - ny * half, path.z[i]);
+    positions.set([lx, ly, lz], i * 6);
+    positions.set([rx, ry, rz], i * 6 + 3);
+    if (i < n - 1) {
+      const a = i * 2, b = i * 2 + 1, c = (i + 1) * 2, d = (i + 1) * 2 + 1;
+      indices.push(a, b, c, b, d, c);
+    }
+  }
+
+  const geom = new THREE.BufferGeometry();
+  geom.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  geom.setIndex(indices);
+  geom.computeVertexNormals();
+  const mat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color(HAAS.grey).multiplyScalar(0.45),
+    roughness: 0.95, metalness: 0, side: THREE.DoubleSide,
+  });
+  const mesh = new THREE.Mesh(geom, mat);
+  mesh.name = "pit-lane";
+  // nudged just above the ground plane so it never z-fights the racing ribbon
+  mesh.position.y = 0.02;
+  return mesh;
 }
