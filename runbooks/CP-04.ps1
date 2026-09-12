@@ -29,8 +29,9 @@
     MODELS.md section 6.3 requires deterministic output.
 
 .PARAMETER Stages
-    Which stages to run, e.g. "4a", "4a,4b", "4c". Default "4a,4b,4c".
-    Use this to resume after an interruption instead of starting over.
+    Which stages to run. Accepts 4b,4c or "4b,4c" or a single 4c.
+    Default is all three. Use this to resume after an interruption instead of
+    starting over.
 
 .PARAMETER RebuildAll
     Include the British Grand Prix in 4c even though 4b built it.
@@ -57,7 +58,7 @@
 [CmdletBinding()]
 param(
     [int]$Jobs = 8,
-    [string]$Stages = "4a,4b,4c",
+    [string[]]$Stages = @('4a','4b','4c'),
     [switch]$RebuildAll,
     [switch]$VerifyOnly
 )
@@ -76,7 +77,9 @@ if (-not (Test-Path $Raw))     { throw "No raw mirror at $Raw." }
 if (-not (Test-Path $Builder)) { throw "Missing $Builder." }
 
 Set-Location $Root
-$wanted = ($Stages -split ',') | ForEach-Object { $_.Trim().ToLower() }
+# Accept every natural spelling: -Stages 4b,4c (PowerShell makes that an
+# array), -Stages "4b,4c" (one comma-joined string), and -Stages 4b.
+$wanted = @($Stages | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim().ToLower() } | Where-Object { $_ })
 $bad = $wanted | Where-Object { $_ -notin @('4a','4b','4c') }
 if ($bad) { throw "Unknown stage(s): $($bad -join ', '). Valid: 4a, 4b, 4c." }
 
