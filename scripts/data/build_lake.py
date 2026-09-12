@@ -38,6 +38,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import platform
 import shutil
 import subprocess
 import sys
@@ -61,6 +62,37 @@ CORE_SESSIONS_HISTORIC = ("Qualifying", "Sprint Qualifying", "Sprint Shootout", 
 CORE_SESSIONS_2026 = ("Practice 1",) + CORE_SESSIONS_HISTORIC
 
 MANIFEST_CSVS = ("lap_manifest.csv", "rejected_laps.csv", "quality_summary.csv")
+
+
+def git_provenance() -> dict:
+    """Record which code produced a build.
+
+    Required by AGENTS.md section 53, and load-bearing when a lake is built on
+    one machine and used on another: without the commit there is no way to tell
+    that the data predates a change to the resampling or metadata code, and the
+    mismatch is silent. `dirty` matters just as much -- a build made with
+    uncommitted changes is not reproducible from any commit.
+    """
+    def run(*args: str) -> str | None:
+        try:
+            out = subprocess.run(args, cwd=ROOT, capture_output=True, text=True, timeout=10)
+            return out.stdout.strip() or None if out.returncode == 0 else None
+        except (OSError, subprocess.SubprocessError):
+            return None
+
+    status = run("git", "status", "--porcelain")
+    return {
+        "git_commit": run("git", "rev-parse", "HEAD"),
+        "git_branch": run("git", "rev-parse", "--abbrev-ref", "HEAD"),
+        "git_dirty": bool(status) if status is not None else None,
+        "git_dirty_files": [line[2:].strip() for line in status.splitlines()][:20] if status else [],
+        # porcelain v1 is XY<space>PATH, but the two status characters can be
+        # "M ", " M", "??" or "R ", so slice past the pair and strip rather
+        # than assuming a fixed offset.
+        "python_version": platform.python_version(),
+        "platform": platform.platform(),
+        "hostname": platform.node(),
+    }
 
 
 def safe_name(value: str) -> str:
@@ -321,6 +353,7 @@ def main() -> int:
     manifest = {
         "schema_version": "phase2_20m_v1",
         "created_utc": datetime.now(timezone.utc).isoformat(),
+        **git_provenance(),
         "command_arguments": {k: (str(v) if isinstance(v, Path) else v) for k, v in vars(args).items()},
         "raw_root": str(args.raw_root),
         "sessions_requested": len(jobs),

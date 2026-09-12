@@ -69,6 +69,21 @@ def verify(lake: Path) -> dict:
           manifest.get("schema_version") == "phase2_20m_v1",
           f"schema_version={manifest.get('schema_version')}, sessions={manifest.get('sessions_requested')}")
 
+    # Which code built this? Load-bearing when a lake is built on one machine and
+    # used on another: without it, data predating a change to the resampling or
+    # metadata code looks identical to data that matches.
+    built_at = manifest.get("git_commit")
+    _gate(results, "build records the commit that produced it", bool(built_at),
+          f"git_commit={(built_at or 'MISSING')[:12]}, branch={manifest.get('git_branch')}, "
+          f"host={manifest.get('hostname')}")
+
+    # A build made with uncommitted changes cannot be reproduced from any commit.
+    dirty = manifest.get("git_dirty")
+    _gate(results, "build was made from a clean working tree", dirty is not True,
+          "clean" if dirty is False else
+          (f"UNCOMMITTED CHANGES: {manifest.get('git_dirty_files')}" if dirty
+           else "unknown; manifest predates provenance recording"))
+
     _gate(results, "no session failed to build",
           manifest.get("sessions_failed", 0) == 0,
           f"{manifest.get('sessions_failed', 0)} failed of {manifest.get('sessions_requested', 0)}")
@@ -146,6 +161,13 @@ def verify(lake: Path) -> dict:
     passed = sum(1 for r in results if r["ok"])
     return {
         "lake": str(lake),
+        "built_by": {
+            "git_commit": manifest.get("git_commit"),
+            "git_branch": manifest.get("git_branch"),
+            "git_dirty": manifest.get("git_dirty"),
+            "hostname": manifest.get("hostname"),
+            "created_utc": manifest.get("created_utc"),
+        },
         "parquet_files": len(parquets),
         "rows": int(len(df)),
         "sessions": manifest.get("sessions_requested"),
