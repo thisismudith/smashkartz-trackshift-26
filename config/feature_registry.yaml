@@ -2202,3 +2202,108 @@ features:
     live_safe: true
     interaction_group: [weather]
     consuming_models: [M08, M15, M16]
+
+  # --------------------------------------- M01 Practice lap-class overlay
+  - name: practice_lap_class
+    definition: >-
+      Deterministic M01 label for a 2026 Practice 1 lap: PUSH, LONG_RUN,
+      COOLDOWN, OUT_LAP, IN_LAP, INTERRUPTED, INVALID, or UNKNOWN.
+    unit: null
+    source: telemetry_20m lap metadata, config/lap_classification.yaml
+    derivation: Causal rule evaluation at lap completion; one label per lap.
+    allowed_sessions: [Practice 1]
+    supported_years: [2026]
+    live_safe: false
+    provenance: DERIVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [practice, calibration]
+    consuming_models: [M01, M14, M15, M16, M30]
+
+  - name: practice_lap_class_provenance
+    definition: Provenance tag for practice_lap_class; always DERIVED.
+    unit: null
+    source: M01 classifier
+    derivation: Constant provenance assigned by the deterministic classifier.
+    allowed_sessions: [Practice 1]
+    supported_years: [2026]
+    live_safe: false
+    provenance: DERIVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [practice, audit]
+    consuming_models: [M01]
+
+  - name: practice_lap_class_reason
+    definition: Deterministic rule reason that selected practice_lap_class.
+    unit: null
+    source: M01 classifier
+    derivation: First matching configured precedence rule or its qualifying condition.
+    allowed_sessions: [Practice 1]
+    supported_years: [2026]
+    live_safe: false
+    provenance: DERIVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [practice, audit]
+    consuming_models: [M01]
+
+  - name: practice_lap_classifier_version
+    definition: Version of the deterministic M01 rule configuration used for the row.
+    unit: null
+    source: config/lap_classification.yaml classifier_version
+    derivation: Attached unchanged by the M01 overlay builder.
+    allowed_sessions: [Practice 1]
+    supported_years: [2026]
+    live_safe: false
+    provenance: DERIVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [practice, audit]
+    consuming_models: [M01]
+
+  - name: driver_session_best_lap_time_s
+    definition: >-
+      Lowest usable green non-pit driver lap time observed through the current
+      Practice 1 lap; not a future-session retrospective best.
+    unit: s
+    source: telemetry_20m lap metadata
+    derivation: Causal running minimum used by M01 PUSH and COOLDOWN rules.
+    allowed_sessions: [Practice 1]
+    supported_years: [2026]
+    live_safe: false
+    provenance: DERIVED
+    availability_scope: partial
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [practice, pace]
+    consuming_models: [M01]

@@ -849,6 +849,25 @@ Record `provenance: DERIVED` for all of these, and store the thresholds in `conf
 
 `src/trackshift/track/lap_classifier.py`, `config/lap_classification.yaml`, `tests/test_lap_classifier.py`, `practice_lap_class` column, registry entries.
 
+### Validation — not complete
+
+2026 local Practice 1 validation covered 17 lake partitions / 9,488 accepted
+laps (British GP included only as deterministic validation). M01 v2 uses PUSH
+≤108% of the causal driver-session best with tyre life ≤5, a one-UNKNOWN
+candidate bridge only where its own green/time/life values preserve the actual
+run, LONG_RUN ≥4 consecutive green laps with strictly increasing life and <3%
+spread, and COOLDOWN >115% immediately after PUSH. Raw `pin`/`pout` now
+precede source timing-quality flags so pit transitions remain auditable.
+
+The permitted PUSH relaxation changed 1,095 → 1,099 PUSH laps (11.54% →
+11.58%); LONG_RUN remained 880 (9.27%) because the strict causal run rules
+admit no arbitrary slow/missing bridge. Pit labels now reconcile at 1,430/1,430
+IN_LAP and 1,607/1,607 OUT_LAP; INVALID fell 27.41% → 5.47% and INTERRUPTED
+3.28% → 3.05%. UNKNOWN only fell 34.57% → 34.53%. CP-07 remains unchecked:
+UNKNOWN is not <15% and LONG_RUN is not within 20–50% without non-causal
+backfill or labels unsupported by the documented rules. Five PUSH spot checks
+passed; 458 passed, 7 skipped.
+
 ---
 
 # CP-08 — Tyre degradation and normalised pace (M30)

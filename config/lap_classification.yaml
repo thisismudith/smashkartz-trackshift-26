@@ -1,0 +1,51 @@
+# M01 deterministic Practice 1 lap classification configuration.
+#
+# The classifier is causal at lap completion: the reference best and a LONG_RUN
+# qualification window contain only the current and earlier laps for the same
+# driver/session.  This makes the artifact safe for subsequent calibration work
+# and deliberately forbids retrospective relabelling from future tyre behaviour.
+schema_version: m01_lap_classification_config_v2
+classifier_version: m01_practice_lap_rules_v2
+scope:
+  years: [2026]
+  sessions: [Practice 1]
+thresholds:
+  # CP-07 permits this one-percent relaxation after diagnosing UNKNOWN >30%.
+  # The causal best and tyre-life guard remain unchanged.
+  push_session_best_ratio_max: 1.08
+  push_tyre_life_laps_max: 5
+  cooldown_session_best_ratio_min_exclusive: 1.15
+  long_run_min_consecutive_laps: 4
+  long_run_lap_time_spread_ratio_max_exclusive: 0.03
+precedence:
+  # Explicit raw pit evidence is a stronger operational fact than the source's
+  # timing-quality marker. Preserve it for reconciliation/audit; pit laps still
+  # cannot seed or continue a calibration long run.
+  - IN_LAP
+  - OUT_LAP
+  - INVALID
+  - INTERRUPTED
+  - PUSH
+  - LONG_RUN
+  - COOLDOWN
+  - UNKNOWN
+long_run:
+  # A candidate run is scoped to exactly one (year, event, session, driver).
+  # It resets on a lap-number gap, pit marker, invalid/inaccurate timing,
+  # non-green status, missing/non-positive time or tyre life, non-increasing
+  # tyre life, or a spread at/above the configured threshold.
+  require_adjacent_lap_numbers: true
+  require_strictly_increasing_tyre_life: true
+  causal_trailing_window_only: true
+  # A provisional UNKNOWN lap remains part of a candidate sequence only when
+  # its own green/tyre/time values satisfy every run condition. This is the one
+  # permitted UNKNOWN bridge; structural labels always reset the sequence.
+  max_unknown_bridge_laps: 1
+session_best:
+  # Best is a running minimum through the current lap, restricted to usable
+  # clean laps.  The current lap may establish the best; later laps cannot.
+  require_green: true
+  exclude_invalid: true
+  exclude_pit_laps: true
+  require_positive_lap_time: true
+provenance: DERIVED
