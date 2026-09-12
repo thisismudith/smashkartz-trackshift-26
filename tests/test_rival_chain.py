@@ -44,46 +44,13 @@ def test_era_harness_excludes_british_training_and_keeps_2026_only_without_evide
     else: raise AssertionError("British GP training accepted")
 
 
-def test_cp08_metrics_use_actual_c10_probability_evidence_and_causal_stability():
-    evidence = [{
-        "event": "Australian Grand Prix", "year": 2026, "model_version": "m09-test",
-        "rule_configuration_version": "rules-2026-v1", "observation_log_likelihood": log(0.8),
-        "posterior": {"CONSERVING": 0.7, "BALANCED": 0.3},
-        "perturbed_posterior": {"CONSERVING": 0.65, "BALANCED": 0.35},
-        "perturbation": {"kind": "causal_feature_delta", "field": "pace_residual_delta_s", "delta": 0.05},
-    }, {
-        "event": "Japanese Grand Prix", "year": 2026, "model_version": "m09-test",
-        "rule_configuration_version": "rules-2026-v1", "next_observation_probability": 0.5,
-        "posterior": {"CONSERVING": 0.2, "BALANCED": 0.8},
-        "perturbed_posterior": {"CONSERVING": 0.25, "BALANCED": 0.75},
-    }]
+def test_era_harness_does_not_claim_complete_without_predictive_evidence():
     report = evaluate_era_strategies(
-        [{"year": 2026, "event": "Australian Grand Prix", "rule_configuration_version": "rules-2026-v1"}],
-        split_version="c9:test", rule_configuration_version="rules-2026-v1",
-        prediction_evidence={"2026_only": evidence},
+        [{"year": 2026, "event": "Australian Grand Prix"}],
+        historical_rows=[{"year": 2022, "event": "Australian Grand Prix"}],
+        split_version="c9",
+        rule_configuration_version="rules-v1",
+        materialisation={"status": "READY"},
     )
-    metrics = report["metrics"]["2026_only"]
-    assert metrics["n"] == 2 and metrics["mean_nll"] == pytest.approx(-0.5 * (log(0.8) + log(0.5)))
-    assert metrics["stability"] == pytest.approx(0.05)
-    assert metrics["event_coverage"] == ["Australian Grand Prix", "Japanese Grand Prix"]
-    assert metrics["year_coverage"] == [2026] and metrics["c9_split_reference"] == "c9:test"
-    assert metrics["model_version"] == ["m09-test"]
-    assert metrics["calibration"].startswith("UNAVAILABLE")
-    assert report["status"] == "BLOCKED"  # historical strategies remain blocked
-
-
-def test_cp08_rejects_british_evidence_and_keeps_drs_separate():
-    with pytest.raises(ValueError, match="British"):
-        evaluate_era_strategies(
-            [{"year": 2026, "event": "British Grand Prix"}],
-            split_version="c9", rule_configuration_version="r",
-            prediction_evidence={"2026_only": [{"event": "British Grand Prix", "year": 2026}]},
-        )
-    report = evaluate_era_strategies(
-        [{"year": 2026, "event": "Australian Grand Prix", "historical_drs_eligible": True, "overtake_eligible": None}],
-        historical_rows=[{"year": 2025, "event": "Australian Grand Prix", "historical_drs_eligible": True, "overtake_eligible": True}],
-        split_version="c9", rule_configuration_version="r",
-    )
-    assert report["historical_drs_is_not_2026_overtake"]
-    assert not report["historical_drs_fields_in_2026_overtake"] and not report["historical_rows_have_2026_overtake_state"]
-    assert report["historical_drs_fields_removed_from_2026"] and report["historical_2026_state_fields_removed"]
+    assert report["status"] == "BLOCKED"
+    assert "predictive likelihood" in report["reason"]

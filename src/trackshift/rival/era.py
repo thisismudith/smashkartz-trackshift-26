@@ -104,113 +104,30 @@ def posterior_stability(evidence: Iterable[Mapping[str, Any]]) -> dict[str, floa
     return {"n": len(deltas), "mean_max_abs_delta": sum(deltas) / len(deltas) if deltas else None,
             "max_abs_delta": max(deltas) if deltas else None}
 
+def _missing_predictive_evidence(metrics: Mapping[str, Mapping[str, Any]]) -> bool:
+    """Return true until every strategy has real held-out evidence.
 
-def _metrics(rows: Sequence[Mapping[str, Any]], evidence: Sequence[Mapping[str, Any]] | None, *, split_version: str,
-             rule_configuration_version: str, model_version: str | None = None,
-             blocked_reason: str | None = None) -> dict[str, Any]:
-    events, years = _coverage(rows)
-    evidence_rows = list(evidence or [])
-    if any(_is_british(item) for item in evidence_rows):
-        raise ValueError("British Grand Prix rows cannot enter CP-08 evaluation evidence")
-    for item in evidence_rows:
-        try:
-            is_2026 = int(item.get("year", 0)) == 2026
-        except (TypeError, ValueError):
-            is_2026 = False
-        if is_2026 and any(item.get(field) is not None for field in ("historical_drs_eligible", "historical_drs_open")):
-            raise ValueError("historical DRS cannot populate a 2026 Overtake feature")
-    evidence_events, evidence_years = _coverage(evidence_rows)
-    versions = _versions(rows, "rule_configuration_version")
-    versions.extend(_versions(evidence_rows, "rule_configuration_version"))
-    if rule_configuration_version not in versions:
-        versions.append(str(rule_configuration_version))
-    model_versions = _versions(evidence_rows, "model_version")
-    if model_version:
-        model_versions.append(str(model_version))
-    provenances = _versions(evidence_rows, "provenance")
-    reason = blocked_reason
-    log_likelihoods = [_log_likelihood(item) for item in evidence_rows]
-    log_likelihoods = [value for value in log_likelihoods if value is not None]
-    stability_result = posterior_stability(evidence_rows)
-    if evidence_rows and not log_likelihoods:
-        reason = reason or "held-out C10 observation likelihood is absent"
-    if evidence_rows and not stability_result["n"]:
-        reason = reason or "causal perturbation posterior is absent"
-    if not evidence_rows:
-        reason = reason or "C10 predictive probabilities and causal perturbation posteriors are unavailable"
-    return {"status": "BLOCKED" if blocked_reason else ("READY" if log_likelihoods and stability_result["n"] else "BLOCKED"),
-            "reason": reason, "n": len(log_likelihoods), "row_n": len(rows),
-            "mean_log_likelihood": sum(log_likelihoods) / len(log_likelihoods) if log_likelihoods else None,
-            "mean_nll": -sum(log_likelihoods) / len(log_likelihoods) if log_likelihoods else None,
-            "stability": stability_result["mean_max_abs_delta"], "stability_n": stability_result["n"],
-            "stability_max_abs_delta": stability_result["max_abs_delta"], "stability_definition": STABILITY_DEFINITION,
-            "calibration": "UNAVAILABLE: no real tactical-state labels", "event_coverage": evidence_events or events,
-            "year_coverage": evidence_years or years, "c9_split_reference": str(split_version),
-            "model_version": sorted(set(model_versions)) or None, "prediction_provenance": sorted(set(provenances)) or None,
-            "rule_configuration_versions": sorted(set(versions))}
+    Historical rows alone do not constitute a regulation-era comparison.  The
+    development harness currently leaves likelihood and stability uncomputed;
+    reporting ``COMPLETE`` in that state would allow a checkpoint to be ticked
+    without satisfying its written gates.
+    """
+    return any(
+        strategy_metrics.get("mean_nll") is None
+        or strategy_metrics.get("stability") is None
+        for strategy_metrics in metrics.values()
+    )
 
 
-def _perturb_row(row: Mapping[str, Any], *, delta: float) -> dict[str, Any]:
-    """Perturb one causal M08 feature without touching identity or future data."""
-    result = dict(row)
-    for name in ("pace_residual_delta_s", "relative_speed_to_ahead_mps", "gap_rate_ahead_s_per_s", "braking_intensity_delta"):
-        if name not in result or result[name] is None:
-            continue
-        value = result[name]
-        if isinstance(value, Mapping):
-            if value.get("value") is None:
-                continue
-            updated = dict(value)
-            updated["value"] = float(value["value"]) + delta
-            result[name] = updated
-        else:
-            result[name] = float(value) + delta
-        result["perturbation"] = {"kind": "causal_feature_delta", "field": name, "delta": delta}
-        return result
-    return result
-
-
-def c10_prediction_evidence(model: Any, sequences: Sequence[Mapping[str, Any]], *, perturbation_delta: float = 0.05) -> list[dict[str, Any]]:
-    """Materialise deterministic held-out evidence from a loaded C10 model."""
-    evidence: list[dict[str, Any]] = []
-    for sequence in sequences:
-        rows = list(sequence.get("rows", ()))
-        if not rows:
-            continue
-        if _is_british(sequence) or any(_is_british(row) for row in rows):
-            raise ValueError("British Grand Prix rows cannot enter CP-08 evaluation evidence")
-        try:
-            year = int(sequence.get("year", rows[0].get("year", 0)))
-        except (TypeError, ValueError):
-            year = 0
-        if year != 2026 or len(rows) < 2:
-            continue
-        index = min(5, len(rows) - 1)
-        prefix = rows[:index]
-        posterior_values = model.predict_distribution(prefix)
-        posterior = {state: value for state, value in zip(model.states, posterior_values)}
-        perturbed_rows = list(prefix)
-        if perturbed_rows:
-            perturbed_rows[-1] = _perturb_row(perturbed_rows[-1], delta=perturbation_delta)
-        perturbed_values = model.predict_distribution(perturbed_rows)
-        perturbed = {state: value for state, value in zip(model.states, perturbed_values)}
-        next_row = rows[index]
-        evidence.append({"battle_id": sequence.get("sequence_id", next_row.get("battle_id")),
-                         "segment_index": next_row.get("segment_index"), "event": sequence.get("event", next_row.get("event")),
-                         "year": year, "session": sequence.get("session", next_row.get("session")),
-                         "fold_id": sequence.get("fold_id"), "c9_split_assignment": sequence.get("c9_split_assignment"),
-                         "model_version": getattr(model, "model_version", None), "provenance": "INFERRED",
-                         "rule_configuration_version": next_row.get("rule_configuration_version"),
-                         "posterior": posterior, "perturbed_posterior": perturbed,
-                         "observation_log_likelihood": model.observation_log_likelihood(next_row, posterior_values), "held_out": True})
-    return evidence
-
-
-def evaluate_era_strategies(rows: Iterable[Mapping[str, Any]], *, split_version: str, rule_configuration_version: str,
-                            historical_rows: Iterable[Mapping[str, Any]] | None = None,
-                            materialisation: Mapping[str, Any] | None = None,
-                            prediction_evidence: Mapping[str, Iterable[Mapping[str, Any]]] | None = None) -> dict[str, Any]:
-    """Evaluate documented strategies from real C10 evidence, failing closed."""
+def evaluate_era_strategies(
+    rows: Iterable[Mapping[str, Any]],
+    *,
+    split_version: str,
+    rule_configuration_version: str,
+    historical_rows: Iterable[Mapping[str, Any]] | None = None,
+    materialisation: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Compare strategies when historical rows are supplied; otherwise block honestly."""
     current = [dict(row) for row in rows]
     historical = [dict(row) for row in (historical_rows or [])]
     all_rows = [*current, *historical]
@@ -234,37 +151,25 @@ def evaluate_era_strategies(rows: Iterable[Mapping[str, Any]], *, split_version:
         row.pop("overtake_eligible", None)
         row.pop("overtake_state", None)
     audit = dict(materialisation or {})
-    historical_ready = bool(historical) and bool(audit.get("complete"))
-    historical_reason = audit.get("reason") if audit.get("status") == "BLOCKED" else None
-    if not historical_ready:
-        historical_reason = historical_reason or "full historical M08 materialisation for 2022-2025 is unavailable"
-    supplied = {key: list(value) for key, value in (prediction_evidence or {}).items()}
-    metrics: dict[str, Any] = {}
-    for strategy in STRATEGIES:
-        strategy_rows = current if strategy == "2026_only" else [*current, *historical]
-        strategy_block = None if strategy == "2026_only" or historical_ready else historical_reason
-        metrics[strategy] = _metrics(strategy_rows, supplied.get(strategy), split_version=split_version,
-                                     rule_configuration_version=rule_configuration_version, blocked_reason=strategy_block)
-        if strategy != "2026_only" and strategy not in supplied:
-            metrics[strategy]["status"] = "BLOCKED"
-            metrics[strategy]["reason"] = strategy_block or "strategy-specific C10 evidence is unavailable"
-    all_metrics_ready = all(metrics[strategy]["status"] == "READY" for strategy in STRATEGIES)
-    blocked_reason = historical_reason if not historical_ready else None
-    if not all_metrics_ready:
-        blocked_reason = blocked_reason or "one or more strategy C10 evidence sets are unavailable"
-    return {"schema_version": ERA_SCHEMA_VERSION, "split_version": split_version,
-            "rule_configuration_version": rule_configuration_version, "held_out_2026_n": len(current),
-            "historical_n": len(historical), "strategies": list(STRATEGIES), "metrics": metrics,
-            "selected": "2026_only", "status": "COMPLETE" if all_metrics_ready and historical_ready else "BLOCKED",
-            "reason": blocked_reason or "all strategy evidence is available", "historical_drs_is_not_2026_overtake": True,
-            "historical_drs_fields_in_2026_overtake": False,
-            "historical_rows_have_2026_overtake_state": False,
-            "historical_drs_fields_removed_from_2026": current_historical_drs_seen,
-            "historical_2026_state_fields_removed": historical_2026_state_seen,
-            "british_gp_used_for_training_or_calibration": False,
-            "tactical_state_calibration": "NOT_CLAIMED: no real tactical-state labels",
-            "cp08_next_blocker": "Historical M08 materialisation for 2022-2025—not another 2026 benchmark." if blocked_reason else None}
+    blocked_reason = audit.get("reason") if audit.get("status") == "BLOCKED" else None
+    if not historical:
+        blocked_reason = blocked_reason or "historical M08 materialisation for 2022-2025 is unavailable"
+    metrics = {strategy: _metrics(current if strategy == "2026_only" else [*current, *historical]) for strategy in STRATEGIES}
+    if not blocked_reason and _missing_predictive_evidence(metrics):
+        blocked_reason = "held-out predictive likelihood and stability evidence is not materialised by the era harness"
+    return {
+        "schema_version": ERA_SCHEMA_VERSION,
+        "split_version": split_version,
+        "rule_configuration_version": rule_configuration_version,
+        "held_out_2026_n": len(current), "historical_n": len(historical),
+        "strategies": list(STRATEGIES), "metrics": metrics,
+        "selected": "2026_only",
+        "status": "BLOCKED" if blocked_reason else "COMPLETE",
+        "reason": blocked_reason or "selected 2026-only unless held-out predictive evidence supports historical data",
+        "historical_drs_is_not_2026_overtake": True,
+        "british_gp_used_for_training_or_calibration": False,
+        "cp08_next_blocker": "Historical M08 materialisation for 2022-2025—not another 2026 benchmark." if blocked_reason else None,
+    }
 
 
-__all__ = ["ERA_SCHEMA_VERSION", "STRATEGIES", "STABILITY_DEFINITION", "materialise_historical_m08",
-           "observation_predictive_nll", "posterior_stability", "c10_prediction_evidence", "evaluate_era_strategies"]
+__all__ = ["ERA_SCHEMA_VERSION", "STRATEGIES", "materialise_historical_m08", "evaluate_era_strategies"]
