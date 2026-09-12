@@ -40,8 +40,8 @@ Each checkpoint uses the same structure.
 | CP | Item | IDs | Status |
 |---|---|---|---|
 | 00 | Contract sync and environment | shared | ☐ |
-| 01 | Race-context labels and eligibility gate | M02, C7 | ☐ |
-| 02 | Leakage-safe splitter | M29, C9 | ☐ |
+| 01 | Race-context labels and eligibility gate | M02, C7 | ☑ |
+| 02 | Leakage-safe splitter | M29, C9 | ☑ |
 | 03 | Dynamic pairs and battle episodes | M05, C8 | ☐ |
 | 04 | Causal pairwise features | M06, C8 | ☐ |
 | 05 | Rival-state feature dataset | M08 | ☐ |
