@@ -43,7 +43,7 @@ import subprocess
 import sys
 import tempfile
 import time
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, wait
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -73,6 +73,7 @@ class SessionJob:
     year: str
     event: str
     session: str
+    laps: int = 0
 
     @property
     def label(self) -> str:
@@ -121,9 +122,15 @@ def discover_sessions(raw_root: Path, years, events, sessions, exclude_events) -
                 if session_dir.name not in wanted_sessions:
                     continue
                 # A session with no driver directories has nothing to build.
-                if not any(p.is_dir() for p in session_dir.iterdir()):
+                drivers_present = [p for p in session_dir.iterdir() if p.is_dir()]
+                if not drivers_present:
                     continue
-                found.append(SessionJob(year, name, session_dir.name))
+                # Pre-count laps so progress is weighted by work, not by session
+                # count: sessions differ by an order of magnitude, so ticking one
+                # per session makes the bar jump unpredictably.
+                laps = sum(1 for d in drivers_present for f in d.iterdir()
+                           if f.is_file() and f.name.endswith("_tel.json"))
+                found.append(SessionJob(year, name, session_dir.name, laps))
     return found
 
 
@@ -243,6 +250,7 @@ def main() -> int:
     if args.dry_run:
         print(json.dumps({
             "sessions": len(jobs),
+            "laps": sum(j.laps for j in jobs),
             "by_year": {y: sum(1 for j in jobs if j.year == y) for y in years},
             "plan": [j.label for j in jobs],
         }, indent=2))
@@ -250,8 +258,9 @@ def main() -> int:
 
     args.output_root.mkdir(parents=True, exist_ok=True)
     started = time.monotonic()
-    prog = Progress(len(jobs), enabled=not args.no_progress)
-    print(f"building {len(jobs)} sessions with {args.jobs} job(s)", file=sys.stderr)
+    total_laps = sum(j.laps for j in jobs) or len(jobs)
+    prog = Progress(total_laps, enabled=not args.no_progress)
+    print(f"building {len(jobs)} sessions ({total_laps:,} laps) with {args.jobs} job(s)", file=sys.stderr)
 
     results: list[SessionResult] = []
     worker = (args.raw_root, args.output_root, args.spacing_m, args.drivers,
@@ -260,16 +269,32 @@ def main() -> int:
     if args.jobs > 1:
         with ProcessPoolExecutor(max_workers=args.jobs) as pool:
             futures = {pool.submit(build_one, job, *worker): job for job in jobs}
-            for future in as_completed(futures):
-                result = future.result()
-                results.append(result)
-                prog.set_label(result.job.label)
-                prog.tick()
+            pending = set(futures)
+            prog.set_label(f"{len(pending)} session(s) queued")
+            prog.heartbeat()
+            while pending:
+                # Wait with a timeout rather than blocking on completion, so the
+                # line keeps updating between finishes. A stage of five sessions
+                # would otherwise print nothing for a minute.
+                finished, pending = wait(pending, timeout=1.0, return_when=FIRST_COMPLETED)
+                for future in finished:
+                    result = future.result()
+                    results.append(result)
+                    prog.set_label(result.job.label)
+                    prog.tick(result.job.laps or 1)
+                if pending:
+                    running = min(len(pending), args.jobs)
+                    queued = len(pending) - running
+                    prog.set_label(
+                        f"{running} building" + (f", {queued} queued" if queued else "")
+                        + f", {len(results)}/{len(jobs)} done"
+                    )
+                    prog.heartbeat()
     else:
         for job in jobs:
             prog.set_label(job.label)
             results.append(build_one(job, *worker))
-            prog.tick()
+            prog.tick(job.laps or 1)
     prog.close()
 
     # Deterministic ordering regardless of completion order, so two runs of the
