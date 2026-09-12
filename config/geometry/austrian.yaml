@@ -1,0 +1,470 @@
+schema_version: 1
+geometry_version: austrian-geom-v1
+boundary_hash: 95d13e41872653bc
+generated_utc: '2026-09-12T12:57:35.431284+00:00'
+circuit: austrian
+event_display: Austrian Grand Prix
+event_config: austrian_grand_prix
+lap_length_m: 4277.7
+lap_length_source: config/rules/2026 lap_length_m (DERIVED_TELEMETRY)
+rotation_deg: 1.0
+corners_source: data/raw/tracinginsights/2026/Austrian Grand Prix/Race/corners.json
+corner_count: 10
+reference_laps: 375
+reference_sessions:
+- Practice 1
+- Qualifying
+options:
+  min_segment_length_m: 40.0
+  min_brake_run_m: 60.0
+  brake_threshold: 0.5
+  throttle_return_pct: 95.0
+  min_throttle_run_m: 60.0
+  heading_smooth_points: 5
+  hairpin_max_kmh: 100.0
+  slow_max_kmh: 160.0
+  medium_max_kmh: 220.0
+  straight_curvature: 0.0004
+  chicane_window_m: 150.0
+  envelope_taper_kmh: 290.0
+  target_segments:
+  - 30
+  - 40
+segment_count: 24
+segments:
+- segment_id: 1
+  start_distance_m: 0.0
+  end_distance_m: 60.0
+  segment_length_m: 60.0
+  kind: EXIT
+  corner_id: null
+  corner_type: STRAIGHT
+  corner_phase: null
+  sector: null
+  zone: null
+  track_heading_deg: 195.1
+  mean_curvature: 1.0e-06
+  peak_curvature: 4.0e-06
+  entry_speed_kmh: 266.0
+  apex_speed_kmh: 266.0
+  exit_speed_kmh: 288.7
+  boundary_sources:
+  - throttle_return
+- segment_id: 2
+  start_distance_m: 60.0
+  end_distance_m: 256.7
+  segment_length_m: 196.7
+  kind: STRAIGHT
+  corner_id: null
+  corner_type: STRAIGHT
+  corner_phase: null
+  sector: null
+  zone: null
+  track_heading_deg: 195.1
+  mean_curvature: 3.0e-06
+  peak_curvature: 9.0e-06
+  entry_speed_kmh: 291.6
+  apex_speed_kmh: 291.6
+  exit_speed_kmh: 294.1
+  boundary_sources:
+  - envelope_taper
+- segment_id: 3
+  start_distance_m: 256.7
+  end_distance_m: 320.0
+  segment_length_m: 63.3
+  kind: CORNER
+  corner_id: 1
+  corner_type: STRAIGHT
+  corner_phase: null
+  sector: null
+  zone: null
+  track_heading_deg: 195.5
+  mean_curvature: -1.6e-05
+  peak_curvature: -2.5e-05
+  entry_speed_kmh: 293.0
+  apex_speed_kmh: 282.6
+  exit_speed_kmh: 282.6
+  boundary_sources:
+  - corner
+- segment_id: 4
+  start_distance_m: 320.0
+  end_distance_m: 520.0
+  segment_length_m: 200.0
+  kind: CORNER
+  corner_id: null
+  corner_type: SLOW_RIGHT
+  corner_phase: null
+  sector: null
+  zone: null
+  track_heading_deg: 194.8
+  mean_curvature: -0.000664
+  peak_curvature: -0.001382
+  entry_speed_kmh: 261.6
+  apex_speed_kmh: 121.6
+  exit_speed_kmh: 158.6
+  boundary_sources:
+  - brake_onset
+- segment_id: 5
+  start_distance_m: 520.0
+  end_distance_m: 780.0
+  segment_length_m: 260.0
+  kind: EXIT
+  corner_id: null
+  corner_type: STRAIGHT
+  corner_phase: null
+  sector: null
+  zone: null
+  track_heading_deg: 122.6
+  mean_curvature: -2.0e-05
+  peak_curvature: -9.6e-05
+  entry_speed_kmh: 176.7
+  apex_speed_kmh: 176.7
+  exit_speed_kmh: 286.7
+  boundary_sources:
+  - throttle_return
+- segment_id: 6
+  start_distance_m: 780.0
+  end_distance_m: 906.9
+  segment_length_m: 126.9
+  kind: STRAIGHT
+  corner_id: null
+  corner_type: STRAIGHT
+  corner_phase: null
+  sector: null
+  zone: null
+  track_heading_deg: 119.2
+  mean_curvature: -5.1e-05
+  peak_curvature: -9.6e-05
+  entry_speed_kmh: 291.0
+  apex_speed_kmh: 291.0
+  exit_speed_kmh: 308.3
+  boundary_sources:
+  - envelope_taper
+- segment_id: 7
+  start_distance_m: 906.9
+  end_distance_m: 1196.9
+  segment_length_m: 290.1
+  kind: CORNER
+  corner_id: 2
+  corner_type: STRAIGHT
+  corner_phase: null
+  sector: null
+  zone: null
+  track_heading_deg: 115.5
+  mean_curvature: 0.000118
+  peak_curvature: 0.000221
+  entry_speed_kmh: 309.9
+  apex_speed_kmh: 298.2
+  exit_speed_kmh: 298.2
+  boundary_sources:
+  - corner
+- segment_id: 8
+  start_distance_m: 1196.9
+  end_distance_m: 1240.0
+  segment_length_m: 43.1
+  kind: CORNER
+  corner_id: 3
+  corner_type: STRAIGHT
+  corner_phase: null
+  sector: null
+  zone: null
+  track_heading_deg: 135.1
+  mean_curvature: 3.4e-05
+  peak_curvature: 5.1e-05
+  entry_speed_kmh: 294.5
+  apex_speed_kmh: 286.3
+  exit_speed_kmh: 286.3
+  boundary_sources:
+  - corner
+- segment_id: 9
+  start_distance_m: 1240.0
+  end_distance_m: 1460.0
+  segment_length_m: 220.0
+  kind: CORNER
+  corner_id: null
+  corner_type: HAIRPIN_RIGHT
+  corner_phase: null
+  sector: null
+  zone: null
+  track_heading_deg: 135.5
+  mean_curvature: -0.001294
+  peak_curvature: -0.003434
+  entry_speed_kmh: 260.0
+  apex_speed_kmh: 68.0
+  exit_speed_kmh: 136.0
+  boundary_sources:
+  - brake_onset
+- segment_id: 10
+  start_distance_m: 1460.0
+  end_distance_m: 1760.0
+  segment_length_m: 300.0
+  kind: EXIT
+  corner_id: null
+  corner_type: STRAIGHT
+  corner_phase: null
+  sector: null
+  zone: null
+  track_heading_deg: 3.1
+  mean_curvature: -9.2e-05
+  peak_curvature: -0.000171
+  entry_speed_kmh: 157.5
+  apex_speed_kmh: 157.5
+  exit_speed_kmh: 288.9
+  boundary_sources:
+  - throttle_return
+- segment_id: 11
+  start_distance_m: 1760.0
+  end_distance_m: 2010.4
+  segment_length_m: 250.4
+  kind: STRAIGHT
+  corner_id: null
+  corner_type: STRAIGHT
+  corner_phase: null
+  sector: null
+  zone: null
+  track_heading_deg: 348.7
+  mean_curvature: 5.7e-05
+  peak_curvature: 9.2e-05
+  entry_speed_kmh: 292.1
+  apex_speed_kmh: 291.9
+  exit_speed_kmh: 291.9
+  boundary_sources:
+  - envelope_taper
+- segment_id: 12
+  start_distance_m: 2010.4
+  end_distance_m: 2198.3
+  segment_length_m: 187.9
+  kind: CORNER
+  corner_id: 4
+  corner_type: HAIRPIN_RIGHT
+  corner_phase: null
+  sector: null
+  zone: null
+  track_heading_deg: 357.7
+  mean_curvature: -0.000888
+  peak_curvature: -0.002341
+  entry_speed_kmh: 284.0
+  apex_speed_kmh: 99.6
+  exit_speed_kmh: 99.6
+  boundary_sources:
+  - corner
+- segment_id: 13
+  start_distance_m: 2198.3
+  end_distance_m: 2280.0
+  segment_length_m: 81.7
+  kind: CORNER
+  corner_id: 5
+  corner_type: SLOW_RIGHT
+  corner_phase: null
+  sector: null
+  zone: null
+  track_heading_deg: 267.1
+  mean_curvature: -0.00133
+  peak_curvature: -0.001952
+  entry_speed_kmh: 102.3
+  apex_speed_kmh: 102.3
+  exit_speed_kmh: 155.4
+  boundary_sources:
+  - corner
+- segment_id: 14
+  start_distance_m: 2280.0
+  end_distance_m: 2517.8
+  segment_length_m: 237.8
+  kind: CORNER
+  corner_id: null
+  corner_type: MEDIUM_RIGHT
+  corner_phase: null
+  sector: null
+  zone: null
+  track_heading_deg: 219.1
+  mean_curvature: -0.000383
+  peak_curvature: -0.000602
+  entry_speed_kmh: 174.0
+  apex_speed_kmh: 174.0
+  exit_speed_kmh: 243.2
+  boundary_sources:
+  - throttle_return
+- segment_id: 15
+  start_distance_m: 2517.8
+  end_distance_m: 2580.0
+  segment_length_m: 62.2
+  kind: CORNER
+  corner_id: 6
+  corner_type: STRAIGHT
+  corner_phase: null
+  sector: null
+  zone: null
+  track_heading_deg: 170.7
+  mean_curvature: 9.8e-05
+  peak_curvature: 0.000202
+  entry_speed_kmh: 243.1
+  apex_speed_kmh: 236.0
+  exit_speed_kmh: 236.0
+  boundary_sources:
+  - corner
+- segment_id: 16
+  start_distance_m: 2580.0
+  end_distance_m: 2838.7
+  segment_length_m: 258.7
+  kind: CORNER
+  corner_id: null
+  corner_type: MEDIUM_LEFT
+  corner_phase: null
+  sector: null
+  zone: null
+  track_heading_deg: 175.8
+  mean_curvature: 0.000864
+  peak_curvature: 0.001309
+  entry_speed_kmh: 220.5
+  apex_speed_kmh: 163.4
+  exit_speed_kmh: 198.6
+  boundary_sources:
+  - brake_onset
+- segment_id: 17
+  start_distance_m: 2838.7
+  end_distance_m: 3041.1
+  segment_length_m: 202.3
+  kind: CORNER
+  corner_id: 7
+  corner_type: MEDIUM_LEFT
+  corner_phase: null
+  sector: null
+  zone: null
+  track_heading_deg: 299.2
+  mean_curvature: 0.000732
+  peak_curvature: 0.001234
+  entry_speed_kmh: 206.0
+  apex_speed_kmh: 182.1
+  exit_speed_kmh: 183.8
+  boundary_sources:
+  - corner
+- segment_id: 18
+  start_distance_m: 3041.1
+  end_distance_m: 3100.0
+  segment_length_m: 58.9
+  kind: CORNER
+  corner_id: 8
+  corner_type: MEDIUM_LEFT
+  corner_phase: null
+  sector: null
+  zone: null
+  track_heading_deg: 29.8
+  mean_curvature: 0.000611
+  peak_curvature: 0.000758
+  entry_speed_kmh: 188.6
+  apex_speed_kmh: 188.6
+  exit_speed_kmh: 196.7
+  boundary_sources:
+  - corner
+- segment_id: 19
+  start_distance_m: 3100.0
+  end_distance_m: 3440.0
+  segment_length_m: 340.0
+  kind: CORNER
+  corner_id: null
+  corner_type: MEDIUM_RIGHT
+  corner_phase: null
+  sector: null
+  zone: null
+  track_heading_deg: 40.0
+  mean_curvature: -0.000196
+  peak_curvature: -0.000575
+  entry_speed_kmh: 205.8
+  apex_speed_kmh: 205.8
+  exit_speed_kmh: 288.8
+  boundary_sources:
+  - throttle_return
+- segment_id: 20
+  start_distance_m: 3440.0
+  end_distance_m: 3578.4
+  segment_length_m: 138.4
+  kind: STRAIGHT
+  corner_id: null
+  corner_type: STRAIGHT
+  corner_phase: null
+  sector: null
+  zone: null
+  track_heading_deg: 0.6
+  mean_curvature: 1.2e-05
+  peak_curvature: 1.9e-05
+  entry_speed_kmh: 290.0
+  apex_speed_kmh: 289.4
+  exit_speed_kmh: 289.4
+  boundary_sources:
+  - envelope_taper
+- segment_id: 21
+  start_distance_m: 3578.4
+  end_distance_m: 3640.0
+  segment_length_m: 61.6
+  kind: CORNER
+  corner_id: 9
+  corner_type: STRAIGHT
+  corner_phase: null
+  sector: null
+  zone: null
+  track_heading_deg: 1.5
+  mean_curvature: -7.0e-05
+  peak_curvature: -0.000123
+  entry_speed_kmh: 287.5
+  apex_speed_kmh: 275.0
+  exit_speed_kmh: 275.0
+  boundary_sources:
+  - corner
+- segment_id: 22
+  start_distance_m: 3640.0
+  end_distance_m: 3778.2
+  segment_length_m: 138.2
+  kind: CORNER
+  corner_id: null
+  corner_type: MEDIUM_RIGHT
+  corner_phase: null
+  sector: null
+  zone: null
+  track_heading_deg: 358.2
+  mean_curvature: -0.000662
+  peak_curvature: -0.001014
+  entry_speed_kmh: 259.0
+  apex_speed_kmh: 202.5
+  exit_speed_kmh: 202.5
+  boundary_sources:
+  - brake_onset
+- segment_id: 23
+  start_distance_m: 3778.2
+  end_distance_m: 4020.0
+  segment_length_m: 241.8
+  kind: CORNER
+  corner_id: 10
+  corner_type: MEDIUM_RIGHT
+  corner_phase: null
+  sector: null
+  zone: null
+  track_heading_deg: 303.1
+  mean_curvature: -0.000738
+  peak_curvature: -0.001432
+  entry_speed_kmh: 202.3
+  apex_speed_kmh: 160.0
+  exit_speed_kmh: 171.9
+  boundary_sources:
+  - corner
+- segment_id: 24
+  start_distance_m: 4020.0
+  end_distance_m: 4277.7
+  segment_length_m: 257.7
+  kind: CORNER
+  corner_id: null
+  corner_type: MEDIUM_RIGHT
+  corner_phase: null
+  sector: null
+  zone: null
+  track_heading_deg: 208.6
+  mean_curvature: -0.000121
+  peak_curvature: -0.000635
+  entry_speed_kmh: 185.0
+  apex_speed_kmh: 185.0
+  exit_speed_kmh: 269.6
+  boundary_sources:
+  - throttle_return
+note: 'Static segment map. Boundaries are a property of the circuit, derived once
+  from the median profile over the reference laps above and applied unchanged to every
+  lap. segment_id is frozen for this geometry_version: changing it invalidates every
+  table that joins on it, so bump the version and rebuild rather than editing in place.'
