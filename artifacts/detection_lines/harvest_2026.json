@@ -1,0 +1,229 @@
+{
+  "schema_version": "detection_line_harvest_v1",
+  "purpose": "Evidence for a 2026 Overtake Detection Line position per circuit. CP-10, CP-12 and CP-13 are all blocked on detection_line_m, which is null for every event in config/rules/2026/.",
+  "rule": {
+    "statement": "The 2026 Overtake Detection Line is co-located with Safety Car Line 1.",
+    "value_source": "RULE_FIA",
+    "regulation_article": "FIA 2026 Formula 1 Sporting Regulations, Article B 7.2.1",
+    "quote": "The detection line referred to in Article B 7.2.1 of the FIA F1 Regulations, is at the same location of the Safety Car Line 1, therefore, will not be painted in yellow. OT boards are installed on both sides of the track.",
+    "stated_verbatim_by": [
+      "belgian",
+      "chinese",
+      "hungarian"
+    ],
+    "silent_events": [
+      "australian",
+      "austrian",
+      "british",
+      "dutch",
+      "italian",
+      "japanese",
+      "miami",
+      "monaco",
+      "spanish"
+    ],
+    "note": "Three events state it word for word. The wording is identical across all three, which reads as the general 2026 arrangement rather than a per-circuit variation, but nine events are silent and this has not been confirmed for them."
+  },
+  "safety_car_line_1_location": {
+    "statement": "Safety Car Line 1 is at the pit-entry bollard.",
+    "value_source": "RULE_FIA",
+    "quote": "any driver passing to the right-hand side of the bollard at safety car line 1 will be considered as entering the pit lane.",
+    "source_item": "Race Director's Competition Notes, Lines at the Pit Entry and Pit Exit"
+  },
+  "position_derivation": {
+    "value_source": "DERIVED_TELEMETRY",
+    "method": "Pit entry located in telemetry distance as the row where lap_start_session_s + lap_elapsed_s is closest to pit_in_session_s, over every Race and Sprint in-lap in the 2026 lake. Note that the lake's session_time_s column is a lap-level field and must not be used here.",
+    "tolerance_s": 2.0,
+    "corroboration": "The f1livepulse 2026 Silverstone map places the Overtake detection point just before Turn 17, the entry to the Vale chicane, which is where Silverstone's pit entry sits. Independent of the telemetry, and it agrees."
+  },
+  "open_question_blocking_config": {
+    "question": "Is there one Detection Line per lap, or one per activation zone?",
+    "evidence_for_single": "The notes say 'the detection line' in the singular and place it at Safety Car Line 1, one location per circuit.",
+    "current_config_model": "config/rules/2026/*.yaml models a detection_line_m per zone; the Australian Grand Prix configures four zones.",
+    "why_it_matters": "If Overtake arms once per lap at a single line and may then be used in any approved activation zone, that differs from DRS per-zone detection and changes the config schema, CP-10's state machine and CP-13's opportunity definition. No value is written to config until this is settled."
+  },
+  "sources": [
+    "https://www.fia.com/documents/championships/fia-formula-one-world-championship-14/season/season-2026-2072",
+    "https://www.fia.com/system/files/decision-document/2026_hungarian_grand_prix_-_race_directors_competition_notes.pdf",
+    "https://www.fia.com/system/files/decision-document/2026_belgian_grand_prix_-_race_directors_competition_notes.pdf",
+    "https://www.fia.com/system/files/decision-document/2026_chinese_grand_prix_-_race_directors_competition_notes_v3.pdf"
+  ],
+  "not_fetched": {
+    "events": [
+      "barcelona",
+      "canadian"
+    ],
+    "reason": "different URL slug in the FIA decision-document naming; not yet located"
+  },
+  "events": {
+    "australian": {
+      "states_detection_line_rule": false,
+      "notes_fetched": true,
+      "pit_entry_distance_m": 4940,
+      "pit_entry_p25_m": 4940,
+      "pit_entry_p75_m": 4940,
+      "spread_m": 0,
+      "laps_measured": 1,
+      "lap_length_m": 5227,
+      "metres_before_start_line": 287,
+      "plausible": true,
+      "reason_if_not": null
+    },
+    "austrian": {
+      "states_detection_line_rule": false,
+      "notes_fetched": true,
+      "pit_entry_distance_m": 4010,
+      "pit_entry_p25_m": 4000,
+      "pit_entry_p75_m": 4020,
+      "spread_m": 20,
+      "laps_measured": 40,
+      "lap_length_m": 4278,
+      "metres_before_start_line": 268,
+      "plausible": true,
+      "reason_if_not": null
+    },
+    "barcelona": {
+      "states_detection_line_rule": false,
+      "notes_fetched": false,
+      "pit_entry_distance_m": 4520,
+      "pit_entry_p25_m": 4520,
+      "pit_entry_p75_m": 4540,
+      "spread_m": 20,
+      "laps_measured": 52,
+      "lap_length_m": 4631,
+      "metres_before_start_line": 111,
+      "plausible": true,
+      "reason_if_not": null
+    },
+    "belgian": {
+      "states_detection_line_rule": true,
+      "notes_fetched": true,
+      "pit_entry_distance_m": 6900,
+      "pit_entry_p25_m": 6880,
+      "pit_entry_p75_m": 6900,
+      "spread_m": 20,
+      "laps_measured": 23,
+      "lap_length_m": 6936,
+      "metres_before_start_line": 36,
+      "plausible": true,
+      "reason_if_not": null
+    },
+    "british": {
+      "states_detection_line_rule": false,
+      "notes_fetched": true,
+      "pit_entry_distance_m": 5520,
+      "pit_entry_p25_m": 5520,
+      "pit_entry_p75_m": 5540,
+      "spread_m": 20,
+      "laps_measured": 53,
+      "lap_length_m": 5811,
+      "metres_before_start_line": 291,
+      "plausible": true,
+      "reason_if_not": null
+    },
+    "canadian": {
+      "states_detection_line_rule": false,
+      "notes_fetched": false,
+      "pit_entry_distance_m": 3900,
+      "pit_entry_p25_m": 3890,
+      "pit_entry_p75_m": 3910,
+      "spread_m": 20,
+      "laps_measured": 3,
+      "lap_length_m": 4330,
+      "metres_before_start_line": 430,
+      "plausible": true,
+      "reason_if_not": null
+    },
+    "chinese": {
+      "states_detection_line_rule": true,
+      "notes_fetched": true,
+      "pit_entry_distance_m": 5400,
+      "pit_entry_p25_m": 5380,
+      "pit_entry_p75_m": 5420,
+      "spread_m": 40,
+      "laps_measured": 33,
+      "lap_length_m": 5410,
+      "metres_before_start_line": 10,
+      "plausible": true,
+      "reason_if_not": null
+    },
+    "dutch": {
+      "states_detection_line_rule": false,
+      "notes_fetched": true,
+      "pit_entry_distance_m": 4300,
+      "pit_entry_p25_m": 4280,
+      "pit_entry_p75_m": 4300,
+      "spread_m": 20,
+      "laps_measured": 70,
+      "lap_length_m": 4222,
+      "metres_before_start_line": -78,
+      "plausible": false,
+      "reason_if_not": "measured pit entry exceeds the telemetry lap length, which is impossible; needs investigation before any value is written to config"
+    },
+    "hungarian": {
+      "states_detection_line_rule": true,
+      "notes_fetched": true,
+      "pit_entry_distance_m": 4500,
+      "pit_entry_p25_m": 4180,
+      "pit_entry_p75_m": 4820,
+      "spread_m": 640,
+      "laps_measured": 47,
+      "lap_length_m": 4268,
+      "metres_before_start_line": -232,
+      "plausible": false,
+      "reason_if_not": "measured pit entry exceeds the telemetry lap length, which is impossible; needs investigation before any value is written to config"
+    },
+    "italian": {
+      "states_detection_line_rule": false,
+      "notes_fetched": true,
+      "pit_entry_distance_m": 5660,
+      "pit_entry_p25_m": 5660,
+      "pit_entry_p75_m": 5680,
+      "spread_m": 20,
+      "laps_measured": 31,
+      "lap_length_m": 5758,
+      "metres_before_start_line": 98,
+      "plausible": true,
+      "reason_if_not": null
+    },
+    "japanese": {
+      "states_detection_line_rule": false,
+      "notes_fetched": true,
+      "pit_entry_distance_m": 5710,
+      "pit_entry_p25_m": 5700,
+      "pit_entry_p75_m": 5720,
+      "spread_m": 20,
+      "laps_measured": 26,
+      "lap_length_m": 5742,
+      "metres_before_start_line": 32,
+      "plausible": true,
+      "reason_if_not": null
+    },
+    "miami": {
+      "states_detection_line_rule": false,
+      "notes_fetched": true,
+      "pit_entry_distance_m": 5200,
+      "pit_entry_p25_m": 5180,
+      "pit_entry_p75_m": 5200,
+      "spread_m": 20,
+      "laps_measured": 24,
+      "lap_length_m": 5333,
+      "metres_before_start_line": 133,
+      "plausible": true,
+      "reason_if_not": null
+    },
+    "monaco": {
+      "states_detection_line_rule": false,
+      "notes_fetched": true,
+      "pit_entry_distance_m": 2920,
+      "pit_entry_p25_m": 2920,
+      "pit_entry_p75_m": 2940,
+      "spread_m": 20,
+      "laps_measured": 83,
+      "lap_length_m": 3284,
+      "metres_before_start_line": 364,
+      "plausible": true,
+      "reason_if_not": null
+    }
+  }
+}
