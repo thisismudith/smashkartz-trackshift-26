@@ -1,3 +1,7 @@
 # Shell scripts must stay LF regardless of core.autocrlf, or bash on Windows
 # fails on the trailing carriage return.
 *.sh text eol=lf
+
+# Dependency manifests must stay UTF-8 text with LF, or PowerShell redirection
+# writes UTF-16 and git stores them as binary with no reviewable diff.
+requirements*.txt text eol=lf
