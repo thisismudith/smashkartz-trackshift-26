@@ -1,0 +1,337 @@
+/*
+ * F1 standing-start intro — layer stack and choreography.
+ *
+ * Everything animated by CSS here is compositor-only (transform / opacity). The physics-driven
+ * parts (car transform, tread offsets, smoke, rubber marks) are written by runtime.ts each frame;
+ * the two canvas layers are the deliberate exception to the "CSS only" rule.
+ *
+ * Layer order inside .stage (bottom to top):
+ *   1 .marks  canvas  asphalt + rubber (persistent; dims to background texture once the car exits)
+ *   2 .grid           grid-slot paint (DOM; fades at lights out — you leave the grid behind)
+ *   3 .brand/.tagline wordmark letters (ignite as the rear axle passes them) + tagline
+ *   4 .car            top-view SVG + 4 wheel divs (one transform write per frame)
+ *   5 .smoke  canvas  particles, tyre heat, exhaust glow (cleared every frame)
+ *   6 .gantry         five-column start lights (DOM; above the smoke, fades with the grid)
+ */
+
+.overlay {
+  --car-w: clamp(280px, 40vw, 620px);
+  --car-h: calc(var(--car-w) * 200 / 560);
+  --cg-x: 0.3607; /* CG at 202 / 560 of the car box */
+  --m: calc(var(--car-w) / 5.6); /* one metre in px — the car is 5.6 m long */
+
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  overflow: hidden;
+  color: var(--haas-white);
+  /* opaque and interactive-blocking while it plays; released as soon as the fade starts */
+  pointer-events: auto;
+  /* Single overhead light: lifts the tarmac under the car so rubber reads; edges stay page-black. */
+  background:
+    radial-gradient(
+      ellipse 70% 60% at 50% 50%,
+      rgba(174, 174, 174, 0.16),
+      rgba(174, 174, 174, 0.06) 55%,
+      rgba(174, 174, 174, 0) 85%
+    ),
+    var(--haas-black);
+  opacity: 1;
+  transition: opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.overlay.fading {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* ---------- camera ---------- */
+
+.stage {
+  position: absolute;
+  inset: 0;
+  transform-origin: 50% 50%;
+  will-change: transform;
+  transition: transform 0.6s ease-out;
+}
+
+/* rev-hold: slow push-in toward the car */
+.stage.pushIn {
+  transform: scale(1.015);
+}
+
+/* lights out: one recoil kick, then the scale relaxes */
+.stage.kick {
+  transition: none;
+  animation: launch-kick 0.5s cubic-bezier(0.2, 0.9, 0.3, 1) both;
+}
+
+@keyframes launch-kick {
+  from {
+    transform: translate3d(-5px, 0, 0) scale(1.015);
+  }
+  to {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+/* ---------- canvases ---------- */
+
+.marks,
+.smoke {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.marks {
+  z-index: 1;
+  transition: opacity 0.5s ease-out;
+}
+
+/* once the car has gone the rubber becomes background texture, so the wordmark is the only loud thing */
+.marks.dimmed {
+  opacity: 0.6;
+}
+
+.smoke {
+  z-index: 5;
+  transition: opacity 0.45s ease-out;
+}
+
+.smoke.clearing {
+  opacity: 0;
+}
+
+/* ---------- grid slot ----------
+ * A real F1 grid slot is an open L: a lateral line the front wheels stop behind plus one
+ * longitudinal line down a single side, open at the rear and on the right. Geometry mirrors
+ * GRID in physics/constants.ts (car-frame metres, CG at the viewport centre, screen-up = -y).
+ */
+
+.grid {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  opacity: 1;
+  transition: opacity 0.45s ease-out;
+  will-change: opacity;
+}
+
+.grid.gone {
+  opacity: 0;
+}
+
+.gridFront,
+.gridSide {
+  position: absolute;
+}
+
+/* lateral line just ahead of the nose (x = +3.74 … +3.86 m; the nose tip is at +3.58 m).
+   Real F1 grid-box paint is yellow, not white: HAAS.yellow / --haas-yellow. */
+.gridFront {
+  left: calc(50% + 3.74 * var(--m));
+  top: calc(50% - 1.3 * var(--m));
+  width: calc(0.12 * var(--m));
+  height: calc(2.6 * var(--m));
+  background: rgba(255, 214, 10, 0.72); /* fallback for no color-mix */
+  background: color-mix(in srgb, var(--haas-yellow) 72%, transparent);
+  box-shadow: 0 0 calc(0.035 * var(--m)) rgba(255, 214, 10, 0.3);
+}
+
+/* longitudinal line down the left flank, meeting the front line at the corner */
+.gridSide {
+  left: calc(50% - 3.2 * var(--m));
+  top: calc(50% - 1.21 * var(--m));
+  width: calc(7.06 * var(--m));
+  height: calc(0.12 * var(--m));
+  background: rgba(239, 239, 239, 0.28);
+}
+
+/* ---------- start lights ---------- */
+
+.gantry {
+  position: absolute;
+  left: 50%;
+  top: 6vh;
+  z-index: 6;
+  transform: translateX(-50%);
+  display: flex;
+  gap: clamp(6px, 1.1vw, 14px);
+  padding: clamp(6px, 1vw, 12px);
+  border-radius: 6px;
+  background: rgba(17, 17, 17, 0.92);
+  border: 1px solid rgba(174, 174, 174, 0.22);
+  opacity: 1;
+  transition: opacity 0.45s ease-out;
+  will-change: opacity;
+}
+
+.gantry.gone {
+  opacity: 0;
+}
+
+.lightCol {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(5px, 0.8vw, 10px);
+}
+
+.lamp {
+  position: relative;
+  width: clamp(14px, 2.2vw, 30px);
+  height: clamp(14px, 2.2vw, 30px);
+  border-radius: 50%;
+  background: rgba(174, 174, 174, 0.1);
+  box-shadow: inset 0 0 0 1px rgba(174, 174, 174, 0.25);
+}
+
+/* the only per-light change is one opacity — 10 compositor toggles for the whole sequence */
+.bulb {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: var(--haas-red);
+  box-shadow: 0 0 clamp(10px, 1.6vw, 22px) 3px rgba(218, 41, 28, 0.5);
+  opacity: 0;
+  transition: opacity 0.09s linear;
+  will-change: opacity;
+}
+
+.lightCol.lit .bulb {
+  opacity: 1;
+}
+
+/* ---------- wordmark ---------- */
+
+.brand {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 3;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  width: min(94vw, 1200px);
+}
+
+.name {
+  font-family: var(--font-display), Impact, "Arial Narrow", sans-serif;
+  font-weight: 900;
+  font-stretch: 118%;
+  font-size: clamp(2.4rem, 9vw, 7rem);
+  letter-spacing: 0.015em;
+  line-height: 1;
+  text-transform: uppercase;
+  color: var(--haas-white);
+  white-space: nowrap;
+  /* the oblique is the cheapest motorsport cue there is; the per-letter reveal below uses
+     translate on the spans, so the two transforms do not collide */
+  transform: skewX(-8deg);
+  padding: 0 0.5em;
+}
+
+.name span {
+  display: inline-block;
+  opacity: 0;
+  transform: translate3d(-6px, 0, 0);
+  transition:
+    opacity 0.12s ease-out,
+    transform 0.12s ease-out;
+  will-change: opacity, transform;
+}
+
+.name span.lit {
+  opacity: 1;
+  transform: translate3d(0, 0, 0);
+}
+
+.name .red {
+  color: var(--haas-red);
+}
+
+/* clear of the lower rubber stripe: half-track 0.725 m + half tyre 0.19 m ≈ 0.92 m */
+.tagline {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(50% + var(--car-w) * 0.175);
+  z-index: 3;
+  text-align: center;
+  font-size: clamp(0.75rem, 1.6vw, 1.1rem);
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--haas-grey);
+  opacity: 0;
+  transition: opacity 0.35s ease-out;
+}
+
+.tagline.shown {
+  opacity: 1;
+}
+
+/* ---------- car ---------- */
+
+.car {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 4;
+  width: var(--car-w);
+  height: var(--car-h);
+  /* CG sits at the viewport centre in the SSR frame; runtime adds translate/rotate on top. */
+  margin-left: calc(var(--car-w) * var(--cg-x) * -1);
+  margin-top: calc(var(--car-h) * -0.5);
+  transform-origin: calc(var(--cg-x) * 100%) 50%;
+  will-change: transform;
+}
+
+/* ---------- reduced motion: static composition, short fade ---------- */
+
+.overlay.reduced .marks,
+.overlay.reduced .smoke,
+.overlay.reduced .grid,
+.overlay.reduced .gantry {
+  display: none;
+}
+
+/* wordmark + tagline above, car parked below them */
+.overlay.reduced .brand {
+  top: 30%;
+}
+
+.overlay.reduced .tagline {
+  top: calc(30% + clamp(1.6rem, 6.5vw, 5.2rem));
+}
+
+.overlay.reduced .car {
+  top: 68%;
+}
+
+.overlay.reduced .name span,
+.overlay.reduced .tagline {
+  opacity: 1;
+  transform: none;
+  transition: none;
+}
+
+.overlay.reduced {
+  animation: overlay-fade 0.3s ease-out 0.9s both;
+}
+
+@keyframes overlay-fade {
+  to {
+    opacity: 0;
+  }
+}
+
+/* screen-reader only */
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}

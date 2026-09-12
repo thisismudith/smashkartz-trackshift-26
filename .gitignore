@@ -1,9 +1,7 @@
-# Derived data is regenerable from data/raw by the build scripts and can reach
+# Raw and derived data is regenerable by the build scripts and can reach
 # many GB once the 20 m lake is built (AGENTS.md sections 10, 48). Never commit it.
-data/raw/
-data/interim/
-data/processed/
-data/derived/
+data/
+frontend/public/sim/
 artifacts/schema_audit/*.csv
 artifacts/schema_audit/*.json
 __pycache__/

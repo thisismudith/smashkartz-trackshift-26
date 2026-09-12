@@ -1,0 +1,124 @@
+.main {
+  min-height: 100dvh;
+  padding: clamp(1.5rem, 5vw, 4rem) clamp(1rem, 6vw, 5rem);
+  display: flex;
+  flex-direction: column;
+  gap: clamp(2rem, 6vh, 4rem);
+}
+
+.hero {
+  max-width: 60rem;
+}
+
+.kicker {
+  font-size: 0.8rem;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--haas-grey);
+}
+
+.title {
+  font-family: var(--font-display), Impact, "Arial Narrow", sans-serif;
+  font-weight: 900;
+  font-stretch: 118%;
+  font-size: clamp(2.6rem, 8.5vw, 6rem);
+  line-height: 1;
+  letter-spacing: 0.015em;
+  text-transform: uppercase;
+  margin-top: 0.4rem;
+  transform: skewX(-8deg);
+  transform-origin: left center;
+}
+
+.title em {
+  font-style: normal;
+  color: var(--haas-red);
+}
+
+.lede {
+  margin-top: 1.2rem;
+  max-width: 44rem;
+  font-size: clamp(1rem, 1.6vw, 1.25rem);
+  line-height: 1.5;
+  color: var(--haas-grey);
+}
+
+.nav {
+  margin-top: 1.6rem;
+}
+
+.button {
+  display: inline-block;
+  padding: 0.7rem 1.4rem;
+  border: 1px solid var(--haas-grey);
+  color: var(--haas-white);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-size: 0.8rem;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.button:hover,
+.button:focus-visible {
+  background: var(--haas-red);
+  border-color: var(--haas-red);
+  outline: none;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: 1rem;
+}
+
+.card {
+  border: 1px solid var(--haas-grey);
+  padding: 1.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  position: relative;
+}
+
+.card::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--haas-red);
+}
+
+.card h2 {
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.card p {
+  color: var(--haas-grey);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.badge {
+  align-self: flex-start;
+  margin-top: auto;
+  font-size: 0.7rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--haas-black);
+  background: var(--haas-grey);
+  padding: 0.15rem 0.5rem;
+}
+
+.footer {
+  margin-top: auto;
+  font-size: 0.8rem;
+  color: var(--haas-grey);
+  border-top: 1px solid var(--haas-grey);
+  padding-top: 1rem;
+}

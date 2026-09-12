@@ -1,0 +1,90 @@
+/*
+ * Top-view car (HaasCarTop.tsx): one SVG body + four DOM wheels rendered as later siblings so they
+ * paint above the body. Wheel boxes are positioned in percent of .carBox from WHEEL_VB (constants.ts).
+ *
+ * Runtime contract (all compositor-only properties):
+ *   [data-wheel="fl"|"fr"]  style.transform = rotate(steer)                 (transform-origin: center)
+ *   [data-tread]            style.transform = translate3d(offset, 0, 0)     offset in (-10, 0] CSS px
+ *   [data-blur]             style.opacity   = f(surface speed)              motion-blur crossfade
+ */
+
+.carBox {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 560 / 200;
+}
+
+.svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  /* the baked ground shadow spills a few units past the viewBox */
+  overflow: visible;
+}
+
+/* ---------- wheels (plan view: diameter along x, tyre width along y) ---------- */
+
+.wheel {
+  position: absolute;
+  box-sizing: border-box;
+  overflow: hidden;
+  border-radius: 2px;
+  background: #111111;
+  /* sidewall edges */
+  border-top: 1px solid rgba(174, 174, 174, 0.6);
+  border-bottom: 1px solid rgba(174, 174, 174, 0.6);
+  transform-origin: center;
+  will-change: transform;
+}
+
+/* Pirelli band: thin red lines inset 2px from each sidewall */
+.wheel::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 2px;
+  bottom: 2px;
+  border-top: 1px solid #da291c;
+  border-bottom: 1px solid #da291c;
+  z-index: 2;
+  pointer-events: none;
+}
+
+/* crown highlight along the horizontal centreline */
+.wheel::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 2px;
+  margin-top: -1px;
+  background: rgba(174, 174, 174, 0.18);
+  z-index: 2;
+  pointer-events: none;
+}
+
+/* tread grooves, 10px pitch; twice the wheel width so a (-10, 0] px translate never exposes an edge */
+.tread {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 200%;
+  height: 100%;
+  background: repeating-linear-gradient(
+    90deg,
+    #111111 0 8px,
+    rgba(174, 174, 174, 0.35) 8px 10px
+  );
+  will-change: transform;
+}
+
+/* grey veil faded in with surface speed to blur the grooves */
+.blur {
+  position: absolute;
+  inset: 0;
+  background: rgba(174, 174, 174, 0.22);
+  opacity: 0;
+  will-change: opacity;
+}
