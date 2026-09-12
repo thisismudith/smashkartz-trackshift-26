@@ -147,8 +147,11 @@ def configure_threads(threads: int) -> None:
 def _params(family: str, *, seed: int, threads: int, deterministic: bool) -> dict[str, Any]:
     """CP-14's parameter block, plus the hardware and reproducibility knobs."""
     if family == "logistic":
+        # CP-14 writes penalty="l2" explicitly. It is the default, and passing it
+        # is deprecated in scikit-learn 1.8 and removed in 1.10 -- so it is omitted
+        # rather than spelled out. The fit is identical; only the warning differs.
         return dict(
-            penalty="l2", C=1.0, solver="lbfgs", max_iter=2000,
+            C=1.0, solver="lbfgs", max_iter=2000,
             class_weight=None, random_state=seed,
         )
     if family == "lightgbm":

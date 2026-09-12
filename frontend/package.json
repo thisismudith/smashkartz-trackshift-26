@@ -3,12 +3,15 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "predev": "node scripts/ensure-sim-data.mjs",
     "dev": "next dev",
+    "prebuild": "node scripts/ensure-sim-data.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "sim:data": "node scripts/ensure-sim-data.mjs"
   },
   "dependencies": {
     "next": "16.3.5",

@@ -157,6 +157,40 @@ export interface SimSource {
   sessionUrls(ref: SessionRef): Promise<{ trackUrl: string; manifestUrl: string; binUrl: string }>;
 }
 
+/** One place where an artifact request can fail, so it fails legibly.
+ *
+ * Every artifact is gitignored BUILD OUTPUT, not repo content, so the ordinary state of a
+ * fresh clone is that none of them exist. Without a status check that showed up as
+ * `Unexpected token '<', "<!DOCTYPE "... is not valid JSON`: the server answers a missing
+ * file with its HTML 404 page and r.json() tries to parse the markup. The panel then
+ * reported a parse error, which points at the data being corrupt when in truth it was
+ * never built. Measured against a running `next start`: status 404, body `<!DOCTYPE html>`.
+ *
+ * Anything the browser can be told here it must be told, because this is the only signal
+ * the person gets. */
+async function getJson<T>(url: string): Promise<T> {
+  let response: Response;
+  try {
+    response = await fetch(url);
+  } catch (cause) {
+    throw new Error(`could not reach ${url} (${String(cause)})`, { cause });
+  }
+  if (!response.ok) {
+    throw new Error(
+      `${url} responded ${response.status}. The sim artifacts are gitignored build ` +
+        `output, so a fresh clone has none: run \`python scripts/build_sim_data.py ` +
+        `--year 2026 --all --jobs 0 --fresh\` from the repo root (it needs the raw ` +
+        `mirror under data/raw/tracinginsights/), or point NEXT_PUBLIC_SIM_BASE at ` +
+        `wherever they are hosted.`,
+    );
+  }
+  try {
+    return (await response.json()) as T;
+  } catch (cause) {
+    throw new Error(`${url} did not contain JSON (${String(cause)})`, { cause });
+  }
+}
+
 /** Reads the artifacts under /sim that the Python build wrote. */
 export class StaticSimSource implements SimSource {
   private indexPromise: Promise<SimIndex> | null = null;
@@ -166,8 +200,8 @@ export class StaticSimSource implements SimSource {
   index(): Promise<SimIndex> {
     if (!this.indexPromise) {
       this.indexPromise = (async () => {
-        const pointer = await fetch(`${this.base}/index.json`).then((r) => r.json());
-        return fetch(`${this.base}/${pointer.latest}`).then((r) => r.json());
+        const pointer = await getJson<{ latest: string }>(`${this.base}/index.json`);
+        return getJson<SimIndex>(`${this.base}/${pointer.latest}`);
       })();
     }
     return this.indexPromise;
@@ -175,30 +209,30 @@ export class StaticSimSource implements SimSource {
 
   async catalogue<T>(): Promise<T> {
     const idx = await this.index();
-    return fetch(`${this.base}/${idx.catalogue}`).then((r) => r.json());
+    return getJson<T>(`${this.base}/${idx.catalogue}`);
   }
 
   async rules(): Promise<RuleSet | null> {
     const idx = await this.index();
     if (!idx.rules) return null;
-    return fetch(`${this.base}/${idx.rules}`).then((r) => r.json());
+    return getJson<RuleSet>(`${this.base}/${idx.rules}`);
   }
 
   async params(): Promise<FittedParams> {
     const idx = await this.index();
-    return fetch(`${this.base}/${idx.params}`).then((r) => r.json());
+    return getJson<FittedParams>(`${this.base}/${idx.params}`);
   }
 
   async track(slug: string): Promise<RawTrackModel> {
     const idx = await this.index();
     const file = idx.tracks[slug];
     if (!file) throw new Error(`no track artifact for ${slug}`);
-    return fetch(`${this.base}/${file}`).then((r) => r.json());
+    return getJson<RawTrackModel>(`${this.base}/${file}`);
   }
 
   async sessionManifest(ref: SessionRef): Promise<RawSessionManifest> {
     const { manifestUrl } = await this.sessionUrls(ref);
-    return fetch(manifestUrl).then((r) => r.json());
+    return getJson<RawSessionManifest>(manifestUrl);
   }
 
   async sessionUrls(ref: SessionRef) {

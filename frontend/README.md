@@ -16,14 +16,24 @@ npm test         # vitest: physics + effects unit tests (node, no DOM)
 ## Data (required before anything renders)
 
 Every chart, table and replay reads `public/sim/*.json|.bin`. Those are **gitignored build
-output**, not repo content, so a fresh clone has none and the app comes up empty. Two steps
-from the repo root produce them:
+output**, not repo content, so a fresh clone or a machine that just pulled has none.
+
+`npm run dev` and `npm run build` check for them first (`scripts/ensure-sim-data.mjs`, wired
+as `predev`/`prebuild`) and build them automatically when the raw mirror is present. So the
+only step that is ever manual is the mirror itself, which is ~8 GB per season and cannot be
+conjured:
 
 ```powershell
-# 1. the raw mirror -- data/raw/tracinginsights/<year>, ~8 GB per season, once
+# once per machine, per season
 .\scripts\data\download_initial_dataset.ps1 -Years 2026
+npm run dev        # sees the mirror, builds the artifacts, then starts
+```
 
-# 2. the artifacts -- ~40 s for all 13 circuits
+Without a mirror, dev still starts and says exactly what is missing rather than failing with
+a JSON parse error. Force a check or rebuild any time with `npm run sim:data`; build by hand
+with:
+
+```powershell
 python scripts/build_sim_data.py --year 2026 --all --jobs 0 --fresh --prune
 ```
 

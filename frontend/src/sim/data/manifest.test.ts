@@ -1,11 +1,11 @@
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { TrackModel } from "../contract/types";
 import {
   halfWidthAt, lapPositionDropped, lapPositionFrame, lapPositionsMeasured,
-  parseCorners, parseTrackModel, ringDsMetres, trackPointAt,
-  type RawSessionManifest, type RawTrackModel,
+  parseCorners, parseTrackModel, ringDsMetres, surfaceAt, trackPointAt,
+  type RawSessionManifest, type RawTrackModel, type RawTrackSurface,
 } from "./manifest";
 
 function makeRaw(over: Partial<RawTrackModel> = {}): RawTrackModel {
@@ -402,3 +402,274 @@ describe.skipIf(!shipped || Object.keys(shipped.sessions).length === 0)(
       }
     });
   });
+
+/* ==========================================================================
+ * The OPTIONAL baked surface block.
+ * ======================================================================== */
+
+/** A surface block over makeRaw()'s 3-vertex, 3 m ring (ds = 1 m). */
+function makeSurfaceRaw(over: Partial<RawTrackSurface> = {}): RawTrackSurface {
+  return {
+    dsMetres: 1,
+    source: "silverstone.glb",
+    sourceSha256: "a".repeat(64),
+    profile: "edelta-scorer",
+    transform: {
+      scale: 0.999404, yawDeg: 0.203281, mirror: -1,
+      txM: -277.7467, tzM: 442.3924, tyM: -203.2841,
+    },
+    zCm: [510, 520, 530],
+    slopePermille: [10, 20, null],
+    camberPermille: [null, 5, 5],
+    validMask: [1, 1, 1],
+    residual: { stdM: 0.0508, maxM: 0.1652 },
+    coverage: 1,
+    roadCoverage: 0.998457,
+    assetUrl: "/sim/glb/british-grand-prix.0123456789.glb",
+    assetSha256: "b".repeat(64),
+    provenance: "DERIVED (exact vertical raycast onto the GLB's scored drive surface)",
+    ...over,
+  };
+}
+
+describe("surface: absence is the normal case, and it is not a surface of zeroes", () => {
+  it("parses a track with no surface block to null, not to a flat surface", () => {
+    const model = parseTrackModel(makeRaw());
+    // undefined would be just as correct a spelling of "absent"; what must NOT happen
+    // is an array of zeroes, which would read as "this circuit is at sea level".
+    expect(model.surface).toBeNull();
+    for (const station of [0, 0.5, 1.7, 2.999]) {
+      expect(surfaceAt(model, station), `station ${station}`).toBeNull();
+    }
+  });
+
+  it("parses an explicit null the same way", () => {
+    expect(parseTrackModel(makeRaw({ surface: null })).surface).toBeNull();
+  });
+
+  it("leaves every other field of the model untouched when a block IS present", () => {
+    const withOut = parseTrackModel(makeRaw());
+    const withIn = parseTrackModel(makeRaw({ surface: makeSurfaceRaw() }));
+    expect(Array.from(withIn.z)).toEqual(Array.from(withOut.z));
+    expect(withIn.lengthMetres).toBe(withOut.lengthMetres);
+    expect(withIn.halfWidth).toEqual(withOut.halfWidth);
+  });
+});
+
+describe("surfaceAt: interpolated where measured, null where not", () => {
+  const model = parseTrackModel(makeRaw({ surface: makeSurfaceRaw() }));
+
+  it("dequantises cm and permille into metres and gradients", () => {
+    const s = model.surface!;
+    // Float32, like the ring's own x/y/z: the source is cm-quantised, so 32 bits carry
+    // the value exactly as far as it was ever measured.
+    expect(s.zM).toBeInstanceOf(Float32Array);
+    expect(Array.from(s.zM)).toHaveLength(3);
+    expect(s.zM[0]).toBeCloseTo(5.1, 6);
+    expect(s.zM[1]).toBeCloseTo(5.2, 6);
+    expect(s.zM[2]).toBeCloseTo(5.3, 6);
+    expect(s.slope[0]).toBeCloseTo(0.01, 6);
+    expect(s.slope[1]).toBeCloseTo(0.02, 6);
+    expect(Number.isNaN(s.slope[2])).toBe(true);       // absent, NOT flat
+    expect(Number.isNaN(s.camber[0])).toBe(true);
+    expect(s.camber[1]).toBeCloseTo(0.005, 9);
+    expect(Array.from(s.valid)).toEqual([1, 1, 1]);
+    expect(s.coverage).toBe(1);
+    expect(s.residual.maxM).toBeCloseTo(0.1652, 9);
+  });
+
+  it("lands on the vertex at an integer station and interpolates between them", () => {
+    expect(surfaceAt(model, 0)!.zM).toBeCloseTo(5.1, 6);
+    expect(surfaceAt(model, 1)!.zM).toBeCloseTo(5.2, 6);
+    expect(surfaceAt(model, 0.5)!.zM).toBeCloseTo(5.15, 6);
+    expect(surfaceAt(model, 0.5)!.slope).toBeCloseTo(0.015, 6);
+  });
+
+  it("wraps circularly, so the last vertex joins the first", () => {
+    expect(surfaceAt(model, 2.5)!.zM).toBeCloseTo(5.2, 6);      // (5.3 + 5.1) / 2
+    expect(surfaceAt(model, 3)!.zM).toBeCloseTo(surfaceAt(model, 0)!.zM, 9);
+    expect(surfaceAt(model, -0.5)!.zM).toBeCloseTo(surfaceAt(model, 2.5)!.zM, 9);
+  });
+
+  it("reports a channel that has no value as null, height and camber separately", () => {
+    // slope runs out at vertex 2, camber at vertex 0: a station can have a measured
+    // height and no measurable camber, because the camber probe reaches off the model
+    // at a track edge. Each channel answers for itself.
+    const a = surfaceAt(model, 1.5)!;
+    expect(a.zM).toBeCloseTo(5.25, 6);
+    expect(a.slope).toBeNull();
+    expect(a.camber).toBeCloseTo(0.005, 6);
+    const b = surfaceAt(model, 0.5)!;
+    expect(b.camber).toBeNull();
+    expect(b.slope).toBeCloseTo(0.015, 6);
+  });
+
+  it("refuses to interpolate ACROSS a station the raycast missed", () => {
+    // This is the whole point of the function. Averaging a measured height with a
+    // missing one manufactures ground that was never sampled, and a manufactured
+    // height is exactly what puts a car through the road or in the air.
+    const gappy = parseTrackModel(makeRaw({
+      slug: "gap-test",
+      surface: makeSurfaceRaw({ zCm: [510, null, 530], validMask: [1, 0, 1] }),
+    }));
+    expect(Array.from(gappy.surface!.valid)).toEqual([1, 0, 1]);
+    expect(Number.isNaN(gappy.surface!.zM[1])).toBe(true);
+    expect(surfaceAt(gappy, 0)).toBeNull();      // 0 -> vertices 0 and 1
+    expect(surfaceAt(gappy, 0.5)).toBeNull();
+    expect(surfaceAt(gappy, 1.5)).toBeNull();    // vertices 1 and 2
+    expect(surfaceAt(gappy, 2.5)!.zM).toBeCloseTo(5.2, 6);   // 2 and 0, both measured
+  });
+
+  it("believes the mask only where there is a height to back it up", () => {
+    const lying = parseTrackModel(makeRaw({
+      slug: "mask-test",
+      surface: makeSurfaceRaw({ zCm: [510, null, 530], validMask: [1, 1, 1] }),
+    }));
+    expect(Array.from(lying.surface!.valid)).toEqual([1, 0, 1]);
+    expect(surfaceAt(lying, 0.5)).toBeNull();
+  });
+});
+
+describe("surface: a block that is present but unusable is refused, loudly", () => {
+  it("refuses a surface whose arrays do not line up with the ring", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const model = parseTrackModel(makeRaw({
+        slug: "length-mismatch",
+        surface: makeSurfaceRaw({ zCm: [510, 520] }),   // 2 heights for 3 vertices
+      }));
+      // refused rather than half-used: a surface indexed against the wrong stations
+      // would stand cars at other corners' heights
+      expect(model.surface).toBeNull();
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(String(warn.mock.calls[0][0])).toContain("length-mismatch");
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("refuses a block with no usable transform -- there is nowhere to put the model", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const model = parseTrackModel(makeRaw({
+        slug: "bad-transform",
+        surface: makeSurfaceRaw({
+          transform: { scale: NaN, yawDeg: 0, mirror: -1, txM: 0, tzM: 0, tyM: 0 },
+        }),
+      }));
+      expect(model.surface).toBeNull();
+      expect(warn).toHaveBeenCalledTimes(1);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+});
+
+describe("surface: provenance and the published asset", () => {
+  it("reads the leading provenance word, and keeps the sentence that explains it", () => {
+    const s = parseTrackModel(makeRaw({ surface: makeSurfaceRaw() })).surface!;
+    // DERIVED, not OBSERVED: this height was never measured from a car (AGENTS.md 13.6).
+    expect(s.provenance).toBe("DERIVED");
+    expect(s.provenanceNote).toContain("raycast");
+  });
+
+  it("refuses a word outside the vocabulary rather than inventing a seventh", () => {
+    const s = parseTrackModel(makeRaw({
+      surface: makeSurfaceRaw({ provenance: "MEASURED (from the model)" }),
+    })).surface!;
+    expect(s.provenance).toBeNull();               // absence, not a new word
+    expect(s.provenanceNote).toBe("MEASURED (from the model)");
+    const none = parseTrackModel(makeRaw({
+      surface: makeSurfaceRaw({ provenance: null }),
+    })).surface!;
+    expect(none.provenance).toBeNull();
+    expect(none.provenanceNote).toBeNull();
+  });
+
+  it("treats a missing or empty asset URL as no asset", () => {
+    for (const assetUrl of [null, "", undefined]) {
+      const s = parseTrackModel(makeRaw({ surface: makeSurfaceRaw({ assetUrl }) })).surface!;
+      expect(s.assetUrl, String(assetUrl)).toBeNull();
+      // the heights are still perfectly usable; only the model cannot be fetched
+      expect(s.zM[0]).toBeCloseTo(5.1, 6);
+    }
+  });
+
+  it("falls back to the ring's own spacing when the block states none", () => {
+    const s = parseTrackModel(makeRaw({
+      surface: makeSurfaceRaw({ dsMetres: NaN }),
+    })).surface!;
+    expect(s.dsMetres).toBeCloseTo(1, 9);
+  });
+});
+
+/** Shipped models that already carry a baked surface. Zero today (no build has written
+ * one yet); the block below activates itself the moment one does. */
+const shippedWithSurface = shipped ? parseableModels().filter(({ raw }) => raw.surface) : [];
+
+describe.skipIf(!shipped)("the surface block, against every shipped artifact", () => {
+  it("reads as NO SURFACE on every model that carries none", () => {
+    const models = parseableModels();
+    expect(models.length).toBeGreaterThan(0);
+    let absent = 0;
+    for (const { slug, raw } of models) {
+      if (raw.surface) continue;
+      absent++;
+      const model = parseTrackModel(raw);
+      expect(model.surface, slug).toBeNull();
+      // and every station answers "there is no baked height here" rather than 0 m
+      for (const f of [0, 0.137, 0.5, 0.871, 0.999]) {
+        expect(surfaceAt(model, f * model.lengthMetres), `${slug} @ ${f}`).toBeNull();
+      }
+    }
+    // 13 of 13 today. This is the shape of the fallback the other twelve circuits keep
+    // forever, so it is the case worth pinning hardest.
+    expect(absent).toBe(models.length - shippedWithSurface.length);
+  });
+});
+
+describe.skipIf(shippedWithSurface.length === 0)("a shipped baked surface", () => {
+  it("is indexed against the ring and stays within its own measured residual", () => {
+    for (const { slug, raw } of shippedWithSurface) {
+      const model = parseTrackModel(raw);
+      const surface = model.surface;
+      expect(surface, slug).not.toBeNull();
+      expect(raw.schemaVersion, slug).toBe(2);
+      // one sample per ring vertex, so station -> index is the same axis for both
+      expect(surface!.zM.length, slug).toBe(model.x.length);
+      expect(surface!.dsMetres, slug).toBeCloseTo(ringDsMetres(model), 6);
+
+      let valid = 0, worst = 0, checked = 0;
+      const ds = ringDsMetres(model);
+      for (let i = 0; i < model.x.length; i++) {
+        if (surface!.valid[i]) valid++;
+        const sample = surfaceAt(model, i * ds);
+        if (!sample) continue;
+        checked++;
+        worst = Math.max(worst, Math.abs(sample.zM - model.z[i]));
+      }
+      // the producer's own coverage, recomputed from the mask this parse produced
+      if (surface!.coverage !== null) {
+        expect(valid / model.x.length, slug).toBeCloseTo(surface!.coverage, 3);
+      }
+      expect(checked, slug).toBeGreaterThan(0);
+      // The baked height must sit within the residual the bake itself REPORTED against
+      // the ring (+2 cm for the cm quantisation). A surface that drifts further than
+      // its own stated residual is either mis-indexed or from a different fit.
+      const limit = (surface!.residual.maxM ?? 0.5) + 0.02;
+      expect(worst, `${slug}: worst |surface - ring| ${worst.toFixed(3)} m`)
+        .toBeLessThanOrEqual(limit);
+    }
+  });
+
+  it("names a content-hashed published asset", () => {
+    for (const { slug, raw } of shippedWithSurface) {
+      const surface = parseTrackModel(raw).surface!;
+      if (surface.assetUrl === null) continue;   // baked but not published yet
+      expect(surface.assetUrl, slug).toMatch(/^\/sim\/glb\/[a-z0-9-]+\.[0-9a-f]{10}\.glb$/);
+      expect(surface.assetSha256, slug).toMatch(/^[0-9a-f]{64}$/);
+      // the URL's hash is the first 10 of the published bytes' sha256
+      expect(surface.assetUrl!.split(".")[1], slug).toBe(surface.assetSha256!.slice(0, 10));
+    }
+  });
+});

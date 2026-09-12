@@ -12,6 +12,7 @@ they share build_track's per-path caches, which pytest keeps for the whole proce
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 from pathlib import Path
@@ -20,8 +21,14 @@ import numpy as np
 import pytest
 
 from simdata import build_track as bt
+from simdata.glb_surface import (GATE_MAX_RESIDUAL_STD_M, GATE_MIN_COVERAGE, REPO_ROOT,
+                                 Fit, SurfaceBake, load_registry, registry_entry)
 from simdata.paths import data_root
 from simdata.geom import Ring
+
+#: AGENTS.md 13.6 plus DEFAULT. There is no seventh word; absence is `null`.
+PROVENANCE_VOCABULARY = ("OBSERVED", "DERIVED", "INFERRED", "SIMULATED", "RULE",
+                         "DEFAULT")
 
 
 DATA_PRESENT = data_root().exists()
@@ -334,3 +341,349 @@ def test_a_clean_circuit_keeps_the_race():
     assert race["measured"]["positionsWithdrawn"] == 0
     assert race["measured"]["sentinelPoints"] == []
     assert race["measured"]["gateRejects"] == {}
+
+
+# --------------------------------------------------------------- 3D surface
+#
+# The rule these tests exist to hold: "for available use the 3d environment, otherwise
+# normal sim as it is working". A circuit the registry does not admit must come out of
+# the build byte-for-byte as it does today, apart from the schemaVersion bump -- so every
+# way of declining is tested, and the passing circuit is tested against the SAME build
+# with the registry taken away.
+
+
+_FITTED_SHA = "c0ffee11" + "0" * 56          # 64 hex chars, as sha256_file returns
+_OTHER_SHA = "deadbeef" + "1" * 56
+
+
+def _fake_bake(n, *, coverage=None, residual_std=0.05, sha=_FITTED_SHA):
+    """A SurfaceBake with the shape a real one has, without a 158 MB asset.
+
+    One station is deliberately invalid: a station the raycast missed must survive the
+    whole path as `null`, never as a plausible-looking height.
+    """
+    valid = np.ones(n, dtype=bool)
+    valid[17] = False
+    z = np.linspace(1.0, 1.7, n)
+    slope = np.full(n, 0.0100)
+    camber = np.full(n, 0.0050)
+    residual = np.zeros(n)
+    for arr in (z, slope, camber, residual):
+        arr[~valid] = np.nan
+    return SurfaceBake(
+        z_m=z, slope_rad=slope, camber_rad=camber, camber_base_m=np.full(n, 2.0),
+        valid=valid, camber_valid=valid.copy(), residual_m=residual,
+        fit=Fit(scale=1.0, yaw_rad=0.0, mirror=-1, tx=1.0, tz=2.0, ty=3.0),
+        coverage=float(valid.mean()) if coverage is None else coverage,
+        road_coverage=0.99, residual_std_m=residual_std,
+        residual_max_m=residual_std * 3.0, largest_gap_stations=1, ds_m=1.0,
+        source="fake.glb", sha256=sha, primitives={"asphalt.001": int(valid.sum())})
+
+
+def _fake_entry(**over):
+    entry = {"event": "Fake Grand Prix", "glb": "tracks/fake.glb",
+             "sha256": _FITTED_SHA, "profile": "edelta-scorer",
+             "fit": {"scale": 1.0, "yawDeg": 0.0, "mirror": -1,
+                     "txM": 1.0, "tzM": 2.0, "tyM": 3.0},
+             "measured": {"coverage": 0.9984, "residualStdM": 0.05, "gate": "pass"}}
+    entry.update(over)
+    return entry
+
+
+def _publish(tmp_path, slug, blob=b"published glb bytes, reduced textures"):
+    """Write a fake published asset under the fake repo root, named after its own bytes.
+
+    The publisher downscales textures, so the published bytes are NOT the source bytes
+    and the two hashes differ -- which is exactly what these tests have to reproduce.
+    """
+    sha = hashlib.sha256(blob).hexdigest()
+    out = tmp_path.joinpath(*bt.GLB_PUBLISH_SUBDIR)
+    out.mkdir(parents=True, exist_ok=True)
+    (out / f"{slug}.{sha[:bt.GLB_SHA_CHARS]}.glb").write_bytes(blob)
+    return sha
+
+
+def _install(monkeypatch, tmp_path, entry, bake=None, *, exc=None, asset=True):
+    """Point _surface_for at a fake registry, a fake asset root and a fake bake.
+
+    Returns the list the bake seam appends to, so a test can prove the expensive half
+    was never reached.
+    """
+    reached = []
+    if asset:
+        (tmp_path / "tracks").mkdir(parents=True, exist_ok=True)
+        (tmp_path / "tracks" / "fake.glb").write_bytes(b"not a real glb")
+    monkeypatch.setattr(bt, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(bt, "registry_entry", lambda slug: entry)
+
+    def seam(e, path, ring):
+        reached.append(path)
+        if exc is not None:
+            raise exc
+        return bake
+
+    monkeypatch.setattr(bt, "_bake_surface_for", seam)
+    return reached
+
+
+def test_a_circuit_with_no_registry_entry_gets_nothing_and_reads_no_asset(monkeypatch,
+                                                                          tmp_path):
+    """Eleven of thirteen circuits are this case. It must cost nothing at all."""
+    ring = _circle_ring()
+    reached = _install(monkeypatch, tmp_path, None, _fake_bake(ring.n))
+    assert bt._surface_for("monaco-grand-prix", ring) is None
+    assert reached == []
+
+
+def test_a_failed_gate_gets_nothing_and_reads_no_asset(monkeypatch, tmp_path):
+    """chinese-grand-prix: residual std 0.306 m against a 0.15 m limit. The gate is an
+    admission test, so this returns None -- it does not fail the build."""
+    ring = _circle_ring()
+    entry = _fake_entry(measured={"residualStdM": 0.306146, "gate": "FAIL"})
+    reached = _install(monkeypatch, tmp_path, entry, _fake_bake(ring.n))
+    assert bt._surface_for("chinese-grand-prix", ring) is None
+    assert reached == []
+
+
+def test_an_absent_asset_gets_nothing(monkeypatch, tmp_path):
+    """data/ is gitignored, so a checkout with no 97-158 MB asset is the normal case."""
+    ring = _circle_ring()
+    reached = _install(monkeypatch, tmp_path, _fake_entry(), _fake_bake(ring.n),
+                       asset=False)
+    assert bt._surface_for("british-grand-prix", ring) is None
+    assert reached == []
+
+
+def test_a_bake_that_raises_gets_nothing_and_the_build_continues(monkeypatch, tmp_path):
+    ring = _circle_ring()
+    reached = _install(monkeypatch, tmp_path, _fake_entry(),
+                       exc=RuntimeError("KHR_draco_mesh_compression"))
+    assert bt._surface_for("british-grand-prix", ring) is None
+    assert len(reached) == 1          # it tried, it failed, it declined
+
+
+def test_an_entry_missing_its_transform_or_profile_gets_nothing(monkeypatch, tmp_path):
+    """Neither is defaulted. A block that cannot say which extractor produced it, or
+    under what transform, is not a block we are willing to ship."""
+    ring = _circle_ring()
+    for over in ({"fit": None}, {"profile": None}):
+        reached = _install(monkeypatch, tmp_path, _fake_entry(**over),
+                           _fake_bake(ring.n))
+        assert bt._surface_for("british-grand-prix", ring) is None
+        assert reached == []
+
+
+def test_a_passing_circuit_gains_a_block_whose_arrays_match_the_ring(monkeypatch,
+                                                                     tmp_path):
+    ring = _circle_ring()
+    _install(monkeypatch, tmp_path, _fake_entry(), _fake_bake(ring.n))
+    block = bt._surface_for("british-grand-prix", ring)
+    assert block is not None
+    for key in bt.SURFACE_STATION_ARRAYS:
+        assert len(block[key]) == ring.n, key
+    assert block["profile"] == "edelta-scorer"
+
+
+def test_the_surface_arrays_are_centimetre_quantised_ints_or_null(monkeypatch, tmp_path):
+    """Same quantisation as ring.xCm -- and a station the raycast missed is `null`,
+    which is what absence looks like. There is no seventh provenance and no default."""
+    ring = _circle_ring()
+    _install(monkeypatch, tmp_path, _fake_entry(), _fake_bake(ring.n))
+    block = bt._surface_for("british-grand-prix", ring)
+    for key in ("zCm", "slopePermille", "camberPermille"):
+        assert all(v is None or isinstance(v, int) for v in block[key]), key
+        assert block[key][17] is None, key
+    assert set(block["validMask"]) == {0, 1}
+    assert all(isinstance(v, int) for v in block["validMask"])
+    assert block["validMask"][17] == 0
+    assert block["zCm"][0] == 100          # 1.0 m -> 100 cm
+    assert block["slopePermille"][0] == 10 # tan(0.01 rad) -> 10 permille
+
+
+def test_the_surface_block_is_derived_and_survives_strict_json(monkeypatch, tmp_path):
+    """DERIVED, not OBSERVED: no car measured these heights."""
+    ring = _circle_ring()
+    _install(monkeypatch, tmp_path, _fake_entry(), _fake_bake(ring.n))
+    block = bt._surface_for("british-grand-prix", ring)
+    assert block["provenance"].split()[0] in PROVENANCE_VOCABULARY
+    assert block["provenance"].startswith("DERIVED")
+    json.dumps(block, allow_nan=False)
+
+
+def test_the_asset_url_names_the_published_bytes_not_the_source(monkeypatch, tmp_path):
+    """The frozen contract is /sim/glb/<slug>.<sha10>.glb where sha10 is of the PUBLISHED
+    bytes. simdata.glb_publish downscales three textures first, so those bytes are not
+    the bytes the transform was fitted to -- silverstone.glb hashes 228c897e5c in
+    data/tracks and cfb1d61f58 in frontend/public/sim/glb. Naming the URL after the
+    source hash would be a 404."""
+    ring = _circle_ring()
+    _install(monkeypatch, tmp_path, _fake_entry(), _fake_bake(ring.n))
+    published = _publish(tmp_path, "british-grand-prix")
+    assert published != _FITTED_SHA
+    block = bt._surface_for("british-grand-prix", ring)
+    assert block["assetSha256"] == published
+    assert block["assetUrl"] == f"/sim/glb/british-grand-prix.{published[:10]}.glb"
+    # ...and the source hash is still recorded, separately, as what the fit was measured
+    # against. Conflating the two would claim a fit to a file that never existed.
+    assert block["sourceSha256"] == _FITTED_SHA
+    assert bt.glb_asset_url("x-grand-prix", _OTHER_SHA) == \
+        f"/sim/glb/x-grand-prix.{_OTHER_SHA[:10]}.glb"
+
+
+def test_an_unpublished_asset_leaves_the_url_null_and_keeps_the_heights(monkeypatch,
+                                                                        tmp_path):
+    """Publishing is a separate step with a separate owner. Before it has run there is
+    no published filename to know, so both fields are null -- absence, never a guess --
+    and the block still carries the heights, which are useful on the ribbon on their
+    own. The artifact must be rebuilt after publishing for the model to load."""
+    ring = _circle_ring()
+    _install(monkeypatch, tmp_path, _fake_entry(), _fake_bake(ring.n))
+    block = bt._surface_for("british-grand-prix", ring)
+    assert block["assetUrl"] is None and block["assetSha256"] is None
+    assert len(block["zCm"]) == ring.n
+
+
+def test_a_published_file_that_is_not_its_own_name_is_not_advertised(monkeypatch,
+                                                                     tmp_path):
+    """A filename is a claim; the bytes are the evidence. A half-written or hand-copied
+    asset must not be advertised as a hash the browser would be told to trust."""
+    ring = _circle_ring()
+    _install(monkeypatch, tmp_path, _fake_entry(), _fake_bake(ring.n))
+    out = tmp_path.joinpath(*bt.GLB_PUBLISH_SUBDIR)
+    out.mkdir(parents=True, exist_ok=True)
+    (out / f"british-grand-prix.{_OTHER_SHA[:10]}.glb").write_bytes(b"different bytes")
+    block = bt._surface_for("british-grand-prix", ring)
+    assert block["assetUrl"] is None and block["assetSha256"] is None
+
+
+def test_the_published_path_agrees_with_the_publisher():
+    """The other half of the frozen contract lives in simdata.glb_publish. If the two
+    ever disagree the artifact points at a file nothing wrote."""
+    pub = pytest.importorskip("simdata.glb_publish")
+    assert bt.REPO_ROOT.joinpath(*bt.GLB_PUBLISH_SUBDIR) == pub.PUBLISH_DIR
+    assert bt.GLB_URL_PREFIX == pub.URL_PREFIX
+    assert bt.GLB_SHA_CHARS == pub.SHA_PREFIX
+    assert bt.glb_asset_url("british-grand-prix", _OTHER_SHA) == \
+        pub.published_url("british-grand-prix", _OTHER_SHA)
+
+
+def test_an_asset_that_is_not_the_one_that_was_fitted_is_refused(monkeypatch, tmp_path):
+    """A recorded transform belongs to specific bytes. Different bytes, different model:
+    the fit means nothing and the published sha10 would name the wrong file."""
+    ring = _circle_ring()
+    _install(monkeypatch, tmp_path, _fake_entry(), _fake_bake(ring.n, sha=_OTHER_SHA))
+    assert bt._surface_for("british-grand-prix", ring) is None
+
+
+def test_a_registry_pass_does_not_override_what_this_build_measures(monkeypatch,
+                                                                    tmp_path):
+    """A stale `measured` block is how a circuit that has stopped aligning keeps
+    shipping. The bake has already computed both numbers, so re-reading the gate here
+    is free -- and it is the difference between a surface and a claim about one."""
+    ring = _circle_ring()
+    _install(monkeypatch, tmp_path, _fake_entry(), _fake_bake(ring.n, residual_std=0.4))
+    assert bt._surface_for("british-grand-prix", ring) is None
+    _install(monkeypatch, tmp_path, _fake_entry(), _fake_bake(ring.n, coverage=0.93))
+    assert bt._surface_for("british-grand-prix", ring) is None
+
+
+def test_arrays_that_are_not_ring_length_are_refused(monkeypatch, tmp_path):
+    """Station i of the surface must be station i of the ring. A length mismatch would
+    stand every car on the wrong part of the circuit, quietly."""
+    ring = _circle_ring()
+    _install(monkeypatch, tmp_path, _fake_entry(), _fake_bake(ring.n - 1))
+    assert bt._surface_for("british-grand-prix", ring) is None
+
+
+def test_the_registry_admits_exactly_the_circuit_that_passes():
+    """The shipped registry, not a fixture: one circuit in, one out, eleven absent."""
+    circuits = load_registry().get("circuits") or {}
+    admitted = {slug for slug, e in circuits.items()
+                if (e.get("measured") or {}).get("gate") == "pass"}
+    assert admitted == {"british-grand-prix"}
+    assert set(circuits) - admitted == {"chinese-grand-prix"}
+
+
+# --------------------------------------------------- 3D surface, real data
+
+_BRITISH_GLB = REPO_ROOT / ((registry_entry("british-grand-prix") or {}).get("glb") or "")
+needs_glb = pytest.mark.skipif(not _BRITISH_GLB.is_file(),
+                               reason=f"{_BRITISH_GLB} is gitignored and absent")
+
+
+@needs_data
+@needs_glb
+def test_british_gains_a_surface_and_changes_nothing_else():
+    """The whole contract, on the real asset, in one build pair.
+
+    Both halves matter: the surface has to be there AND the rest of the artifact has to
+    be exactly what it is without it. The second build reuses the cached ring and
+    session scan, so it costs seconds, not another read of a 158 MB model.
+    """
+    model = bt.build_track_model("British Grand Prix")
+    assert model["schemaVersion"] == 2
+    surface = model["surface"]
+
+    n = len(model["ring"]["xCm"])
+    for key in bt.SURFACE_STATION_ARRAYS:
+        assert len(surface[key]) == n, key
+    assert all(v is None or isinstance(v, int) for v in surface["zCm"])
+
+    # the measured numbers, re-read from the artifact rather than from the registry
+    assert surface["coverage"] >= GATE_MIN_COVERAGE
+    assert surface["residual"]["stdM"] <= GATE_MAX_RESIDUAL_STD_M
+    assert surface["profile"] == registry_entry("british-grand-prix")["profile"]
+    # sourceSha256 is the asset the fit was measured against; assetSha256 is whatever
+    # the publisher wrote, which is a different file once its textures are reduced.
+    assert surface["sourceSha256"] == registry_entry("british-grand-prix")["sha256"]
+    if surface["assetUrl"] is None:
+        assert surface["assetSha256"] is None      # nothing published on this machine
+    else:
+        sha10 = surface["assetSha256"][:10]
+        assert surface["assetUrl"] == f"/sim/glb/british-grand-prix.{sha10}.glb"
+        assert bt.REPO_ROOT.joinpath(*bt.GLB_PUBLISH_SUBDIR,
+                                     f"british-grand-prix.{sha10}.glb").is_file()
+    assert surface["provenance"].startswith("DERIVED")
+    assert model["provenance"]["surface"] == surface["provenance"]
+
+    # ...and now the same event with no registry entry at all: version 1's artifact,
+    # key for key, plus the schemaVersion bump.
+    mp = pytest.MonkeyPatch()
+    try:
+        mp.setattr(bt, "registry_entry", lambda slug: None)
+        plain = bt.build_track_model("British Grand Prix")
+    finally:
+        mp.undo()
+    assert plain["schemaVersion"] == 2
+    assert "surface" not in plain and "surface" not in plain["provenance"]
+
+    stripped = dict(model)
+    stripped.pop("surface")
+    stripped["provenance"] = {k: v for k, v in model["provenance"].items()
+                              if k != "surface"}
+    assert _canonical(stripped) == _canonical(plain)
+
+
+@needs_data
+def test_a_failing_circuit_is_the_same_artifact_and_never_opens_its_asset():
+    """chinese-grand-prix is registered, has its 97 MB asset on disk, and fails the gate.
+    It must produce today's artifact and must not spend a second reading the model."""
+    mp = pytest.MonkeyPatch()
+    mp.setattr(bt, "_bake_surface_for", _must_not_be_called)
+    try:
+        model = bt.build_track_model("Chinese Grand Prix")
+    finally:
+        mp.undo()
+    assert model["schemaVersion"] == 2
+    assert "surface" not in model
+    assert "surface" not in model["provenance"]
+
+
+def _must_not_be_called(*a, **kw):
+    raise AssertionError("a circuit that fails the gate must never read its asset")
+
+
+def _canonical(model: dict) -> str:
+    """The artifact as it would be written: the same _json_safe the writer uses."""
+    from build_sim_data import _json_safe
+    return json.dumps(_json_safe(model), sort_keys=True, allow_nan=False)

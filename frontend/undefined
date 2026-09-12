@@ -1,0 +1,52 @@
+australian-grand-prix    n=20 anchor=-11.0 pitch=8.041 handover=4.29s launchWindowOvl=0 lap1-lap2 med=12.86s
+    t= 0 ovl=  0/190 spread= 152.78 minGap= 8.04 spd=[0.0,0.0]
+    t=10 ovl= 15/190 spread= 104.40 minGap= 0.88 spd=[138.2,168.5]
+    t=30 ovl=  8/190 spread= 202.85 minGap= 0.02 spd=[128.0,216.8]
+austrian-grand-prix      n=22 anchor=NULL/DEFAULT pitch=8.041 handover=4.29s launchWindowOvl=0 lap1-lap2 med=-0.80s
+    t= 0 ovl=  0/231 spread= 168.86 minGap= 8.04 spd=[0.0,0.0]
+    t=10 ovl= 17/231 spread=  93.02 minGap= 0.51 spd=[103.4,150.8]
+    t=30 ovl= 10/231 spread= 214.01 minGap= 0.05 spd=[76.2,245.1]
+barcelona-grand-prix     n=21 anchor=102.4 pitch=8.041 handover=4.29s launchWindowOvl=0 lap1-lap2 med=10.71s
+    t= 0 ovl=  0/210 spread= 160.82 minGap= 8.04 spd=[0.0,0.0]
+    t=10 ovl=  5/210 spread= 213.46 minGap= 0.02 spd=[288.0,315.0]
+    t=30 ovl=  7/210 spread= 204.77 minGap= 1.05 spd=[122.1,244.2]
+belgian-grand-prix       n=22 anchor=108.2 pitch=8.037 handover=4.29s launchWindowOvl=0 lap1-lap2 med=-10.07s
+    t= 0 ovl=  0/231 spread= 168.78 minGap= 8.04 spd=[0.0,0.0]
+    t=10 ovl= 28/231 spread=  66.71 minGap= 0.48 spd=[69.8,102.6]
+    t=30 ovl=  3/231 spread= 344.69 minGap= 1.33 spd=[288.5,306.3]
+british-grand-prix       n=21 anchor=117.1 pitch=7.984 handover=4.29s launchWindowOvl=0 lap1-lap2 med=10.75s
+    t= 0 ovl=  0/210 spread= 159.68 minGap= 7.98 spd=[0.0,0.0]
+    t=10 ovl=  5/210 spread= 190.30 minGap= 0.61 spd=[250.4,261.8]
+    t=30 ovl=  5/210 spread= 297.00 minGap= 0.51 spd=[219.4,285.4]
+canadian-grand-prix      n=20 anchor=-32.8 pitch=8.041 handover=4.29s launchWindowOvl=0 lap1-lap2 med=13.18s
+    t= 0 ovl=  0/190 spread= 152.78 minGap= 8.04 spd=[0.0,0.0]
+    t=10 ovl= 18/190 spread=  81.58 minGap= 1.00 spd=[77.2,128.2]
+    t=30 ovl=  8/190 spread= 216.95 minGap= 0.10 spd=[94.0,218.2]
+chinese-grand-prix       n=20 anchor=NULL/DEFAULT pitch=8.041 handover=4.29s launchWindowOvl=0 lap1-lap2 med=12.61s
+    t= 0 ovl=  0/190 spread= 152.78 minGap= 8.04 spd=[0.0,0.0]
+    t=10 ovl= 11/190 spread= 180.36 minGap= 0.70 spd=[243.7,283.2]
+    t=30 ovl=  3/190 spread= 213.36 minGap= 1.69 spd=[214.0,260.0]
+dutch-grand-prix         n=21 anchor=151.9 pitch=7.961 handover=4.29s launchWindowOvl=0 lap1-lap2 med=9.93s
+    t= 0 ovl=  0/210 spread= 159.22 minGap= 7.96 spd=[0.0,0.0]
+    t=10 ovl= 21/210 spread=  83.23 minGap= 0.92 spd=[90.3,155.7]
+    t=30 ovl=  4/210 spread= 322.58 minGap= 0.71 spd=[228.3,259.0]
+hungarian-grand-prix     n=21 anchor=24.5 pitch=8.041 handover=4.29s launchWindowOvl=0 lap1-lap2 med=12.28s
+    t= 0 ovl=  0/210 spread= 160.82 minGap= 8.04 spd=[0.0,0.0]
+    t=10 ovl=  6/210 spread= 219.33 minGap= 0.12 spd=[162.7,298.2]
+    t=30 ovl=  8/210 spread= 291.01 minGap= 0.40 spd=[165.1,276.6]
+italian-grand-prix       n=20 anchor=291.2 pitch=8.091 handover=4.29s launchWindowOvl=0 lap1-lap2 med=8.24s
+    t= 0 ovl=  0/190 spread= 153.73 minGap= 8.09 spd=[0.0,0.0]
+    t=10 ovl=  7/190 spread= 164.53 minGap= 0.53 spd=[198.5,294.4]
+    t=30 ovl=  6/190 spread= 276.95 minGap= 1.23 spd=[254.4,280.8]
+japanese-grand-prix      n=22 anchor=281.5 pitch=8.002 handover=4.29s launchWindowOvl=0 lap1-lap2 med=-9.57s
+    t= 0 ovl=  0/231 spread= 168.04 minGap= 8.00 spd=[0.0,0.0]
+    t=10 ovl=  5/231 spread= 162.38 minGap= 0.12 spd=[169.9,269.3]
+    t=30 ovl=  6/231 spread= 217.00 minGap= 0.89 spd=[147.6,202.6]
+miami-grand-prix         n=21 anchor=117.9 pitch=8.041 handover=4.29s launchWindowOvl=0 lap1-lap2 med=10.58s
+    t= 0 ovl=  0/210 spread= 160.82 minGap= 8.04 spd=[0.0,0.0]
+    t=10 ovl= 24/210 spread=  65.92 minGap= 0.74 spd=[81.7,109.8]
+    t=30 ovl=  8/210 spread= 203.84 minGap= 1.01 spd=[138.9,193.9]
+monaco-grand-prix        n=20 anchor=NULL/DEFAULT pitch=8.041 handover=4.29s launchWindowOvl=0 lap1-lap2 med=12.61s
+    t= 0 ovl=  0/190 spread= 152.78 minGap= 8.04 spd=[0.0,0.0]
+    t=10 ovl= 15/190 spread=  99.06 minGap= 0.04 spd=[98.2,189.4]
+    t=30 ovl= 13/190 spread=  92.44 minGap= 0.46 spd=[66.2,131.0]

@@ -12,6 +12,9 @@ import {
 import { buildF1CarGeometry } from "./carGeometry";
 import { buildDriverLabels, type DriverLabels } from "./driverLabels";
 import {
+  applyEnvironmentMaterials, environmentForTrack, type ResolvedEnvironment,
+} from "./environments";
+import {
   applyShadowPriceOverlay, buildPitLaneMesh, buildTrackMesh, buildTrackOutline,
   carOrientation, renderForward, toRenderFrame,
 } from "./trackMesh";
@@ -348,6 +351,189 @@ export function declutterLanes(
   }
 }
 
+/* ==========================================================================
+ * Track layers: what setTrack installs, and the one path that takes it down.
+ * ======================================================================== */
+
+/** Material properties the ribbon is put back to when it is not sitting under a GLB.
+ * Snapshotted from the material three actually built, rather than retyped, so this
+ * cannot drift from buildTrackMesh. */
+interface RibbonMaterialState {
+  transparent: boolean;
+  opacity: number;
+  depthWrite: boolean;
+  polygonOffset: boolean;
+  polygonOffsetFactor: number;
+  polygonOffsetUnits: number;
+}
+
+/** Everything one circuit contributes to the scene, held together so a re-roll or a
+ * session switch takes down exactly what it put up -- no more (the shared GLB) and no
+ * less (the pit group, which used to be added and never removed). */
+export interface TrackLayers {
+  surface: THREE.Mesh;
+  outline: THREE.LineSegments;
+  pit: THREE.Group | null;
+  ribbonDefaults: RibbonMaterialState;
+}
+
+/**
+ * Every texture slot a material in this scene can own.
+ *
+ * `material.map` alone is not enough. The procedural ribbon has no textures at all, so
+ * that was harmless until a real GLB arrived -- a glTF material routinely carries
+ * normal, roughness, metalness, AO and emissive maps as well, and each is an
+ * independent GPU allocation. Disposing the material without them leaks every one.
+ */
+const TEXTURE_SLOTS = [
+  "map", "normalMap", "roughnessMap", "metalnessMap", "aoMap", "emissiveMap",
+  "alphaMap", "bumpMap", "displacementMap", "lightMap", "specularMap", "envMap",
+] as const;
+
+function disposeMaterial(mat: THREE.Material): void {
+  const slots = mat as unknown as Record<string, unknown>;
+  for (const slot of TEXTURE_SLOTS) {
+    const tex = slots[slot];
+    if (tex instanceof THREE.Texture) tex.dispose();
+  }
+  mat.dispose();
+}
+
+/**
+ * Frees one renderable object's GPU resources. Safe on anything: an object with no
+ * geometry (a Group, a Sprite, a Light) is left alone.
+ *
+ * The type test covers `THREE.Line` rather than `THREE.LineSegments` because a GLB can
+ * contribute plain `Line` and `Points` primitives -- glTF has both as primitive modes
+ * -- and LineSegments extends Line, so the wider test still catches the track outline.
+ * A missed type is not a crash; it is a silent leak, which is why it is worth being
+ * wider than the scene's own contents.
+ */
+export function disposeRenderObject(obj: THREE.Object3D): void {
+  if (!(obj instanceof THREE.Mesh || obj instanceof THREE.Line || obj instanceof THREE.Points)) {
+    return;
+  }
+  obj.geometry.dispose();
+  const mat = obj.material;
+  for (const m of Array.isArray(mat) ? mat : [mat]) {
+    if (m) disposeMaterial(m);
+  }
+}
+
+/** Removes a circuit's layers from the scene and frees them. Idempotent: a null
+ * `layers` is a no-op, which is what the first setTrack call passes. */
+export function disposeTrackLayers(scene: THREE.Scene, layers: TrackLayers | null): void {
+  if (!layers) return;
+  for (const obj of [layers.surface, layers.outline, layers.pit]) {
+    if (!obj) continue;
+    scene.remove(obj);
+    obj.traverse(disposeRenderObject);
+  }
+}
+
+/** Builds and adds one circuit's ribbon, outline and pit lane. */
+export function installTrackLayers(scene: THREE.Scene, track: TrackModel): TrackLayers {
+  const surface = buildTrackMesh(track);
+  const outline = buildTrackOutline(track);
+  const pit = buildPitLaneMesh(track);
+  scene.add(surface, outline);
+  if (pit) scene.add(pit);
+  const mat = surface.material as THREE.MeshStandardMaterial;
+  return {
+    surface, outline, pit,
+    ribbonDefaults: {
+      transparent: mat.transparent, opacity: mat.opacity, depthWrite: mat.depthWrite,
+      polygonOffset: mat.polygonOffset,
+      polygonOffsetFactor: mat.polygonOffsetFactor,
+      polygonOffsetUnits: mat.polygonOffsetUnits,
+    },
+  };
+}
+
+/**
+ * Puts the ribbon material into (or back out of) the state it needs when a real circuit
+ * model is drawn underneath it.
+ *
+ * The ribbon is a flat strip through the middle of the real road surface, so the two
+ * are close to coplanar and z-fight badly. Pulling it forward with a polygon offset,
+ * dropping its depth writes and taking it to partial opacity makes it read as an
+ * overlay ON the road instead of a second road. This only matters while something --
+ * today, the shadow-price colouring -- asks for the ribbon over a GLB; the ordinary
+ * "environment loaded" case just hides it.
+ */
+export function setRibbonOverEnvironment(layers: TrackLayers, over: boolean): void {
+  const mat = layers.surface.material as THREE.MeshStandardMaterial;
+  const d = layers.ribbonDefaults;
+  mat.polygonOffset = over || d.polygonOffset;
+  mat.polygonOffsetFactor = over ? -2 : d.polygonOffsetFactor;
+  mat.polygonOffsetUnits = over ? -2 : d.polygonOffsetUnits;
+  mat.depthWrite = over ? false : d.depthWrite;
+  mat.transparent = over || d.transparent;
+  mat.opacity = over ? 0.55 : d.opacity;
+  mat.needsUpdate = true;
+}
+
+/* ==========================================================================
+ * The circuit model: one fetch per URL, for the life of the page.
+ * ======================================================================== */
+
+/**
+ * Parsed circuit models, keyed by served URL, at MODULE SCOPE.
+ *
+ * This has to outlive the renderer. Replay disposes the whole SimRenderer and builds a
+ * new one on every session change (SimCanvas.tsx), so an instance-level cache would
+ * re-fetch and re-parse a 158 MB asset every time the user picks a different session at
+ * the same circuit. Keyed by URL, which is content-hashed, so a rebuilt asset is a new
+ * key rather than a stale hit.
+ *
+ * The Promise is cached rather than the result, so two overlapping requests for the same
+ * circuit share one fetch. A REJECTED promise is evicted (see below) so a transient
+ * network failure does not permanently blacklist the circuit for the rest of the page's
+ * life -- but the failure is only logged once per URL, which is the "log once" rule.
+ */
+const GLB_CACHE = new Map<string, Promise<THREE.Group>>();
+const GLB_LOGGED_FAILURES = new Set<string>();
+
+/** Whether this URL's model is already loaded or in flight. Diagnostics and tests: the
+ * renderer itself never needs to ask, because loadEnvironmentGlb dedupes. */
+export function environmentGlbCached(url: string): boolean {
+  return GLB_CACHE.has(url);
+}
+
+/**
+ * Fetches and parses a circuit model, once per URL per page.
+ *
+ * GLTFLoader is imported dynamically for two reasons: it keeps a loader that only one
+ * circuit in thirteen needs out of the initial bundle, and it keeps a DOM-dependent
+ * addon out of the node test environment. It resolves through `three/addons/*`, which
+ * is already in node_modules -- no new npm dependency.
+ */
+export function loadEnvironmentGlb(
+  url: string, onProgress?: (loaded: number, total: number) => void,
+): Promise<THREE.Group> {
+  const hit = GLB_CACHE.get(url);
+  if (hit) return hit;
+  const pending = (async () => {
+    const { GLTFLoader } = await import("three/addons/loaders/GLTFLoader.js");
+    const gltf = await new GLTFLoader().loadAsync(url, (e) => {
+      if (onProgress && e.total > 0) onProgress(e.loaded, e.total);
+    });
+    return gltf.scene;
+  })().catch((err) => {
+    // Evict, so the next session switch may retry; log once, so a repeatedly failing
+    // URL cannot spam the console every time the user changes session.
+    GLB_CACHE.delete(url);
+    if (!GLB_LOGGED_FAILURES.has(url)) {
+      GLB_LOGGED_FAILURES.add(url);
+      console.warn(`[sim] circuit model ${url} could not be loaded; keeping the ` +
+        `procedural ribbon.`, err);
+    }
+    throw err;
+  });
+  GLB_CACHE.set(url, pending);
+  return pending;
+}
+
 /**
  * Imperative three.js scene: one instanced mesh for every car (one draw call), the
  * track ribbon built once from the track model, and a small set of camera modes. This
@@ -364,7 +550,26 @@ export class SimRenderer {
   private focusOutline: THREE.Mesh | null = null;
   private labels: DriverLabels | null = null;
   private showLabels = true;
-  private trackSurface: THREE.Mesh | null = null;
+  /** The ribbon, outline and pit lane of the circuit currently installed. */
+  private layers: TrackLayers | null = null;
+  /** The circuit model currently being drawn, and the definition it came from. The
+   * root is SHARED, module-scope state (see GLB_CACHE): this renderer may add and
+   * remove it from its own scene, and must never dispose it. */
+  private env: ResolvedEnvironment | null = null;
+  private envRoot: THREE.Group | null = null;
+  /** Bumped by every setEnvironment call, so a load that finishes after the user has
+   * moved to another circuit is discarded instead of attaching the wrong model. */
+  private envToken = 0;
+  /** Hemisphere fill added only while a circuit model is drawn. */
+  private envHemi: THREE.HemisphereLight | null = null;
+  /** The scene's own lights, kept so the environment's lighting profile can be applied
+   * and then exactly undone. */
+  private ambient: THREE.AmbientLight;
+  private sun: THREE.DirectionalLight;
+  private baseLighting: { ambient: number; sun: number; sunPos: THREE.Vector3 };
+  /** True while setShadowPrice is painting the ribbon, which is the one thing that
+   * brings the ribbon back over a circuit model. */
+  private shadowPriceActive = false;
   private track: TrackModel | null = null;
   private driverCount = 0;
   private driverNames: string[] = [];
@@ -469,10 +674,17 @@ export class SimRenderer {
     this.renderer.setClearColor(new THREE.Color(HAAS.black), 1);
     this.camera = new THREE.PerspectiveCamera(55, 1, 1, 20000);
 
-    const ambient = new THREE.AmbientLight(0xffffff, 0.7);
-    const sun = new THREE.DirectionalLight(0xffffff, 0.8);
-    sun.position.set(1, 3, 1);
-    this.scene.add(ambient, sun);
+    this.ambient = new THREE.AmbientLight(0xffffff, 0.7);
+    this.sun = new THREE.DirectionalLight(0xffffff, 0.8);
+    this.sun.position.set(1, 3, 1);
+    this.scene.add(this.ambient, this.sun);
+    // snapshotted so a circuit model's own lighting profile can be undone exactly,
+    // rather than restored to numbers retyped somewhere else
+    this.baseLighting = {
+      ambient: this.ambient.intensity,
+      sun: this.sun.intensity,
+      sunPos: this.sun.position.clone(),
+    };
 
     canvas.addEventListener("pointerdown", this.onPointerDown);
     window.addEventListener("pointermove", this.onPointerMove);
@@ -484,14 +696,19 @@ export class SimRenderer {
     this.resize();
   }
 
+  /**
+   * Installs a circuit.
+   *
+   * NewRaceCanvas re-calls this on every re-roll, on the SAME renderer, so it has to
+   * take down the previous circuit's layers before building the next -- otherwise every
+   * re-roll stacks another ribbon, outline and pit group on the scene and leaks their
+   * geometry. The environment hook lives inside here, on the slug this already receives,
+   * which is why no call site changed to gain a 3D circuit.
+   */
   setTrack(track: TrackModel) {
     this.track = track;
-    const surface = buildTrackMesh(track);
-    const outline = buildTrackOutline(track);
-    this.scene.add(surface, outline);
-    this.trackSurface = surface;
-    const pit = buildPitLaneMesh(track);
-    if (pit) this.scene.add(pit);
+    disposeTrackLayers(this.scene, this.layers);
+    this.layers = installTrackLayers(this.scene, track);
     // Frame the orbit view on the CIRCUIT's own centre, not the telemetry origin:
     // the coordinate origin is an arbitrary point in the feed's frame and can sit
     // well outside the track, which left the circuit off-centre and clipped.
@@ -508,6 +725,136 @@ export class SimRenderer {
     this.orbitCentre.set(...toRenderFrame(cx, cy, sumZ / track.x.length));
     this.orbitDist = radius * 2.2;
     this.cameraTarget.copy(this.orbitCentre);
+
+    // Null for twelve of thirteen circuits and for every artifact built before the
+    // surface block existed, which is why this reads as one line and not as a branch.
+    this.setEnvironment(environmentForTrack(track));
+  }
+
+  /**
+   * Draws this circuit's real model instead of the procedural ribbon, or -- given null
+   * -- goes back to the ribbon.
+   *
+   * NOTHING WAITS ON THE DOWNLOAD. The ribbon is already in the scene and the race is
+   * already running by the time this is called; the model is fetched in the background
+   * and swapped in only if and when it arrives. A failed fetch leaves the circuit
+   * exactly as it is today.
+   *
+   * IDEMPOTENT, because NewRaceCanvas re-calls setTrack on every re-roll: asking for the
+   * environment that is already installed (or already in flight) re-applies the ribbon
+   * state -- the ribbon is a NEW object after a re-roll and needs hiding again -- and
+   * does nothing else. It does not restart the fetch and does not re-add the model.
+   */
+  setEnvironment(env: ResolvedEnvironment | null) {
+    if (env && this.env && env.assetUrl === this.env.assetUrl) {
+      this.applyRibbonForEnvironment();
+      return;
+    }
+    const token = ++this.envToken;
+    this.detachEnvironment();
+    this.env = env;
+    this.applyRibbonForEnvironment();
+    if (!env) return;
+
+    void loadEnvironmentGlb(env.assetUrl).then((root) => {
+      // discarded if the renderer is gone, or the user moved on while this was in
+      // flight; the model itself stays in the module cache either way
+      if (!this.alive || token !== this.envToken) return;
+      this.attachEnvironment(root, env);
+    }).catch(() => {
+      // already logged once by loadEnvironmentGlb. The ribbon is still there: this is
+      // the third of the three fallbacks (no entry / failed gate / failed fetch), and
+      // all three have to leave the circuit byte-for-byte as it is without a model.
+    });
+  }
+
+  /**
+   * Hangs the loaded model on the placement derived from the artifact's own fit.
+   *
+   * The placement assumes the model's WORLD coordinates are the frame the Python fit
+   * targeted, which holds because GLTFLoader applies the same node matrices Python
+   * composes (scripts/simdata/glb_surface.py: both Sketchfab chains compose to
+   * world = (raw_x, -raw_z, raw_y)). Neither side re-orients the model by hand.
+   */
+  private attachEnvironment(root: THREE.Group, env: ResolvedEnvironment) {
+    const { position, rotationY, scale } = env.placement;
+    root.position.set(position[0], position[1], position[2]);
+    root.rotation.set(0, rotationY, 0);
+    root.scale.setScalar(scale);
+    applyEnvironmentMaterials(root, env.def, this.renderer.capabilities.getMaxAnisotropy());
+    // NoToneMapping at exposure 1: ACES rendered these editor-authored assets far
+    // darker than their own source render. Both are three's defaults, set explicitly
+    // because the model's appearance depends on them.
+    this.renderer.toneMapping = THREE.NoToneMapping;
+    this.renderer.toneMappingExposure = 1;
+    this.scene.add(root);
+    this.envRoot = root;
+    this.applyEnvironmentLighting(env);
+    this.applyRibbonForEnvironment();
+  }
+
+  /**
+   * Takes the circuit model out of this scene WITHOUT disposing it.
+   *
+   * The root, its geometry and its textures are shared module-scope state, cached so
+   * that switching session does not re-download 158 MB. Disposing it here would free
+   * the GPU resources of an object the cache still hands out, and the next session at
+   * the same circuit would render an empty husk.
+   */
+  private detachEnvironment() {
+    if (this.envRoot) {
+      this.scene.remove(this.envRoot);
+      this.envRoot = null;
+    }
+    this.restoreLighting();
+    this.env = null;
+  }
+
+  /** The lighting the model was authored against (env_sim.md Part B). Applied to the
+   * scene's existing lights so the cars stay lit by the same rig as the circuit. */
+  private applyEnvironmentLighting(env: ResolvedEnvironment) {
+    const r = env.def.render;
+    this.ambient.intensity = r.ambientIntensity;
+    this.sun.intensity = r.directional.intensity;
+    this.sun.position.set(...r.directional.position);
+    if (!this.envHemi) {
+      this.envHemi = new THREE.HemisphereLight(
+        r.hemisphere.skyHex, r.hemisphere.groundHex, r.hemisphere.intensity,
+      );
+      this.scene.add(this.envHemi);
+    } else {
+      this.envHemi.intensity = r.hemisphere.intensity;
+    }
+  }
+
+  private restoreLighting() {
+    this.ambient.intensity = this.baseLighting.ambient;
+    this.sun.intensity = this.baseLighting.sun;
+    this.sun.position.copy(this.baseLighting.sunPos);
+    if (this.envHemi) {
+      this.scene.remove(this.envHemi);
+      this.envHemi.dispose();
+      this.envHemi = null;
+    }
+  }
+
+  /**
+   * Ribbon visibility, given what is under it.
+   *
+   * HIDDEN, NEVER DELETED. setShadowPrice has to be able to bring the ribbon back to
+   * paint the energy shadow price over the real circuit, and a deleted ribbon cannot
+   * come back; a hidden one is one boolean away. The outline and the pit ribbon go with
+   * it -- they are schematic stand-ins for geometry the model actually has, and drawing
+   * them over it reads as double vision.
+   */
+  private applyRibbonForEnvironment() {
+    const layers = this.layers;
+    if (!layers) return;
+    const onModel = this.envRoot !== null;
+    layers.surface.visible = !onModel || this.shadowPriceActive;
+    layers.outline.visible = !onModel;
+    if (layers.pit) layers.pit.visible = !onModel;
+    setRibbonOverEnvironment(layers, onModel);
   }
 
   setDrivers(driverCount: number, teamColours: (string | null)[], names: string[] = []) {
@@ -640,7 +987,13 @@ export class SimRenderer {
    * per-station scalar in [0, 1], e.g. the energy shadow price from the Python
    * planner. Pass null to restore the plain surface. A no-op before setTrack(). */
   setShadowPrice(values: Float32Array | null) {
-    if (this.trackSurface) applyShadowPriceOverlay(this.trackSurface, values);
+    if (!this.layers) return;
+    applyShadowPriceOverlay(this.layers.surface, values);
+    // The ribbon is the only thing that can carry this colouring, so asking for it
+    // brings the ribbon back even over a real circuit model -- as a translucent,
+    // depth-offset overlay rather than a second road (setRibbonOverEnvironment).
+    this.shadowPriceActive = values !== null;
+    this.applyRibbonForEnvironment();
   }
 
   resize() {
@@ -1072,13 +1425,15 @@ export class SimRenderer {
     window.removeEventListener("pointerup", this.onPointerUp);
     this.canvas.removeEventListener("wheel", this.onWheel);
     this.canvas.removeEventListener("contextmenu", this.onContextMenu);
-    this.scene.traverse((obj) => {
-      if (obj instanceof THREE.Mesh || obj instanceof THREE.LineSegments) {
-        obj.geometry.dispose();
-        const mat = obj.material;
-        if (Array.isArray(mat)) mat.forEach((m) => m.dispose()); else mat.dispose();
-      }
-    });
+    // BEFORE the traverse, not after. The circuit model is shared, module-scope state
+    // cached across renderer lifetimes, and this traverse frees the geometry and
+    // textures of everything it can still reach -- so leaving the model in the scene
+    // here would destroy the cached copy that the NEXT session is about to be handed.
+    // Replay disposes and rebuilds the whole renderer on every session change, so this
+    // is not a rare path: it is every session change.
+    this.detachEnvironment();
+    this.scene.traverse(disposeRenderObject);
+    this.layers = null;
     this.renderer.dispose();
   }
 }

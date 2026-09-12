@@ -87,6 +87,92 @@ export interface TrackCorner {
   labelAngleDeg?: number | null;
 }
 
+/**
+ * The measured map from telemetry metres onto the circuit model's own Y-up world frame
+ * (scripts/simdata/glb_surface.py, `Fit`):
+ *
+ *     u  = (scale*x, scale*mirror*y)
+ *     wx = cos(yaw)*u.x - sin(yaw)*u.y + txM
+ *     wz = sin(yaw)*u.x + cos(yaw)*u.y + tzM
+ *     wy = scale*z + tyM
+ *
+ * Every one of these six numbers was FITTED against the telemetry ring, never read out
+ * of the model's own metadata -- including `scale`, which is why "both models are already
+ * in real metres" is a result rather than an assumption. `mirror` is a parameter for the
+ * same reason: telemetry is right-handed with z up, so the horizontal map picks up a
+ * reflection that the fit has to be free to confirm or reject.
+ */
+export interface TrackSurfaceTransform {
+  scale: number;
+  yawDeg: number;
+  /** +1 or -1. Both circuits measured -1. */
+  mirror: number;
+  txM: number;
+  tzM: number;
+  tyM: number;
+}
+
+/**
+ * The drive surface baked under the ring from a real circuit model, sampled at the SAME
+ * stations as the ring (one value per ring vertex, so index i is station i * ds).
+ *
+ * OPTIONAL, AND ABSENT IS THE NORMAL CASE: 12 of 13 circuits have no model that clears
+ * the quality gate, and no artifact built before schemaVersion 2 carries one at all. A
+ * circuit without this block keeps the procedural ribbon and today's elevation, which is
+ * why absence has to read as "there is no baked surface" and never as a height of zero.
+ *
+ * Provenance is DERIVED, not OBSERVED: this height was never measured from a car. It is
+ * a third-party model's geometry read by an exact raycast under a transform fitted to
+ * the OBSERVED ring, and AGENTS.md 13.6 is explicit that producing a value FROM observed
+ * inputs does not make it observed. A station the raycast missed is NaN here with its
+ * `valid` byte clear -- not a filled-in height, and not a seventh provenance word.
+ */
+export interface TrackSurface {
+  /** vertex spacing of the arrays, metres. Equal to the ring's own ds. */
+  dsMetres: number;
+  /** file name of the SOURCE model the bake was measured on. */
+  source: string;
+  /** sha256 of that source model, or null. NOT the hash of the served asset. */
+  sourceSha256: string | null;
+  /** which Python extractor profile produced the bake. */
+  profile: string | null;
+  transform: TrackSurfaceTransform;
+  /** surface height in the TELEMETRY frame, metres. NaN where the raycast missed. */
+  zM: Float32Array;
+  /** along-track gradient dz/ds (tan of the slope angle), + uphill. NaN where absent. */
+  slope: Float32Array;
+  /** cross-track gradient (tan of the camber angle), + when the LEFT of travel is
+   * higher -- the same "+ is left of travel" convention as every lateral in the
+   * pipeline. NaN where absent, which happens independently of zM. */
+  camber: Float32Array;
+  /** 1 where the station has a measured height, 0 where it has none. */
+  valid: Uint8Array;
+  residual: { stdM: number | null; maxM: number | null };
+  /** fraction of stations with a measured height, and the stricter fraction that landed
+   * on a surface the model NAMES as road. Null when the producer reported neither. */
+  coverage: number | null;
+  roadCoverage: number | null;
+  /** served URL of the published, content-hashed model, and the sha256 of those
+   * published bytes. Null when the artifact names no asset -- in which case there is
+   * nothing to fetch and the circuit stays on its ribbon. */
+  assetUrl: string | null;
+  assetSha256: string | null;
+  /** The leading provenance word of the producer's own tag, validated against the
+   * six-word vocabulary. Null when it carried none or carried something else: absence
+   * is null, never a seventh word. */
+  provenance: Provenance | null;
+  /** the producer's full provenance sentence, including the method it describes. */
+  provenanceNote: string | null;
+}
+
+/** One station's baked surface. Every channel is optional EXCEPT the height: a station
+ * can have a measured height and no measurable camber. */
+export interface TrackSurfaceSample {
+  zM: number;
+  slope: number | null;
+  camber: number | null;
+}
+
 export interface TrackModel {
   slug: string;
   event: string;
@@ -125,6 +211,11 @@ export interface TrackModel {
   pitLanePath: { role: string; x: Float32Array; y: Float32Array; z: Float32Array }[] | null;
   grid: { order: string[]; pitchMetres: number; unplaced?: string[] | null };
   referenceProfile: { binMetres: number; speedKph: Float32Array; gear: Uint8Array };
+  /** The drive surface baked from a real circuit model, when this artifact carries one.
+   * Undefined on a TrackModel built from a pre-schemaVersion-2 artifact, null when the
+   * artifact carried a block this build could not use. Both mean "no baked surface";
+   * read it through surfaceAt(), which never invents a height. */
+  surface?: TrackSurface | null;
 }
 
 /** Weather is only ever OBSERVED (Replay) or a fixed configuration (New Race, which

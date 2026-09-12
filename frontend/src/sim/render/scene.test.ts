@@ -1,16 +1,25 @@
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import * as THREE from "three";
-import { describe, expect, it } from "vitest";
-import type { TrackModel } from "../contract/types";
+import { describe, expect, it, vi } from "vitest";
+import type { TrackModel, TrackSurface, TrackSurfaceTransform } from "../contract/types";
 import { CAR } from "@/components/loader/physics/constants";
 import { parseTrackModel, trackPointAt, type RawTrackModel } from "../data/manifest";
 import { POSE_FLOATS_PER_CAR, POSE_STATUS } from "../worker/protocol";
 import { buildF1CarGeometry } from "./carGeometry";
 import {
+  applyEnvironmentMaterials, ENVIRONMENTS, environmentFor, environmentForTrack,
+  environmentPlacement, GATE_MAX_RESIDUAL_STD_M, GATE_MIN_COVERAGE, measurementPasses,
+  type EnvironmentPlacement,
+} from "./environments";
+import {
   CAR_GROUND_CLEARANCE_M, FOCUS_OUTLINE_SCALE, carInstanceY, focusGhostY, PRESENTATION_SCALE,
 } from "./presentation";
-import { carRenderPos, chaseCameraPose, declutterLanes, orbitEye, orbitPanBasis } from "./scene";
+import {
+  carRenderPos, chaseCameraPose, declutterLanes, disposeRenderObject, disposeTrackLayers,
+  environmentGlbCached, installTrackLayers, loadEnvironmentGlb, orbitEye, orbitPanBasis,
+  setRibbonOverEnvironment,
+} from "./scene";
 import { renderForward, toRenderFrame } from "./trackMesh";
 
 const RING_R = 500;
@@ -524,5 +533,387 @@ describe("heading at a collapsed ring segment", () => {
     expect(collapsed).toBeGreaterThanOrEqual(0);
     expect(checked).toBe(track.x.length);
     expect(worstDeg).toBeLessThan(1e-9);
+  });
+});
+
+/* ==========================================================================
+ * The environment layer: the registry, the placement it derives, and the
+ * disposal rules that keep the shared model alive.
+ * ======================================================================== */
+
+/** The Python fit, written out INDEPENDENTLY of environmentPlacement (this is
+ * glb_surface.Fit.to_world transcribed from its own docstring, not a call into the
+ * code under test): telemetry metres -> the model's Y-up world frame. */
+function fitToWorld(fit: TrackSurfaceTransform, x: number, y: number, z: number): THREE.Vector3 {
+  const yaw = (fit.yawDeg * Math.PI) / 180;
+  const c = Math.cos(yaw), s = Math.sin(yaw);
+  const ux = fit.scale * x;
+  const uy = fit.scale * fit.mirror * y;
+  return new THREE.Vector3(
+    c * ux - s * uy + fit.txM,          // wx
+    fit.scale * z + fit.tyM,            // wy
+    s * ux + c * uy + fit.tzM,          // wz
+  );
+}
+
+/** The placement as an actual Object3D matrix -- i.e. exactly what the renderer hangs
+ * on the loaded GLB, not a re-derivation of it. */
+function placementMatrix(p: EnvironmentPlacement): THREE.Matrix4 {
+  const obj = new THREE.Object3D();
+  obj.position.set(p.position[0], p.position[1], p.position[2]);
+  obj.rotation.set(0, p.rotationY, 0);
+  obj.scale.setScalar(p.scale);
+  obj.updateMatrix();
+  return obj.matrix;
+}
+
+function makeSurface(over: Partial<TrackSurface> = {}): TrackSurface {
+  const n = 4;
+  return {
+    dsMetres: 1, source: "silverstone.glb", sourceSha256: "ab".repeat(32),
+    profile: "edelta-scorer",
+    transform: ENVIRONMENTS["british-grand-prix"].fit,
+    zM: new Float32Array(n), slope: new Float32Array(n), camber: new Float32Array(n),
+    valid: new Uint8Array(n).fill(1),
+    residual: { stdM: 0.05, maxM: 0.17 }, coverage: 1, roadCoverage: 0.99,
+    assetUrl: "/sim/glb/british-grand-prix.0123456789.glb",
+    assetSha256: "cd".repeat(32),
+    provenance: "DERIVED", provenanceNote: "DERIVED (raycast)",
+    ...over,
+  };
+}
+
+describe("environmentFor: absence, and a failed gate, read the same", () => {
+  it("returns null for a circuit with no entry -- the case for 12 of 13", () => {
+    expect(environmentFor("monaco-grand-prix")).toBeNull();
+    expect(environmentFor("")).toBeNull();
+    expect(environmentFor(null)).toBeNull();
+    expect(environmentFor(undefined)).toBeNull();
+  });
+
+  it("returns null for a circuit that FAILS the gate, even though it has an entry", () => {
+    // Shanghai is in the registry -- we know its model, its sha and its numbers -- and
+    // it still must not be drawn: residual std 0.306 m against a 0.15 m limit. A caller
+    // cannot tell it from a circuit with no model at all, which is the point.
+    expect(ENVIRONMENTS["chinese-grand-prix"]).toBeDefined();
+    expect(ENVIRONMENTS["chinese-grand-prix"].gate).toBe("fail");
+    expect(environmentFor("chinese-grand-prix")).toBeNull();
+  });
+
+  it("returns the definition for the one circuit that passes", () => {
+    const def = environmentFor("british-grand-prix");
+    expect(def).not.toBeNull();
+    expect(def!.slug).toBe("british-grand-prix");
+    expect(def!.sourceGlb).toBe("data/tracks/silverstone.glb");
+  });
+
+  it("keeps every row's verdict consistent with the numbers it carries", () => {
+    // This is what stops a stale `measured` block keeping a circuit shipping after it
+    // has stopped aligning: the verdict is checked against the gate, not trusted.
+    expect(GATE_MIN_COVERAGE).toBe(0.99);
+    expect(GATE_MAX_RESIDUAL_STD_M).toBe(0.15);
+    for (const [slug, def] of Object.entries(ENVIRONMENTS)) {
+      expect(def.slug, slug).toBe(slug);
+      expect(measurementPasses(def.measured), slug).toBe(def.gate === "pass");
+      expect(def.sourceSha256, slug).toMatch(/^[0-9a-f]{64}$/);
+      expect(def.measured.stations, slug).toBeGreaterThan(0);
+    }
+    expect(measurementPasses(ENVIRONMENTS["british-grand-prix"].measured)).toBe(true);
+    expect(measurementPasses(ENVIRONMENTS["chinese-grand-prix"].measured)).toBe(false);
+  });
+});
+
+describe("environmentPlacement: the model lands where the telemetry says it does", () => {
+  it("sends every point of the fitted model back onto its own telemetry point", () => {
+    // The whole correctness claim of the environment layer in one assertion. The fit
+    // maps telemetry -> model world; the placement must be that map INVERTED and then
+    // re-expressed in the render frame, so a point of the model under telemetry (x,y,z)
+    // has to draw at exactly toRenderFrame(x, y, z). If this drifts, the cars stand
+    // beside the road rather than on it.
+    const fit = ENVIRONMENTS["british-grand-prix"].fit;
+    const placement = environmentPlacement(fit)!;
+    expect(placement).not.toBeNull();
+    const m = placementMatrix(placement);
+    let worst = 0;
+    for (const [x, y, z] of [
+      [0, 0, 0], [500, -300, 12], [-812.4, 640.1, -3.5], [1e-3, 1e-3, 1e-3],
+    ] as [number, number, number][]) {
+      const drawn = fitToWorld(fit, x, y, z).applyMatrix4(m);
+      const expected = new THREE.Vector3(...toRenderFrame(x, y, z));
+      worst = Math.max(worst, drawn.distanceTo(expected));
+    }
+    expect(worst).toBeLessThan(1e-6);
+  });
+
+  it("agrees with the placement env_sim.md verified across all 5832 stations", () => {
+    // env_sim.md measured, under its OWN earlier fit, position (276.23, 203.68,
+    // -442.88) with rotation.y ~ 0.0004 and scale 1. This derives (276.34, 203.41,
+    // -443.64) from the registry's later, sharper fit. Two independently measured fits
+    // agreeing to under a metre is the cross-check; a metre of disagreement between
+    // them is expected, a hundred metres would mean the derivation is wrong.
+    const p = environmentPlacement(ENVIRONMENTS["british-grand-prix"].fit)!;
+    expect(p.position[0]).toBeCloseTo(276.34, 1);
+    expect(p.position[1]).toBeCloseTo(203.41, 1);
+    expect(p.position[2]).toBeCloseTo(-443.64, 1);
+    expect(Math.abs(p.position[0] - 276.23)).toBeLessThan(1);
+    expect(Math.abs(p.position[1] - 203.68)).toBeLessThan(1);
+    expect(Math.abs(p.position[2] - -442.88)).toBeLessThan(1);
+    // scale is the fit's own inverse, and the fit measured ~1.000 -- a RESULT, not an
+    // assumption: the search brackets 0.35x to 3.3x.
+    expect(p.scale).toBeCloseTo(1 / 0.999404, 9);
+    expect(p.rotationY).toBeCloseTo((0.203281 * Math.PI) / 180, 12);
+  });
+
+  it("refuses a fit a rotation cannot express, rather than mirroring the signage", () => {
+    const fit = ENVIRONMENTS["british-grand-prix"].fit;
+    // mirror +1 would need a negative scale component, which reflects the model's
+    // advertising boards and sponsor logos. Refusing means "keep the ribbon".
+    expect(environmentPlacement({ ...fit, mirror: 1 })).toBeNull();
+    expect(environmentPlacement({ ...fit, scale: 0 })).toBeNull();
+    expect(environmentPlacement({ ...fit, scale: -1 })).toBeNull();
+    expect(environmentPlacement({ ...fit, txM: NaN })).toBeNull();
+    expect(environmentPlacement({ ...fit, yawDeg: Infinity })).toBeNull();
+  });
+});
+
+describe("environmentForTrack: four things must hold, and absence is the normal case", () => {
+  it("is null for a track with no surface block -- every circuit today", () => {
+    const track = makeRing({ slug: "british-grand-prix" });
+    expect(track.surface).toBeUndefined();
+    expect(environmentForTrack(track)).toBeNull();
+  });
+
+  it("is null when the artifact names no published asset", () => {
+    const track = makeRing({ slug: "british-grand-prix", surface: makeSurface({ assetUrl: null }) });
+    expect(environmentForTrack(track)).toBeNull();
+  });
+
+  it("is null for a gate-failing circuit even with a complete surface block", () => {
+    const track = makeRing({ slug: "chinese-grand-prix", surface: makeSurface() });
+    expect(environmentForTrack(track)).toBeNull();
+  });
+
+  it("resolves the asset and the placement when everything is present", () => {
+    const surface = makeSurface();
+    const env = environmentForTrack(makeRing({ slug: "british-grand-prix", surface }));
+    expect(env).not.toBeNull();
+    expect(env!.assetUrl).toBe(surface.assetUrl);
+    expect(env!.assetSha256).toBe(surface.assetSha256);
+    expect(env!.def.slug).toBe("british-grand-prix");
+    // the placement comes from the ARTIFACT's transform, which is the transform the
+    // baked heights were measured under
+    expect(env!.placement.scale).toBeCloseTo(1 / surface.transform.scale, 12);
+  });
+
+  it("takes the transform from the artifact, not from the registry copy", () => {
+    // A re-bake that moved the model 100 m must move the drawn model 100 m, even though
+    // environments.ts still carries the older numbers.
+    const surface = makeSurface({
+      transform: { ...ENVIRONMENTS["british-grand-prix"].fit, txM: -177.7467 },
+    });
+    const env = environmentForTrack(makeRing({ slug: "british-grand-prix", surface }))!;
+    const registry = environmentPlacement(ENVIRONMENTS["british-grand-prix"].fit)!;
+    // ~100 rather than exactly 100: the translation is carried through the fit's own
+    // inverse scale and yaw, which is itself the proof that the transform is inverted
+    // rather than copied.
+    expect(Math.abs(env.placement.position[0] - registry.position[0])).toBeCloseTo(100, 0);
+  });
+});
+
+describe("applyEnvironmentMaterials: the diagnosed fixes, applied", () => {
+  function texturedMesh() {
+    const mat = new THREE.MeshStandardMaterial({ metalness: 0.9, roughness: 0.05 });
+    mat.map = new THREE.Texture();
+    mat.emissiveMap = new THREE.Texture();
+    mat.normalMap = new THREE.Texture();
+    return new THREE.Mesh(new THREE.BufferGeometry(), mat);
+  }
+
+  it("clamps the specular-workflow metalness and roughness", () => {
+    const def = ENVIRONMENTS["british-grand-prix"];
+    const mesh = texturedMesh();
+    const touched = applyEnvironmentMaterials(mesh, def, 16);
+    const mat = mesh.material as THREE.MeshStandardMaterial;
+    expect(touched).toBe(1);
+    // without these the grandstands render as solid black cut-outs
+    expect(mat.metalness).toBe(0.25);
+    expect(mat.roughness).toBe(0.42);
+  });
+
+  it("marks the colour maps sRGB and leaves the data maps alone", () => {
+    const mesh = texturedMesh();
+    applyEnvironmentMaterials(mesh, ENVIRONMENTS["british-grand-prix"], 16);
+    const mat = mesh.material as THREE.MeshStandardMaterial;
+    expect(mat.map!.colorSpace).toBe(THREE.SRGBColorSpace);
+    expect(mat.emissiveMap!.colorSpace).toBe(THREE.SRGBColorSpace);
+    // a normal map is DATA, not colour: tagging it sRGB would corrupt the normals
+    expect(mat.normalMap!.colorSpace).not.toBe(THREE.SRGBColorSpace);
+    expect(mat.map!.anisotropy).toBe(16);
+    expect(mat.normalMap!.anisotropy).toBe(16);
+  });
+
+  it("never asks for more anisotropy than the GPU has", () => {
+    const mesh = texturedMesh();
+    applyEnvironmentMaterials(mesh, ENVIRONMENTS["british-grand-prix"], 4);
+    expect((mesh.material as THREE.MeshStandardMaterial).map!.anisotropy).toBe(4);
+    const mesh2 = texturedMesh();
+    applyEnvironmentMaterials(mesh2, ENVIRONMENTS["british-grand-prix"], 0);
+    expect((mesh2.material as THREE.MeshStandardMaterial).map!.anisotropy).toBe(1);
+  });
+
+  it("touches nothing on a model with no meshes", () => {
+    expect(applyEnvironmentMaterials(new THREE.Group(), ENVIRONMENTS["british-grand-prix"], 16))
+      .toBe(0);
+  });
+});
+
+describe("disposal: every texture slot, every primitive type, and not the shared model", () => {
+  /** Counts dispose() calls by listening for three's own dispose event. */
+  function watched(): [THREE.Texture, () => number] {
+    const tex = new THREE.Texture();
+    let n = 0;
+    tex.addEventListener("dispose", () => { n++; });
+    return [tex, () => n];
+  }
+
+  it("frees a GLB material's other five maps, not only .map", () => {
+    const mat = new THREE.MeshStandardMaterial();
+    const counters: (() => number)[] = [];
+    for (const slot of ["map", "normalMap", "roughnessMap", "metalnessMap", "aoMap",
+      "emissiveMap"] as const) {
+      const [tex, count] = watched();
+      mat[slot] = tex;
+      counters.push(count);
+    }
+    disposeRenderObject(new THREE.Mesh(new THREE.BufferGeometry(), mat));
+    // before this widening only the first of these was freed; the other five were a
+    // silent leak on every session switch at a circuit with a real model
+    expect(counters.map((c) => c())).toEqual([1, 1, 1, 1, 1, 1]);
+  });
+
+  it("covers Line and Points, which a GLB can contribute and LineSegments-only missed", () => {
+    for (const obj of [
+      new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial()),
+      new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial()),
+      new THREE.Points(new THREE.BufferGeometry(), new THREE.PointsMaterial()),
+    ]) {
+      let geomDisposed = 0;
+      obj.geometry.addEventListener("dispose", () => { geomDisposed++; });
+      disposeRenderObject(obj);
+      expect(geomDisposed, obj.type).toBe(1);
+    }
+    // and leaves things with no geometry alone rather than throwing
+    expect(() => disposeRenderObject(new THREE.Group())).not.toThrow();
+    expect(() => disposeRenderObject(new THREE.AmbientLight())).not.toThrow();
+  });
+
+  it("frees every material of a multi-material mesh", () => {
+    const [a, countA] = watched();
+    const [b, countB] = watched();
+    const m1 = new THREE.MeshStandardMaterial(); m1.map = a;
+    const m2 = new THREE.MeshStandardMaterial(); m2.map = b;
+    disposeRenderObject(new THREE.Mesh(new THREE.BufferGeometry(), [m1, m2]));
+    expect([countA(), countB()]).toEqual([1, 1]);
+  });
+
+  it("removes AND frees a circuit's layers, and is a no-op on null", () => {
+    const scene = new THREE.Scene();
+    const track = makeRing();
+    const layers = installTrackLayers(scene, track);
+    expect(scene.children).toContain(layers.surface);
+    expect(scene.children).toContain(layers.outline);
+    let disposed = 0;
+    layers.surface.geometry.addEventListener("dispose", () => { disposed++; });
+    layers.outline.geometry.addEventListener("dispose", () => { disposed++; });
+    disposeTrackLayers(scene, layers);
+    expect(scene.children).not.toContain(layers.surface);
+    expect(scene.children).not.toContain(layers.outline);
+    expect(disposed).toBe(2);
+    expect(() => disposeTrackLayers(scene, null)).not.toThrow();
+  });
+
+  it("re-rolling does not stack ribbons: three setTrack-equivalents leave one", () => {
+    const scene = new THREE.Scene();
+    const track = makeRing();
+    let layers = installTrackLayers(scene, track);
+    const after1 = scene.children.length;
+    for (let i = 0; i < 3; i++) {
+      disposeTrackLayers(scene, layers);
+      layers = installTrackLayers(scene, track);
+    }
+    expect(scene.children.length).toBe(after1);
+  });
+
+  it("a blanket traverse would destroy the SHARED model -- so it is removed first", () => {
+    // Hazard (a), reproduced without WebGL. dispose() frees everything the scene can
+    // still reach; the circuit model is module-scope state that outlives the renderer,
+    // so it has to leave the scene BEFORE the traverse or the next session gets an
+    // emptied husk of a 158 MB asset it will not re-download.
+    const scene = new THREE.Scene();
+    const layers = installTrackLayers(scene, makeRing());
+    const [tex, texCount] = watched();
+    const envMat = new THREE.MeshStandardMaterial(); envMat.map = tex;
+    const envRoot = new THREE.Group();
+    envRoot.add(new THREE.Mesh(new THREE.BufferGeometry(), envMat));
+    scene.add(envRoot);
+
+    let ribbonDisposed = 0;
+    layers.surface.geometry.addEventListener("dispose", () => { ribbonDisposed++; });
+
+    scene.remove(envRoot);              // the line dispose() must run first
+    scene.traverse(disposeRenderObject);
+
+    expect(ribbonDisposed).toBe(1);     // the renderer's own geometry IS freed
+    expect(texCount()).toBe(0);         // the shared model's texture is NOT
+  });
+});
+
+describe("the ribbon is hidden, never deleted", () => {
+  it("restores its material exactly when the model goes away", () => {
+    const scene = new THREE.Scene();
+    const layers = installTrackLayers(scene, makeRing());
+    const mat = layers.surface.material as THREE.MeshStandardMaterial;
+    const before = {
+      transparent: mat.transparent, opacity: mat.opacity, depthWrite: mat.depthWrite,
+      polygonOffset: mat.polygonOffset, factor: mat.polygonOffsetFactor,
+      units: mat.polygonOffsetUnits,
+    };
+    setRibbonOverEnvironment(layers, true);
+    // pulled forward and made translucent so it reads as an overlay ON the real road
+    // rather than z-fighting with it
+    expect(mat.polygonOffset).toBe(true);
+    expect(mat.polygonOffsetFactor).toBe(-2);
+    expect(mat.depthWrite).toBe(false);
+    expect(mat.opacity).toBeCloseTo(0.55, 6);
+    setRibbonOverEnvironment(layers, false);
+    expect({
+      transparent: mat.transparent, opacity: mat.opacity, depthWrite: mat.depthWrite,
+      polygonOffset: mat.polygonOffset, factor: mat.polygonOffsetFactor,
+      units: mat.polygonOffsetUnits,
+    }).toEqual(before);
+    // and the mesh itself was never removed from the scene by any of it
+    expect(scene.children).toContain(layers.surface);
+  });
+});
+
+describe("loadEnvironmentGlb: one fetch per URL, for the life of the page", () => {
+  it("hands two callers the SAME in-flight load rather than two 158 MB fetches", () => {
+    // Replay disposes and rebuilds the whole renderer on every session change, so this
+    // cache has to live at MODULE scope: an instance-level one would re-fetch
+    // Silverstone every time the user picked a different session at the same circuit.
+    // Deduping by URL is what makes that true, and the URL is content-hashed, so a
+    // rebuilt asset is a new key rather than a stale hit.
+    const url = "/sim/glb/dedupe-probe.0000000000.glb";
+    expect(environmentGlbCached(url)).toBe(false);
+    const first = loadEnvironmentGlb(url);
+    const second = loadEnvironmentGlb(url);
+    expect(second).toBe(first);
+    expect(environmentGlbCached(url)).toBe(true);
+    // Nothing awaits it: the race must never wait on a circuit model. There is no such
+    // asset and no browser here, so the settlement of this load is not this test's
+    // subject -- it is swallowed exactly as the renderer swallows it, leaving the
+    // procedural ribbon in place.
+    first.catch(() => {});
+    second.catch(() => {});
   });
 });

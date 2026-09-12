@@ -36,7 +36,7 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from simdata.glb_surface import (Fit, TriangleIndex, bake_surface, load_surface,
-                                 registry_entry, surface_block)
+                                 registry_entry, sha256_file, surface_block)
 from simdata.paths import ROOT as REPO_ROOT, data_root
 from simdata.rawio import MIN_SAMPLES, LapTable, SentinelIndex, load_lap
 from simdata.track import (build_ring, corner_stations, grid, pick_geometry_laps,
@@ -669,14 +669,26 @@ def _ring_emission_error(ring, x_cm, y_cm) -> float:
 # be written in parallel:
 #     published path   frontend/public/sim/glb/<slug>.<sha10>.glb
 #     served URL       /sim/glb/<slug>.<sha10>.glb
-# <sha10> is the first 10 hex characters of the sha256 of the PUBLISHED bytes. Publishing
-# is a byte-for-byte copy of the asset that was fitted and baked, so that is the same hash
-# this module measures off the file it read -- and `_surface_for` refuses to emit a block
-# when the file on disk is not the one the recorded transform was fitted to, which is what
-# keeps the two halves of the contract from drifting apart. An asset-prep step that ever
-# rewrites the bytes has to re-fit and re-record the registry; it cannot just republish.
+# <sha10> is the first 10 hex characters of the sha256 of the PUBLISHED bytes.
+#
+# PUBLISHED, not source. simdata.glb_publish downscales three oversized textures before
+# it writes the asset, so the published bytes are NOT the bytes the transform was fitted
+# to: silverstone.glb hashes 228c897e5c in data/tracks and cfb1d61f58 in
+# frontend/public/sim/glb. Naming the URL after the source hash would produce a 404 and a
+# circuit that silently keeps the ribbon. So this module does not compute the published
+# name at all -- it looks for the file the publisher actually wrote, hashes THOSE bytes,
+# and only then agrees that the name describes them. `surface.sourceSha256`, which
+# glb_surface fills in, stays the source hash: it says what the fit was measured against,
+# and it is a different number on purpose.
+#
+# Nothing is published here. The publisher is its own step and its own owner; a build run
+# before it emits `assetUrl: null` -- absence, not a guessed filename -- and the artifact
+# has to be rebuilt after publishing for the environment to load.
 GLB_URL_PREFIX = "/sim/glb"
 GLB_SHA_CHARS = 10
+#: Where the publisher writes, under REPO_ROOT. `/sim` IS frontend/public/sim, so the
+#: served URL mirrors this path exactly. Kept as parts so a test can redirect the root.
+GLB_PUBLISH_SUBDIR = ("frontend", "public", "sim", "glb")
 
 # Arrays the frontend reads per station. They must be exactly as long as ring.xCm, in the
 # same order, or a renderer would stand cars on the wrong part of the circuit.
@@ -684,8 +696,43 @@ SURFACE_STATION_ARRAYS = ("zCm", "slopePermille", "camberPermille", "validMask")
 
 
 def glb_asset_url(slug: str, sha256: str) -> str:
-    """The served URL for a published circuit asset. One definition of the name."""
+    """The served URL for a published circuit asset, from the sha256 of its bytes.
+
+    A restatement of the frozen contract, held against the other half of it --
+    simdata.glb_publish.published_url -- by a test, so the two cannot drift apart.
+    """
     return f"{GLB_URL_PREFIX}/{slug}.{sha256[:GLB_SHA_CHARS]}.glb"
+
+
+def _published_asset(slug: str, publish_dir: Path) -> tuple[str | None, str | None]:
+    """The published asset for `slug` as (url, sha256), or (None, None) when there is
+    none. The caller reports which it got, on its one line.
+
+    The filename carries a hash, but a filename is a claim; the bytes are the evidence.
+    So the file is hashed and the name is required to describe what was hashed -- that is
+    what catches a half-written or hand-copied asset, which would otherwise ship a URL
+    the browser fetches and cannot verify.
+    """
+    if not publish_dir.is_dir():
+        return None, None
+    found = [p for p in sorted(publish_dir.glob(f"{slug}.*.glb"))
+             if len(p.name) == len(slug) + len(".") + GLB_SHA_CHARS + len(".glb")
+             and set(p.name[len(slug) + 1:-len(".glb")]) <= set("0123456789abcdef")]
+    if not found:
+        return None, None
+    if len(found) > 1:
+        # The publisher prunes superseded assets, so this is an anomaly rather than a
+        # choice; take the newest and say that a choice was made.
+        found.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+        print(f"  {slug}: {len(found)} published assets; taking the newest, "
+              f"{found[0].name}", flush=True)
+    path = found[0]
+    sha = sha256_file(path)
+    if path.name != f"{slug}.{sha[:GLB_SHA_CHARS]}.glb":
+        print(f"  {slug}: published {path.name} hashes {sha[:GLB_SHA_CHARS]}; it is not "
+              f"the file its own name claims, so assetUrl stays null", flush=True)
+        return None, None
+    return glb_asset_url(slug, sha), sha
 
 
 def _no_surface(slug: str, why: str) -> None:
@@ -754,11 +801,16 @@ def _surface_for(slug: str, ring) -> dict | None:
     if wrong:
         return _no_surface(slug, f"baked arrays {wrong} are not {ring.n} stations long")
 
-    # Per the frozen contract: which file to fetch, and the hash that names it.
-    block["assetUrl"] = glb_asset_url(slug, bake.sha256)
-    block["assetSha256"] = bake.sha256
+    # Per the frozen contract: which file to fetch, and the hash of the bytes in it.
+    # Both are null when nothing has been published yet -- the heights, slope and camber
+    # are still true and still usable on the procedural ribbon; only the model is absent.
+    url, asset_sha = _published_asset(slug, REPO_ROOT.joinpath(*GLB_PUBLISH_SUBDIR))
+    block["assetUrl"] = url
+    block["assetSha256"] = asset_sha
     print(f"  {slug}: 3D surface from {glb_path.name} -- coverage {bake.coverage:.2%}, "
-          f"residual std {bake.residual_std_m:.3f} m, {ring.n} stations", flush=True)
+          f"residual std {bake.residual_std_m:.3f} m, {ring.n} stations, asset "
+          + (url if url else "NOT PUBLISHED (assetUrl null; publish, then rebuild)"),
+          flush=True)
     return block
 
 

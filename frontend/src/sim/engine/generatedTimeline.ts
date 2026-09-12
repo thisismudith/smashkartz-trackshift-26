@@ -6,11 +6,12 @@
  * station-based gap logic are the same idea as timeline.ts, simplified because a
  * generated race has none of the real data's missing-lap/mismatched-frame problems.
  *
- * Lap 1 is a STANDING START: until each car hands over at the fitted validity ceiling it
- * is placed by scripts/simdata/launch.py's model (grid box, reaction, constant-
- * acceleration launch), with a hard non-interpenetration gap of one car length applied
- * in grid order exactly as launch_state's `min_gap_m` does. Every number behind that
- * comes from params.json; this file only applies it.
+ * Lap 1 is a STANDING START. Until the field-wide handover it is placed by
+ * scripts/simdata/launch.py's model -- grid box, reaction, constant-acceleration launch
+ * -- with a hard non-interpenetration gap of one car length applied in grid order,
+ * exactly as launch_state's `min_gap_m` does. After it, each car joins the reference
+ * profile at the position the launch left it in. Every number behind that comes from
+ * params.json standingStart; this file only applies it.
  */
 import type {
   CarState, NeutralisationInterval, Provenance, RaceEvent, RaceTimeline, TrackModel,
@@ -29,7 +30,6 @@ interface Progress {
   idx: number;
   motion: MotionSample;
   finished: boolean;
-  placement: GridPlacement | null;
 }
 
 export class GeneratedTimeline implements RaceTimeline {
@@ -161,12 +161,12 @@ export class GeneratedTimeline implements RaceTimeline {
       const placement = this.result.standingStart?.byDriver.get(entry.driver) ?? null;
       const launched = idx <= 0 ? field?.get(entry.driver) : undefined;
       if (launched) {
-        return { entry, idx: Math.max(0, idx), motion: launched, placement, finished: false };
+        return { entry, idx: Math.max(0, idx), motion: launched, finished: false };
       }
       if (idx < 0) {
         // Unreachable while the worker keeps sessionTime >= 0 and lap 1 starts at the
         // signal, but a car with no lap yet is on its box, not at station 0 doing 250.
-        return { entry, idx, finished: false, placement, motion: gridMotion(placement) };
+        return { entry, idx, finished: false, motion: gridMotion(placement) };
       }
       const lapRow = entry.laps[idx];
       const relT = Math.min(lapRow.sesT - lapRow.lST, Math.max(0, t - lapRow.lST));
@@ -175,7 +175,7 @@ export class GeneratedTimeline implements RaceTimeline {
         ? sampler(relT)
         : { progressM: idx * L, stationM: 0, speedKph: 0, gear: 1, phase: "HANDOVER" as LaunchPhase };
       return {
-        entry, idx, motion, placement,
+        entry, idx, motion,
         finished: t > lapRow.sesT && idx === entry.laps.length - 1,
       };
     });
@@ -207,7 +207,7 @@ export class GeneratedTimeline implements RaceTimeline {
         lapsDone: lapRow ? idx + (t > lapRow.sesT ? 1 : 0) : 0,
         lapProgress: lapRow ? Math.max(0, Math.min(0.9999, relT / lapSpan)) : 0,
         position: i + 1,
-        gapToLeaderS: i === 0 ? null : this.gapToLeader(ranked, i, t),
+        gapToLeaderS: i === 0 ? null : this.gapToLeader(ranked, i),
         lapsDownFromLeader: this.lapsDownFromLeader(ranked, i),
         intervalS: i === 0 ? null : this.intervalToAhead(ranked, i),
         inPit,
@@ -247,7 +247,7 @@ export class GeneratedTimeline implements RaceTimeline {
    * On lap 1 the cars share a lap START (the signal) but not a starting POINT, so that
    * stand-in reports 0.0 for the whole field. The lap-1 gap is taken from the metres
    * between the cars instead, converted at the car's own current speed. */
-  private gapToLeader(ranked: Progress[], i: number, t: number): number | null {
+  private gapToLeader(ranked: Progress[], i: number): number | null {
     if (this.lapsDownFromLeader(ranked, i) > 0) return null;
     const leader = ranked[0];
     const mine = ranked[i];

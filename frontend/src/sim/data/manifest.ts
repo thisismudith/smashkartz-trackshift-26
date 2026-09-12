@@ -1,4 +1,7 @@
-import type { TrackCorner, TrackModel } from "../contract/types";
+import type {
+  Provenance, TrackCorner, TrackModel, TrackSurface, TrackSurfaceSample,
+  TrackSurfaceTransform,
+} from "../contract/types";
 import type { LapEnergy } from "./source";
 
 /** Raw shapes as written by scripts/simdata/*.py (see those files for the exact
@@ -38,6 +41,45 @@ export interface RawTrackModel {
   } | null;
   width: { binMetres: number; halfWidth: number[] };
   referenceProfile: { binMetres: number; speedKph: number[]; gear: number[] };
+  /** 2 once a build can carry a `surface` block. Absent on every artifact written
+   * before that, which is not an error. */
+  schemaVersion?: number;
+  /** OPTIONAL, AND USUALLY ABSENT: only a circuit whose real model clears the quality
+   * gate carries one (1 of 13 today), and no pre-schemaVersion-2 artifact carries one
+   * at all. Absence is the ordinary case and must never be read as a surface of
+   * zeroes -- see parseTrackSurface. */
+  surface?: RawTrackSurface | null;
+}
+
+/** The `surface` block exactly as scripts/simdata/glb_surface.py's `surface_block()`
+ * writes it, plus the two fields the publisher adds to name the served asset. Heights
+ * and gradients are quantised ints with `null` -- never a stand-in number -- at a
+ * station the raycast missed. */
+export interface RawTrackSurface {
+  dsMetres: number;
+  source: string;
+  sourceSha256: string | null;
+  profile: string | null;
+  /** the fitted transform, plus its own restatement in the model's raw Z-up
+   * coordinates (glbXOffsetM/glbYOffsetM/glbZOffsetM). The restatement is derived from
+   * the same three translations, so only the six-parameter form is parsed. */
+  transform: {
+    scale: number; yawDeg: number; mirror: number;
+    txM: number; tzM: number; tyM: number;
+  };
+  zCm: (number | null)[];
+  slopePermille: (number | null)[];
+  camberPermille: (number | null)[];
+  /** 1 per station, 1 = the raycast landed. */
+  validMask: number[];
+  residual: { stdM: number | null; maxM: number | null };
+  coverage: number | null;
+  roadCoverage?: number | null;
+  /** served URL of the published model, `/sim/glb/<slug>.<sha10>.glb`, and the sha256
+   * of those published bytes. Added by the publisher, not by the bake. */
+  assetUrl?: string | null;
+  assetSha256?: string | null;
+  provenance?: string | null;
 }
 
 export interface RawCorners {
@@ -92,6 +134,107 @@ export function parseCorners(raw: RawTrackModel): TrackCorners {
     });
   }
   return { rotationDeg: finiteOrNull(block.rotationDeg), corners };
+}
+
+/** The whole provenance vocabulary. There is no seventh word, and absence is null. */
+const PROVENANCE_WORDS = new Set<Provenance>([
+  "OBSERVED", "DERIVED", "INFERRED", "SIMULATED", "RULE", "DEFAULT",
+]);
+
+/** The leading provenance word of a producer tag such as "DERIVED (exact vertical
+ * raycast ...)". Null -- not a guess, and not a new word -- for anything else. */
+function leadingProvenance(tag: unknown): Provenance | null {
+  if (typeof tag !== "string") return null;
+  const word = tag.trim().split(/[^A-Z]/)[0] as Provenance;
+  return PROVENANCE_WORDS.has(word) ? word : null;
+}
+
+const warned = new Set<string>();
+function warnOnce(key: string, message: string): void {
+  if (warned.has(key)) return;
+  warned.add(key);
+  console.warn(message);
+}
+
+/** Quantised ints -> metres/ratios, with `null` and non-finite entries becoming NaN.
+ * NaN rather than 0 on purpose: 0 is a perfectly plausible height and a perfectly
+ * plausible gradient, so it cannot also mean "there is no value here". */
+function dequantise(values: (number | null)[] | undefined, n: number, divisor: number): Float32Array {
+  const out = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const v = values?.[i];
+    out[i] = typeof v === "number" && Number.isFinite(v) ? v / divisor : NaN;
+  }
+  return out;
+}
+
+/**
+ * Parses the OPTIONAL baked surface block.
+ *
+ * ABSENCE IS THE ORDINARY ANSWER, not an error: 12 of the 13 shipped circuits have no
+ * model that clears the quality gate, and no artifact written before schemaVersion 2
+ * carries the block at all. Both return null, silently, and the caller draws the
+ * procedural ribbon exactly as it does today.
+ *
+ * A block that is PRESENT but unusable is a different thing -- a producer bug -- and is
+ * reported once and then also refused, because a surface whose arrays do not line up
+ * with the ring would stand cars at the wrong stations' heights. The one structural
+ * requirement is that there is exactly one sample per ring vertex; everything else
+ * (slope, camber, coverage, the asset URL) may be missing on its own without costing
+ * the height.
+ */
+export function parseTrackSurface(raw: RawTrackModel): TrackSurface | null {
+  const block = raw.surface;
+  if (!block) return null;
+  const n = raw.ring.xCm.length;
+  const slug = raw.slug ?? "?";
+
+  if (!Array.isArray(block.zCm) || block.zCm.length !== n) {
+    warnOnce(`surface-length-${slug}`,
+      `[sim] ${slug}: surface block has ${Array.isArray(block.zCm) ? block.zCm.length : "no"} ` +
+      `heights for ${n} ring vertices; ignoring it and keeping the procedural ribbon.`);
+    return null;
+  }
+  const t = block.transform;
+  const transform: TrackSurfaceTransform = {
+    scale: Number(t?.scale), yawDeg: Number(t?.yawDeg), mirror: Number(t?.mirror),
+    txM: Number(t?.txM), tzM: Number(t?.tzM), tyM: Number(t?.tyM),
+  };
+  if (!Object.values(transform).every((v) => Number.isFinite(v))) {
+    warnOnce(`surface-transform-${slug}`,
+      `[sim] ${slug}: surface block carries no usable transform; keeping the ribbon.`);
+    return null;
+  }
+
+  const zM = dequantise(block.zCm, n, 100);
+  const valid = new Uint8Array(n);
+  for (let i = 0; i < n; i++) {
+    // BOTH conditions: the mask is the producer's verdict, the finite height is the
+    // evidence for it, and a station is only usable when the two agree.
+    valid[i] = block.validMask?.[i] === 1 && Number.isFinite(zM[i]) ? 1 : 0;
+  }
+
+  return {
+    dsMetres: finiteOrNull(block.dsMetres) ?? raw.ring.lengthMetres / n,
+    source: typeof block.source === "string" ? block.source : "",
+    sourceSha256: typeof block.sourceSha256 === "string" ? block.sourceSha256 : null,
+    profile: typeof block.profile === "string" ? block.profile : null,
+    transform,
+    zM,
+    slope: dequantise(block.slopePermille, n, 1000),
+    camber: dequantise(block.camberPermille, n, 1000),
+    valid,
+    residual: {
+      stdM: finiteOrNull(block.residual?.stdM),
+      maxM: finiteOrNull(block.residual?.maxM),
+    },
+    coverage: finiteOrNull(block.coverage),
+    roadCoverage: finiteOrNull(block.roadCoverage),
+    assetUrl: typeof block.assetUrl === "string" && block.assetUrl ? block.assetUrl : null,
+    assetSha256: typeof block.assetSha256 === "string" ? block.assetSha256 : null,
+    provenance: leadingProvenance(block.provenance),
+    provenanceNote: typeof block.provenance === "string" ? block.provenance : null,
+  };
 }
 
 /**
@@ -262,6 +405,9 @@ export function parseTrackModel(raw: RawTrackModel): TrackModel {
       speedKph: Float32Array.from(profile.speedKph),
       gear: Uint8Array.from(profile.gear),
     },
+    // null for 12 of 13 circuits and for every pre-schemaVersion-2 artifact. That is
+    // the normal case, not a failure: those circuits keep the procedural ribbon.
+    surface: parseTrackSurface(raw),
   };
 }
 
@@ -363,4 +509,53 @@ export function halfWidthAt(track: TrackModel, station: number): number {
   const f = s / bin - 0.5;                                     // uniform interior bins
   const i0 = Math.floor(f);
   return lerp(track.halfWidth[i0], track.halfWidth[i0 + 1], f - i0);
+}
+
+/**
+ * The baked surface at an arbitrary station, or null when there is none.
+ *
+ * NULL IS A REAL ANSWER AND THE COMMON ONE. It means one of three things, and the
+ * caller should treat all three identically -- fall back to the ring's own elevation:
+ *   - the artifact carries no `surface` block (12 of 13 circuits, and every artifact
+ *     built before schemaVersion 2),
+ *   - this station's raycast found nothing,
+ *   - the station falls between two ring vertices and EITHER of them is invalid.
+ *
+ * That last rule is the point of this function. Interpolating across a gap would
+ * manufacture a height for ground the raycast never hit, and a manufactured height is
+ * exactly what puts a car through the road or in the air. Heights are interpolated the
+ * same way trackPointAt interpolates the ring -- the arrays share the ring's stations,
+ * one sample per vertex -- so the surface and the centreline cannot disagree about
+ * which station is which.
+ *
+ * `slope` and `camber` are independent of the height and of each other: a station can
+ * have a measured height and no measurable camber (camber needs a probe out to each
+ * side, which can fall off the model at a track edge). Each is null when either
+ * bracketing vertex has none.
+ */
+export function surfaceAt(
+  track: Pick<TrackModel, "lengthMetres" | "x" | "surface">, station: number,
+): TrackSurfaceSample | null {
+  const surface = track.surface;
+  if (!surface) return null;
+  const n = track.x.length;
+  if (surface.zM.length !== n) return null;
+
+  const L = track.lengthMetres;
+  const ds = L / n;                       // === ringDsMetres(track), by construction
+  const s = ((station % L) + L) % L;
+  if (!Number.isFinite(s)) return null;
+  const f = s / ds;
+  const i0 = Math.floor(f) % n;
+  const i1 = (i0 + 1) % n;
+  const frac = f - Math.floor(f);
+  if (!surface.valid[i0] || !surface.valid[i1]) return null;
+
+  const lerp = (a: Float32Array) => {
+    const v0 = a[i0], v1 = a[i1];
+    return Number.isFinite(v0) && Number.isFinite(v1) ? v0 + (v1 - v0) * frac : null;
+  };
+  const zM = lerp(surface.zM);
+  if (zM === null) return null;           // unreachable while valid[] agrees with zM
+  return { zM, slope: lerp(surface.slope), camber: lerp(surface.camber) };
 }
