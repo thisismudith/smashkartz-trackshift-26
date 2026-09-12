@@ -1,0 +1,213 @@
+# TrackShift dataset registry (M31, AGENTS.md section 45).
+#
+# One entry per processed dataset. A dataset that exists on disk but not here is
+# undocumented output; a dataset here with status "planned" is a contract not yet
+# built. Both states are visible on purpose.
+#
+# Required keys: name, description, source, schema_version, partitioning,
+# primary_key, producer, consumers, live_status, status.
+#
+#   live_status  LIVE_SAFE  every column is available at decision time.
+#                MIXED      contains both; per-column live_safe in the feature
+#                           registry is authoritative.
+#                OFFLINE_ONLY  labels or evaluation only (section 44).
+#   status       built | planned
+
+schema_version: 1
+
+datasets:
+
+  - name: telemetry_20m
+    description: >-
+      Canonical distance-resampled telemetry. Every accepted lap interpolated
+      onto a fixed 20 m grid, joined with its lap metadata. The lake every
+      downstream feature is derived from (section 10).
+    source: data/raw/tracinginsights/<year>/<event>/<session>/<driver>/<lap>_tel.json
+      joined with the sibling laptimes.json
+    schema_version: phase2_20m_v1
+    partitioning: year / event / session
+    primary_key: [year, event, session, driver, lap, distance_m]
+    producer: scripts/build_phase2_dataset.py
+    consumers: [M01, M03, M04, M06, M07, M14, M33]
+    live_status: MIXED
+    status: built
+    notes: >-
+      Only laps the validator accepts are written; rejects go to
+      rejected_laps.csv. Rejection is structural, not corruption: lap 1 starts
+      from a grid slot and pit and qualifying out/in laps traverse a different
+      path length, so distance is non-monotonic. Measured on 2026: Race 94.96%
+      accepted, Qualifying 75.69%. See scripts/data/quality_report.py.
+
+  - name: segments
+    description: >-
+      Strategic track segments, roughly 30-40 per lap, bounded by braking onset,
+      return to sustained throttle and the FIA lines (section 13). Carries the
+      static per-track geometry that segment_id keys.
+    source: telemetry_20m
+    schema_version: null
+    partitioning: year / event / session
+    primary_key: [year, event, session, driver, lap, segment_id]
+    producer: scripts/features/build_segments.py
+    consumers: [M04, M05, M06, M08, M14, M16, M19, M22]
+    live_status: MIXED
+    status: planned
+    notes: >-
+      Contract C1. segment_id must be stable for a given geometry_version: it is
+      the join key for every downstream table, so changing it invalidates them
+      all. Full-segment summaries are OFFLINE_ONLY; live columns are aligned to
+      segment entry.
+
+  - name: driver_segment_baselines
+    description: Per-driver median reference per track segment (section 14).
+    source: segments
+    schema_version: null
+    partitioning: track
+    primary_key: [track, segment_id, driver]
+    producer: scripts/features/build_baselines.py
+    consumers: [M06, M08, M10]
+    live_status: OFFLINE_ONLY
+    status: planned
+    notes: >-
+      Contract C2. Built from normal_race_model_eligible rows only. Rows below
+      the declared minimum sample count carry baseline_valid false rather than
+      being dropped, so a thin baseline is visible instead of missing.
+
+  - name: team_segment_baselines
+    description: Per-team median reference per track segment (section 14).
+    source: segments
+    schema_version: null
+    partitioning: track
+    primary_key: [track, segment_id, team]
+    producer: scripts/features/build_baselines.py
+    consumers: [M06, M08, M10]
+    live_status: OFFLINE_ONLY
+    status: planned
+
+  - name: field_segment_baselines
+    description: Whole-field median reference per track segment (section 14).
+    source: segments
+    schema_version: null
+    partitioning: track
+    primary_key: [track, segment_id]
+    producer: scripts/features/build_baselines.py
+    consumers: [M06, M08, M10]
+    live_status: OFFLINE_ONLY
+    status: planned
+
+  - name: race_context
+    description: >-
+      Race-control and pit state per row, including the
+      normal_race_model_eligible gate that every model dataset filters on
+      (section 12).
+    source: telemetry_20m, rcm.json, laptimes.json
+    schema_version: null
+    partitioning: year / event / session
+    primary_key: [year, event, session, driver, lap, distance_m]
+    producer: src/trackshift/race_context.py
+    consumers: [M04, M05, M07, M08, M15]
+    live_status: LIVE_SAFE
+    status: built
+    notes: >-
+      Contract C7, owned by Rishabh. pit_stop_duration_s_offline is
+      OFFLINE_ONLY and never a live feature. Race-control and pit transitions
+      are hard sequence boundaries: no rolling feature crosses one.
+
+  - name: split_assignments
+    description: Leakage-safe train/validation/test assignments (section 40).
+    source: battle_episodes, overtake_opportunities
+    schema_version: c9_split_assignments_v1
+    partitioning: none
+    primary_key: [split_unit, group_key]
+    producer: scripts/data/build_splits.py
+    consumers: [M09, M10, M11, M13]
+    live_status: OFFLINE_ONLY
+    status: built
+    notes: >-
+      Contract C9, owned by Rishabh. No battle_id appears in more than one fold.
+      Chain P and Chain S both call this; neither writes its own split.
+
+  - name: pairwise_segment_features
+    description: Attacker/defender differentials per battle segment (section 17).
+    source: segments, battle_episodes
+    schema_version: null
+    partitioning: year / event / session
+    primary_key: [battle_id, segment_index]
+    producer: scripts/features/build_battles.py
+    consumers: [M07, M08, M10]
+    live_status: LIVE_SAFE
+    status: planned
+    notes: Contract C8, owned by Rishabh.
+
+  - name: battle_episodes
+    description: Continuous attacker/defender fights, the unit of leakage-safe splitting (section 18).
+    source: telemetry_20m, segments
+    schema_version: null
+    partitioning: year / event / session
+    primary_key: [battle_id]
+    producer: scripts/features/build_battles.py
+    consumers: [M07, M08, M09, M29]
+    live_status: MIXED
+    status: planned
+    notes: >-
+      Contract C8, owned by Rishabh. An episode never spans a race-control or
+      pit-state transition; bounded_by records why it ended.
+
+  - name: overtake_opportunities
+    description: >-
+      One row per opportunity per decision checkpoint (DETECTION, ACTIVATION,
+      BRAKING), the pass model's training unit (section 19).
+    source: pairwise_segment_features, event_rules
+    schema_version: null
+    partitioning: year / event
+    primary_key: [opportunity_id, decision_checkpoint]
+    producer: scripts/features/build_opportunities.py
+    consumers: [M10, M11, M12, M13]
+    live_status: MIXED
+    status: planned
+    notes: >-
+      A row carries only features whose checkpoint has already occurred: a
+      DETECTION row never holds gap_at_activation. The label
+      passed_by_outcome_horizon is ACAUSAL and OFFLINE_ONLY; pass_attempted and
+      the outcome distance are audit fields and never features.
+
+  - name: rival_state_features
+    description: Per-battle-segment features for latent rival tactical state (section 24).
+    source: segments, pairwise_segment_features, baselines
+    schema_version: null
+    partitioning: year / event
+    primary_key: [battle_id, segment_index]
+    producer: scripts/features/build_rival_features.py
+    consumers: [M09]
+    live_status: LIVE_SAFE
+    status: planned
+    notes: Contract C8 input, owned by Rishabh. Normal-race-eligible segments only.
+
+  - name: physics_calibration
+    description: >-
+      Fitted energy-twin parameters at each rung of the calibration hierarchy
+      (section 29), with envelope-violation rate as a fit-quality metric.
+    source: telemetry_20m, segments
+    schema_version: null
+    partitioning: level (global / team / event)
+    primary_key: [level, scope_key, parameter]
+    producer: scripts/train/calibrate_physics.py
+    consumers: [M14, M16, M34, M35]
+    live_status: OFFLINE_ONLY
+    status: planned
+
+  - name: event_rules
+    description: >-
+      Encoded FIA regulation per event, including the speed-dependent power
+      envelope (sections 20.1, 21).
+    source: FIA Sporting and Technical Regulations, event documents
+    schema_version: null
+    partitioning: season / event
+    primary_key: [season, event]
+    producer: config/rules/<season>/<event>.yaml
+    consumers: [M19, M20, M21, M22, M35]
+    live_status: LIVE_SAFE
+    status: planned
+    notes: >-
+      RULE provenance. Every key carries source and verified. Values with
+      verified false are usable for modelling but must surface as unverified
+      wherever displayed, and block any claim of legality by construction.

@@ -8,6 +8,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 from trackshift import SCHEMA_VERSION
+from trackshift.data.registry import assert_registered
 from trackshift.raw_loader import discover_laps, load_lap_metadata, load_raw_lap
 from trackshift.resample import CONTINUOUS, DISCRETE, resample_lap
 
@@ -24,6 +25,9 @@ def main() -> int:
     parser.add_argument("--year", required=True); parser.add_argument("--event", required=True); parser.add_argument("--session", required=True)
     parser.add_argument("--drivers", nargs="+"); parser.add_argument("--laps", nargs="+", type=int); parser.add_argument("--max-laps-per-driver", type=int)
     parser.add_argument("--spacing-m", type=float, default=20.0); parser.add_argument("--dry-run", action="store_true"); parser.add_argument("--include-rejected", action="store_true")
+    parser.add_argument("--allow-unregistered", action="store_true",
+                        help="Write columns that are not in the feature registry. Escape hatch for "
+                             "local experiments only; a committed build must never need it (section 46).")
     args = parser.parse_args()
     if args.spacing_m <= 0: parser.error("--spacing-m must be positive")
     raw_laps = discover_laps(args.raw_root, args.year, args.event, args.session, args.drivers, args.laps, args.max_laps_per_driver)
@@ -48,6 +52,12 @@ def main() -> int:
         import pyarrow  # noqa: F401
     except ImportError:
         raise SystemExit("Parquet output requires pandas and pyarrow. Install them with: pip install pandas pyarrow")
+    # Registration is a gate, not a lint: a dataset that writes an unregistered
+    # column is undocumented output, and the registry silently drifting from the
+    # real schema is the failure this check exists to prevent (M31, section 46).
+    if resampled_rows and not args.allow_unregistered:
+        assert_registered(sorted({key for row in resampled_rows for key in row}),
+                          f"telemetry_20m build {args.year} {args.event} {args.session}")
     args.output_root.mkdir(parents=True, exist_ok=True)
     if resampled_rows:
         output_file.parent.mkdir(parents=True, exist_ok=True); pd.DataFrame(resampled_rows).to_parquet(output_file, index=False)
