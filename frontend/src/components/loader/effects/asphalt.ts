@@ -41,15 +41,16 @@ const LIFT = {
   endStop: 0.9,
 } as const;
 
-/** RGB triples of the four palette colours (the only hues allowed on this canvas). */
-const RGB: Record<keyof typeof HAAS, readonly [number, number, number]> = {
+/** The tarmac is painted in these hues only — speckle and lighting, nothing chromatic. */
+type TarmacHue = "white" | "grey" | "black";
+
+const RGB: Record<TarmacHue, readonly [number, number, number]> = {
   white: [239, 239, 239],
   grey: [174, 174, 174],
-  red: [218, 41, 28],
   black: [17, 17, 17],
 };
 
-const rgba = (c: keyof typeof HAAS, a: number): string => `rgba(${RGB[c].join(",")},${a})`;
+const rgba = (c: TarmacHue, a: number): string => `rgba(${RGB[c].join(",")},${a})`;
 
 function makeSpeckleTile(rng: () => number): HTMLCanvasElement | null {
   const size = SPECKLE.tilePx;

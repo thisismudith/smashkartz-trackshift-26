@@ -32,19 +32,42 @@ const WHEELS: ReadonlyArray<{ id: WheelId; style: CSSProperties }> = (
   };
 });
 
-const NUMBER_FONT: CSSProperties = {
-  fontFamily: 'var(--font-display, "Chakra Petch"), Impact, "Arial Narrow", sans-serif',
+/** The logotype: heavy, tightly tracked and slanted, like the HAAS mark on the real car. */
+const LOGO_FONT: CSSProperties = {
+  fontFamily: 'var(--font-display, "Archivo"), Impact, "Arial Narrow", sans-serif',
+  fontWeight: 900,
+  fontStyle: "italic",
+  fontStretch: "112%",
 };
 
 /**
- * Plan-view 2026-style F1 car, nose pointing +x (screen right), drawn strictly in the Haas palette.
+ * Body outline, one symmetric path: tail -> engine cover -> sidepods -> chassis -> nose -> tip,
+ * then mirrored back along the bottom. Half-widths follow the VF-21 plan view: a narrow tail, a
+ * long tapering engine cover, sidepods at their widest just behind the cockpit (half-width 70),
+ * a hard pinch in front of the sidepod inlets, then a slim nose spine out to the wing.
+ */
+const BODY =
+  "M14 93 Q60 88 100 82 Q132 77 150 72 Q180 64 200 56 Q226 44 240 40 Q256 31 272 31 L310 30 " +
+  "Q337 32 341 43 Q347 59 357 70 Q363 78 373 79 L548 92 Q554 100 548 108 L373 121 Q363 122 357 130 " +
+  "Q347 141 341 157 Q337 168 310 170 L272 169 Q256 169 240 160 Q226 156 200 144 Q180 136 150 128 " +
+  "Q132 123 100 118 Q60 112 14 107 Z";
+
+/**
+ * Plan-view Haas-liveried F1 car, nose pointing +x (screen right), drawn in the Haas palette.
+ *
+ * Livery mapping from the VF-21 plan view: white shell, black carbon (floor, wings, suspension,
+ * halo, inlets), HAAS.blue for the rear-deck flash core and the front-wing endplate band, and red
+ * for the flash edging plus the HAAS logotype itself. The car carries NO red outline — on the real
+ * thing the red along the flanks is the oversized wordmark running off the edge of the bodywork,
+ * reproduced here by clipping the logotype to the body outline.
+ *
  * viewBox 0 0 560 200 = 5.6 m x 2.0 m at 100 units/m; rear of car at x=0, centreline y=100,
  * rear axle x=60, front axle x=400 (see WHEEL_VB). Tyres are NOT in the SVG: they are the four
  * absolutely-positioned wheel divs after it, so the runtime can scroll tread and steer the fronts
  * without re-rasterising the body. Server-compatible: no hooks, no client directive.
  */
 export default function HaasCarTop({ className }: { className?: string }) {
-  const { white, grey, red, black } = HAAS;
+  const { white, grey, red, blue, black } = HAAS;
   const box = className ? `${styles.carBox} ${className}` : styles.carBox;
   return (
     <div className={box} data-car>
@@ -62,148 +85,222 @@ export default function HaasCarTop({ className }: { className?: string }) {
           <filter id="hct-glow" x="-100%" y="-100%" width="300%" height="300%">
             <feGaussianBlur stdDeviation="3" />
           </filter>
+          {/* every livery graphic is clipped to the shell, so the wordmark runs off the edge */}
+          <clipPath id="hct-body">
+            <path d={BODY} />
+          </clipPath>
         </defs>
 
-        {/* ground shadow: coarse silhouette (wings, floor, nose, tyre footprints), pre-blurred */}
-        <path
-          d="M0 46H48V60H100L138 8H372V82H518V2H560V198H518V118H372V192H138L100 140H48V154H0ZM24 9H96V47H24ZM24 153H96V191H24ZM364 9H436V37H364ZM364 163H436V191H364Z"
-          fill={black}
-          fillRule="evenodd"
-          opacity="0.55"
-          transform="translate(6 8)"
-          filter="url(#hct-shadow)"
-        />
+        {/* ground shadow: the real silhouette (shell + floor + wings), pre-blurred */}
+        <g fill={black} opacity="0.45" transform="translate(5 7)" filter="url(#hct-shadow)">
+          <path d={BODY} />
+          <path d="M106 60L140 26H350Q358 26 358 34V166Q358 174 350 174H140L106 140Z" />
+          <rect x="0" y="44" width="48" height="112" />
+          <rect x="504" y="2" width="56" height="196" />
+        </g>
 
-        {/* ---- floor: visible outboard of the sidepods, edge outlined ---- */}
+        {/* ---- floor: black carbon, visible outboard of the bodywork between the wheels ---- */}
+        <path d="M106 60L140 26H350Q358 26 358 34V166Q358 174 350 174H140L106 140Z" fill={black} />
         <path
-          d="M104 54L142 10H360Q372 10 372 22V178Q372 190 360 190H142L104 146Z"
-          fill={black}
+          d="M140 27H350Q357 27 357 34M140 173H350Q357 173 357 166"
+          fill="none"
           stroke={grey}
-          strokeWidth="1.5"
+          strokeWidth="1.2"
+          opacity="0.6"
         />
-        {/* floor-edge wings / fences */}
-        <path d="M150 14H200M150 186H200" stroke={grey} strokeWidth="2" />
-        <path d="M348 16H366M348 184H366" stroke={grey} strokeWidth="1" />
-        {/* sidepod undercut shading on the floor */}
+        {/* floor fences */}
+        <g stroke={grey} strokeWidth="1" opacity="0.3">
+          <path d="M160 32H210M168 37H210M300 30V42M312 30V40M324 30V38" />
+          <path d="M160 168H210M168 163H210M300 170V158M312 170V160M324 170V162" />
+        </g>
+
+        {/* ---- rear suspension: wishbone legs + driveshaft to each wheel centre (60, 100±72.5) ---- */}
+        <g stroke={black} strokeWidth="5" strokeLinecap="round">
+          <path d="M54 88L58 30M96 86L64 30M54 112L58 170M96 114L64 170" />
+        </g>
+        <g stroke={grey} strokeWidth="1.4" strokeLinecap="round" opacity="0.7">
+          <path d="M54 88L58 30M96 86L64 30M54 112L58 170M96 114L64 170" />
+        </g>
+        <path d="M68 92L64 32M68 108L64 168" stroke={black} strokeWidth="3.5" />
+
+        {/* ---- front suspension: upper/lower wishbones + pushrod to each wheel centre (400, 100±77.5) ---- */}
+        <g stroke={black} strokeWidth="5" strokeLinecap="round">
+          <path d="M356 74L396 26M394 80L404 26M376 78L399 32M356 126L396 174M394 120L404 174M376 122L399 168" />
+        </g>
+        <g stroke={grey} strokeWidth="1.4" strokeLinecap="round" opacity="0.7">
+          <path d="M356 74L396 26M394 80L404 26M356 126L396 174M394 120L404 174" />
+        </g>
+
+        {/* ---- rear crash structure + rain light ---- */}
+        <path d="M2 95H62V105H2Z" fill={white} />
+        <ellipse cx="6" cy="100" rx="8" ry="6" fill={red} opacity="0.55" filter="url(#hct-glow)" />
+        <rect x="1" y="96" width="7" height="8" rx="1" fill={red} />
+
+        {/* ---- bodywork shell (no outline: the red on the flanks is the wordmark, not a border) ---- */}
+        <path d={BODY} fill={white} />
+
+        {/* ---- livery, all clipped to the shell ---- */}
+        <g clipPath="url(#hct-body)">
+          {/* engine-cover cooling louvres */}
+          <g fill={black} opacity="0.85">
+            <rect x="150" y="84" width="24" height="2.6" rx="1.3" />
+            <rect x="156" y="89" width="24" height="2.6" rx="1.3" />
+            <rect x="150" y="113.4" width="24" height="2.6" rx="1.3" />
+            <rect x="156" y="108.4" width="24" height="2.6" rx="1.3" />
+          </g>
+
+          {/* sidepod inlets: the black intake mouths at the leading edge */}
+          <path d="M336 44 Q346 56 352 70 L344 74 Q338 58 330 48 Z" fill={black} />
+          <path d="M336 156 Q346 144 352 130 L344 126 Q338 142 330 152 Z" fill={black} />
+        </g>
+
+        {/* ---- airbox / roll hoop intake, behind the driver ---- */}
+        <path d="M232 89 Q246 86 252 93 L252 107 Q246 114 232 111 Z" fill={black} />
+        <path d="M236 93 Q246 91 249 95 L249 105 Q246 109 236 107 Z" fill={grey} opacity="0.28" />
+
+        {/*
+          ---- cockpit: survival-cell opening with its padded surround, then the halo.
+          In plan view the halo is a slim loop running from two rear mounts, out around the
+          opening, converging on a single pillar ahead of the driver — not a fat ring.
+        */}
+        {/* coaming around the survival-cell opening */}
         <path
-          d="M156 74Q180 36 250 31L300 30Q332 30 338 46M156 126Q180 164 250 169L300 170Q332 170 338 154"
+          d="M262 84 Q268 79 284 78 L308 79 Q322 82 324 92 L324 108 Q322 118 308 121 L284 122 Q268 121 262 116 Z"
+          fill={black}
+        />
+        <path
+          d="M267 87 Q272 83 285 82 L307 83 Q319 86 320 93 L320 107 Q319 114 307 117 L285 118 Q272 117 267 113 Z"
+          fill="none"
+          stroke={grey}
+          strokeWidth="1.1"
+          opacity="0.55"
+        />
+        {/* headrest padding wrapping the back of the driver's head */}
+        <path
+          d="M276 88 Q270 100 276 112"
           fill="none"
           stroke={grey}
           strokeWidth="7"
-          opacity="0.7"
+          strokeLinecap="round"
+          opacity="0.35"
         />
-
-        {/* ---- rear suspension: wishbone legs + driveshaft to each wheel centre (60, 100±72.5) ---- */}
-        <g stroke={black} strokeWidth="4" strokeLinecap="round">
-          <path d="M56 90L56 30M98 88L64 30M56 110L56 170M98 112L64 170" />
-        </g>
-        <g stroke={grey} strokeWidth="1.5" strokeLinecap="round">
-          <path d="M56 90L56 30M98 88L64 30M56 110L56 170M98 112L64 170" />
-        </g>
-        <path d="M66 90L62 32M66 110L62 168" stroke={black} strokeWidth="3" />
-
-        {/* ---- front suspension: upper/lower wishbones + pushrod to each wheel centre (400, 100±77.5) ---- */}
-        <g stroke={black} strokeWidth="4" strokeLinecap="round">
-          <path d="M352 76L396 26M392 80L404 26M376 80L399 32M352 124L396 174M392 120L404 174M376 120L399 168" />
-        </g>
-        <g stroke={grey} strokeWidth="1.5" strokeLinecap="round">
-          <path d="M352 76L396 26M392 80L404 26M352 124L396 174M392 120L404 174" />
-        </g>
-
-        {/* ---- rear crash structure + rain light (tail pokes out behind the wing) ---- */}
-        <path d="M2 95H62V105H2Z" fill={white} stroke={grey} strokeWidth="1" />
-        <ellipse cx="6" cy="100" rx="8" ry="6" fill={red} opacity="0.55" filter="url(#hct-glow)" />
-        <rect x="1" y="96" width="7" height="8" rx="1" fill={red} />
-        {/* beam wing */}
-        <rect x="46" y="64" width="10" height="72" rx="2" fill={grey} />
-
-        {/* ---- rear wing: endplates, DRS flap (rearmost), red main-plane top surface ---- */}
-        <rect x="0" y="46" width="48" height="6" rx="1.5" fill={white} stroke={grey} strokeWidth="1" />
-        <rect x="0" y="148" width="48" height="6" rx="1.5" fill={white} stroke={grey} strokeWidth="1" />
-        <rect x="2" y="54" width="12" height="92" rx="1" fill={white} stroke={grey} strokeWidth="1" />
-        <rect x="12" y="52" width="32" height="96" rx="1.5" fill={red} />
-        <path d="M43 52V148" stroke={white} strokeWidth="1.5" opacity="0.7" />
-
-        {/* ---- body: engine cover, sidepods, chassis, nose (one symmetric outline) ---- */}
+        {/* helmet from above: dark shell, lit crown, visor edge facing forward (+x) */}
+        <ellipse cx="296" cy="100" rx="9.5" ry="7.5" fill={black} />
+        <ellipse cx="294.5" cy="99" rx="6.6" ry="4.8" fill={grey} opacity="0.45" />
+        <path d="M303 95.5 Q305.5 100 303 104.5" fill="none" stroke={red} strokeWidth="2" strokeLinecap="round" />
+        {/* halo: slim loop + central forward pillar */}
         <path
-          d="M14 94L60 90L110 86L156 74Q180 36 250 31L300 30Q332 30 338 46V62L350 74L372 78L556 92Q561 100 556 108L372 122L350 126L338 138V154Q332 170 300 170L250 169Q180 164 156 126L110 114L60 110L14 106Z"
-          fill={white}
-        />
-        {/* sidepod ramps (light grey wash) outboard of the engine-cover spine */}
-        <path
-          d="M156 74Q180 36 250 31L300 30Q332 30 338 46V74Q300 72 250 76Q200 72 160 78ZM156 126Q180 164 250 169L300 170Q332 170 338 154V126Q300 128 250 124Q200 128 160 122Z"
-          fill={grey}
-          opacity="0.3"
+          d="M256 80 Q286 70 312 74 Q338 80 350 100 Q338 120 312 126 Q286 130 256 120"
+          fill="none"
+          stroke={black}
+          strokeWidth="5.5"
+          strokeLinecap="round"
         />
         <path
-          d="M48 92Q120 84 160 78Q200 72 250 76M48 108Q120 116 160 122Q200 128 250 124"
+          d="M256 79 Q286 69 312 73 Q338 79 350 99"
           fill="none"
           stroke={grey}
-          strokeWidth="1"
+          strokeWidth="1.2"
+          strokeLinecap="round"
+          opacity="0.65"
         />
-        {/* red spine stripe along the engine cover */}
-        <path d="M52 100L244 95V105Z" fill={red} />
-
-        {/* ---- sidepod inlets (dark vertical slots) + red swooshes sweeping rearward-outward ---- */}
-        <rect x="333" y="40" width="7" height="24" rx="2" fill={black} />
-        <rect x="333" y="136" width="7" height="24" rx="2" fill={black} />
-        <path d="M322 70Q276 54 208 42L204 49Q268 63 316 76Z" fill={red} />
-        <path d="M322 130Q276 146 208 158L204 151Q268 137 316 124Z" fill={red} />
+        <path d="M350 100H360" stroke={black} strokeWidth="5" strokeLinecap="round" />
 
         {/* ---- mirrors on stalks ---- */}
-        <path d="M350 58L352 74M350 142L352 126" stroke={black} strokeWidth="1.5" />
-        <rect x="344" y="50" width="12" height="8" rx="2" fill={grey} />
-        <rect x="344" y="142" width="12" height="8" rx="2" fill={grey} />
+        <path d="M344 62L338 74M344 138L338 126" stroke={black} strokeWidth="2" />
+        <rect x="338" y="54" width="13" height="8" rx="2.5" fill={black} />
+        <rect x="338" y="138" width="13" height="8" rx="2.5" fill={black} />
 
-        {/* ---- airbox mouth, roll hoop, cockpit opening ---- */}
-        <rect x="220" y="96" width="8" height="8" rx="1" fill={black} />
-        <ellipse cx="238" cy="100" rx="9" ry="14" fill={black} />
-        <ellipse cx="238" cy="100" rx="9" ry="14" fill="none" stroke={grey} strokeWidth="1" />
-        <ellipse
-          cx="292"
-          cy="100"
-          rx="34"
-          ry="20"
-          fill={black}
-          stroke={grey}
-          strokeWidth="2"
-          strokeOpacity="0.8"
-        />
-        {/* helmet with red visor crescent at the front */}
-        <circle cx="286" cy="100" r="11" fill={white} stroke={black} strokeWidth="1.5" />
-        <path d="M289 90A11 11 0 0 1 289 110A7 7 0 0 0 289 90Z" fill={red} />
-
-        {/* ---- halo ring, grey top highlight, central pillar ---- */}
-        <ellipse cx="290" cy="100" rx="44" ry="30" fill="none" stroke={black} strokeWidth="6" />
-        <ellipse cx="290" cy="99" rx="44" ry="30" fill="none" stroke={grey} strokeWidth="1.5" />
-        <path d="M334 100H354" stroke={black} strokeWidth="5" strokeLinecap="round" />
-        <path d="M334 99H354" stroke={grey} strokeWidth="1" strokeLinecap="round" />
-
-        {/* ---- nose: race number (red tip is drawn after the wing so it sits on top) ---- */}
+        {/*
+          ---- nose markings. Rotated -90 so they run ACROSS the nose, which is how they sit on the
+          real car: painted to be read from the side, so a plan view catches them side-on. Matches
+          the rear-wing logotype, and both now turn with the car instead of facing the viewer.
+        */}
         <text
-          x="472"
-          y="107"
+          x="450"
+          y="100"
           textAnchor="middle"
-          fontSize="20"
-          fontWeight="700"
-          fontStyle="italic"
-          fill={black}
-          style={NUMBER_FONT}
+          dominantBaseline="central"
+          fontSize="22"
+          fill={red}
+          style={LOGO_FONT}
+          transform="rotate(-90 450 100)"
         >
-          31
+          7
         </text>
+        {/*
+          Fixed textLength instead of letterSpacing: the nose narrows quickly here (body half-width
+          ~17 at x=421), so a font-metric-dependent width could crowd the edges. Pinning it to 19
+          guarantees clear padding on both sides regardless of how the font renders.
+        */}
+        <text
+          x="421"
+          y="100"
+          textAnchor="middle"
+          dominantBaseline="central"
+          fontSize="9"
+          textLength="19"
+          lengthAdjust="spacingAndGlyphs"
+          fill={black}
+          style={LOGO_FONT}
+          transform="rotate(-90 421 100)"
+        >
+          HAAS
+        </text>
+        <g fill={grey} opacity="0.45">
+          <rect x="480" y="97" width="14" height="1.8" rx="0.9" />
+          <rect x="480" y="101" width="9" height="1.8" rx="0.9" />
+        </g>
 
-        {/* ---- front wing: endplates, two flaps (red outer tips), mainplane at the very front ---- */}
-        <rect x="512" y="2" width="48" height="6" rx="1.5" fill={white} stroke={grey} strokeWidth="1" />
-        <rect x="512" y="192" width="48" height="6" rx="1.5" fill={white} stroke={grey} strokeWidth="1" />
-        <rect x="518" y="8" width="22" height="184" fill={white} stroke={grey} strokeWidth="1" />
-        <path d="M529 8V192" stroke={grey} strokeWidth="1" />
-        <rect x="518" y="8" width="22" height="34" fill={red} />
-        <rect x="518" y="158" width="22" height="34" fill={red} />
-        <rect x="540" y="8" width="20" height="184" rx="2" fill={white} stroke={grey} strokeWidth="1" />
-        {/* red nose tip over the wing centre section */}
-        <path d="M528 90L556 92Q561 100 556 108L528 110Z" fill={red} />
-        <path d="M528 90V110" stroke={white} strokeWidth="1" />
+        {/*
+          ---- rear wing, drawn after the shell so the body and flash cannot cover it:
+          black endplates + DRS flap, white main plane carrying the red HAAS logotype across the span.
+        */}
+        <rect x="46" y="66" width="9" height="68" rx="2" fill={black} />
+        <path d="M50 66V134" stroke={grey} strokeWidth="1" opacity="0.55" />
+        <rect x="0" y="44" width="48" height="9" rx="1.5" fill={black} />
+        <rect x="0" y="147" width="48" height="9" rx="1.5" fill={black} />
+        <path d="M2 46H46M2 154H46" stroke={grey} strokeWidth="1" opacity="0.45" />
+        <rect x="2" y="53" width="11" height="94" rx="1" fill={black} />
+        <path d="M8 53V147" stroke={grey} strokeWidth="1" opacity="0.5" />
+        <rect x="13" y="53" width="31" height="94" rx="1.5" fill={white} />
+        <text
+          x="29"
+          y="100"
+          textAnchor="middle"
+          dominantBaseline="central"
+          fontSize="18"
+          fill={red}
+          style={LOGO_FONT}
+          transform="rotate(-90 29 100)"
+        >
+          HAAS
+        </text>
+        <path d="M20 88V78M20 112V122" stroke={black} strokeWidth="3" />
+
+        {/*
+          ---- front wing: swept multi-element planform. Carbon elements inboard, white endplates
+          outboard carrying the angled red-over-blue flash, and the white centre the nose plugs into.
+        */}
+        <path
+          d="M504 12 Q504 2 516 2 L546 2 Q558 2 558 14 L558 186 Q558 198 546 198 L516 198 Q504 198 504 188 Z"
+          fill={black}
+        />
+        {/* chordwise element separators across the span */}
+        <g stroke={grey} strokeWidth="1" opacity="0.35">
+          <path d="M518 8V192M532 8V192M545 8V192" />
+        </g>
+        {/* endplates, swept so the outer ends lead the centre */}
+        <path d="M504 12 Q504 2 516 2 L546 2 Q558 2 558 14 L558 34 L504 41 Z" fill={white} />
+        <path d="M504 188 Q504 198 516 198 L546 198 Q558 198 558 186 L558 166 L504 159 Z" fill={white} />
+        <path d="M504 41 L558 34 L558 25 L504 31 Z" fill={red} />
+        <path d="M504 31 L558 25 L558 16 L504 21 Z" fill={blue} />
+        <path d="M504 159 L558 166 L558 175 L504 169 Z" fill={red} />
+        <path d="M504 169 L558 175 L558 184 L504 179 Z" fill={blue} />
+        {/* white centre section the nose plugs into, then the red tip */}
+        <path d="M504 90H558V110H504Z" fill={white} />
+        <path d="M504 90H558M504 110H558" stroke={grey} strokeWidth="1" opacity="0.4" />
+        <path d="M534 95L550 97Q553 100 550 103L534 105Z" fill={red} />
       </svg>
 
       {WHEELS.map((w) => (

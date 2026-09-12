@@ -219,9 +219,12 @@ export const SMOKE = {
   slipPowerRefW: 40_000,
   lifeMinS: 1.2,
   lifeMaxS: 1.9,
-  rearwardVelFrac: 0.05, // of v_sx — smoke should envelop the tyre, not fly a metre behind it
-  lateralOutwardMps: 1.0,
-  isotropicSpreadFrac: 0.9,
+  // Of v_sx. A spinning tyre throws its smoke REARWARD off the contact patch, so this has to
+  // dominate the lateral/random terms — otherwise puffs scatter sideways off the top of the tyre
+  // instead of trailing behind it.
+  rearwardVelFrac: 0.18,
+  lateralOutwardMps: 0.5,
+  isotropicSpreadFrac: 0.35,
   dragTauS: 0.25,
   radius0M: 0.1,
   radiusGrowthM: 0.6, // r = r0 + growth*sqrt(age/life)

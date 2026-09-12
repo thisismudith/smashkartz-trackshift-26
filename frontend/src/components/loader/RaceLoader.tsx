@@ -52,6 +52,11 @@ export default function RaceLoader() {
     const done = () => setMounted(false);
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") done();
+    };
+    window.addEventListener("keydown", onKeyDown);
+
     let dispose: () => void;
     let failSafe: number;
 
@@ -101,6 +106,7 @@ export default function RaceLoader() {
     return () => {
       dispose();
       window.clearTimeout(failSafe);
+      window.removeEventListener("keydown", onKeyDown);
     };
   }, [mounted]);
 

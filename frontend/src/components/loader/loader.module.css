@@ -130,14 +130,14 @@
 }
 
 /* lateral line just ahead of the nose (x = +3.74 … +3.86 m; the nose tip is at +3.58 m).
-   Real F1 grid-box paint is yellow, not white — the one deliberate exception to the strict
-   four-colour palette, reserved for this single track marking. */
+   Real F1 grid-box paint is yellow, not white: HAAS.yellow / --haas-yellow. */
 .gridFront {
   left: calc(50% + 3.74 * var(--m));
   top: calc(50% - 1.3 * var(--m));
   width: calc(0.12 * var(--m));
   height: calc(2.6 * var(--m));
-  background: rgba(255, 214, 10, 0.72);
+  background: rgba(255, 214, 10, 0.72); /* fallback for no color-mix */
+  background: color-mix(in srgb, var(--haas-yellow) 72%, transparent);
   box-shadow: 0 0 calc(0.035 * var(--m)) rgba(255, 214, 10, 0.3);
 }
 

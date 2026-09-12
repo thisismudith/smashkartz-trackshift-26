@@ -2,6 +2,8 @@
   --haas-white: #efefef;
   --haas-grey: #aeaeae;
   --haas-red: #da291c;
+  --haas-blue: #1b40a6;
+  --haas-yellow: #ffd60a;
   --haas-black: #111111;
 
   /* one family for display and body (see layout.tsx) */

@@ -1,0 +1,177 @@
+.stage {
+  position: relative;
+  width: 100%;
+  height: 100dvh;
+  background: var(--haas-black);
+  overflow: hidden;
+}
+
+.canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.hud {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 1rem;
+  pointer-events: none;
+}
+
+.hud > * {
+  pointer-events: auto;
+}
+
+.provenance {
+  font-size: 0.75rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--haas-grey);
+}
+
+.error {
+  color: var(--haas-red);
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.controls button {
+  background: rgba(17, 17, 17, 0.75);
+  border: 1px solid var(--haas-grey);
+  color: var(--haas-white);
+  padding: 0.3rem 0.7rem;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+}
+
+.controls button:hover {
+  border-color: var(--haas-red);
+}
+
+.controls label {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.75rem;
+  color: var(--haas-grey);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.controls input,
+.controls select {
+  background: rgba(17, 17, 17, 0.9);
+  border: 1px solid var(--haas-grey);
+  color: var(--haas-white);
+  padding: 0.25rem 0.4rem;
+  font-size: 0.8rem;
+  width: 5rem;
+}
+
+.controls select {
+  width: auto;
+}
+
+.controls button[data-active="true"] {
+  background: var(--haas-red);
+  border-color: var(--haas-red);
+}
+
+.row {
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-start;
+}
+
+.side {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.leaderboard {
+  align-self: flex-start;
+  background: rgba(17, 17, 17, 0.75);
+  border: 1px solid var(--haas-grey);
+  border-collapse: collapse;
+  font-size: 0.8rem;
+  max-height: 60vh;
+  overflow-y: auto;
+  display: block;
+}
+
+.leaderboard tr {
+  cursor: pointer;
+}
+
+.leaderboard tr:hover td {
+  background: rgba(174, 174, 174, 0.12);
+}
+
+.leaderboard tr[data-selected="true"] td {
+  background: rgba(218, 41, 28, 0.25);
+}
+
+.leaderboard td {
+  padding: 0.15rem 0.5rem;
+  color: var(--haas-white);
+  border-bottom: 1px solid rgba(174, 174, 174, 0.2);
+  white-space: nowrap;
+}
+
+.gpuBadge {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  align-self: flex-start;
+  background: rgba(17, 17, 17, 0.75);
+  border: 1px solid var(--haas-grey);
+  padding: 0.25rem 0.6rem;
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--haas-grey);
+}
+
+.gpuDot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--haas-white);
+  flex: none;
+}
+
+.gpuDot[data-software="true"] {
+  background: var(--haas-red);
+}
+
+.gpuName {
+  color: var(--haas-white);
+  max-width: 16rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gpuFps {
+  margin-left: auto;
+  color: var(--haas-white);
+}
+
+.gpuFps[data-low="true"] {
+  color: var(--haas-red);
+}

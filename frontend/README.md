@@ -15,15 +15,19 @@ npm test         # vitest: physics + effects unit tests (node, no DOM)
 
 ## Palette (strict)
 
-| Token          | Hex       | Use                                          |
-| -------------- | --------- | -------------------------------------------- |
-| `--haas-white` | `#EFEFEF` | body text, car body, grid paint, smoke core   |
-| `--haas-grey`  | `#AEAEAE` | muted text, floor edges, smoke, tarmac lift   |
-| `--haas-red`   | `#DA291C` | start lights, wing tips, swooshes, tyre heat  |
-| `--haas-black` | `#111111` | background, tyres, rubber marks               |
+| Token           | Hex       | Use                                              |
+| --------------- | --------- | ------------------------------------------------ |
+| `--haas-white`  | `#EFEFEF` | body text, car shell, smoke core                  |
+| `--haas-grey`   | `#AEAEAE` | muted text, floor edges, smoke, tarmac lift       |
+| `--haas-red`    | `#DA291C` | start lights, HAAS logotype, race number, tyre heat |
+| `--haas-blue`   | `#1B40A6` | VF-21 front-wing endplate flash                   |
+| `--haas-yellow` | `#FFD60A` | painted grid-slot line (FIA track marking)        |
+| `--haas-black`  | `#111111` | background, tyres, carbon, rubber marks           |
 
-Source of truth: `src/lib/palette.ts` and the CSS variables in `src/app/globals.css`. Canvas layers
-only ever use alpha blends of these four (source-over, never additive) — the harness asserts it.
+Source of truth: `src/lib/palette.ts` and the CSS variables in `src/app/globals.css`. The two canvas
+layers only ever use alpha blends of white/grey/black (source-over, never additive) — the harness
+asserts the tarmac stays on the grey axis. Blue and yellow are livery/track colours, used in the DOM
+and SVG only.
 
 ## Type
 
@@ -37,11 +41,11 @@ This is the page-load intro only — **not** the race simulator. `src/components
 
 | File | Role |
 | --- | --- |
-| `RaceLoader.tsx` | Mounted once in `app/layout.tsx` → plays on every full load, never on client navigation. SSR frame is the static pose (car on the grid, gantry dark); everything else starts in the effect. Self-unmounts on the overlay fade (fail-safe 4.4 s). |
+| `RaceLoader.tsx` | Mounted once in `app/layout.tsx` → plays on every full load, never on client navigation. SSR frame is the static pose (car on the grid, gantry dark); everything else starts in the effect. Self-unmounts on the overlay fade (fail-safe 7 s). |
 | `runtime.ts` | The only file that touches both a `dt` and the DOM: start-light clock, rev presentation signal, fixed-step accumulator (≤1/240 s, sim time = 1.1× wall), car transform + tread offsets, letter ignition, camera and end-state classes. |
 | `physics/` | Pure, unit-tested launch model: Pacejka longitudinal tyre, implicit-stiffness wheel step, driver slip-target throttle with a clutch-dump window, viscous diff, weight transfer, bicycle-model yaw with tyre relaxation length + combined-slip collapse and a lagged counter-steer (that is where the fishtail comes from), rear tread temperature. `constants.ts` is the single source of numbers. |
 | `effects/` | Struct-of-arrays smoke pool (pre-rendered sprites, oldest-recycled), two-regime rubber deposition (`depositAlpha`), asphalt speckle + lighting. |
-| `HaasCarTop.tsx` | Top-view SVG (560×200 viewBox, 100 units/m, nose +x). Tyres are sibling `div`s (`[data-wheel]`) so tread can animate without re-rasterising the SVG. |
+| `HaasCarTop.tsx` | Top-view Haas VF-21 SVG (560×200 viewBox, 100 units/m, nose +x): white shell, carbon floor/wings/suspension, red logotype and race number, blue endplate flash. Tyres are sibling `div`s (`[data-wheel]`) so tread can animate without re-rasterising the SVG. |
 
 Layer stack (bottom → top): marks canvas → grid paint → wordmark + tagline → car → smoke canvas →
 start-light gantry. The name literally emerges through the launch smoke.
@@ -51,17 +55,18 @@ start-light gantry. The name literally emerges through the launch smoke.
 ```
 0.00  car still on the grid, gantry dark, grid L painted
 0.35  ●○○○○
-0.50  ●●○○○   engine spools: rev signal ramps, exhaust glow in
-0.67  ●●●○○   rears start to turn, tread blurs, tyres heat
-0.82  ●●●●○   first smoke wisps, shudder escalating
-0.99  ●●●●●   FULL REV — max shudder + 11 Hz limiter flutter
-0.99–1.33     all-red HOLD
-1.33  ○○○○○   LIGHTS OUT → clutch dump: 33 m/s slip, thick smoke, long stripes
+0.77  ●●○○○   engine spools: rev signal ramps, exhaust glow in
+1.18  ●●●○○   rears start to turn, tread blurs, tyres heat
+1.59  ●●●●○   first smoke wisps, shudder escalating
+1.89  ●●●●●   FULL REV — max shudder + 11 Hz limiter flutter
+1.89–2.73     all-red HOLD — length is drawn fresh from the RNG every load (0.45–1.0 s),
+              the way the FIA varies it so nobody can anticipate lights-out
+2.73  ○○○○○   LIGHTS OUT → clutch dump: 33 m/s slip, thick smoke, long stripes
               gantry + grid fade (0.45 s) — you leave the grid behind
-1.52–2.57     letters ignite as the rear axle passes them
-2.57          rear axle past 85 % width → marks dim to 60 %, smoke clears
-3.04–3.55     tagline at full brightness (a real hold, not a flash)
-3.55–3.97     overlay fade → unmount
+3.05–4.11     letters ignite as the rear axle passes them
+4.11          rear axle past 85 % width → marks dim to 60 %, smoke clears
+4.61–5.88     tagline at full brightness (a real ~1.3 s hold, not a flash)
+5.88–6.29     overlay fade → unmount
 ```
 
 The **grid slot** is an open L — a lateral line just ahead of the nose plus one longitudinal line
