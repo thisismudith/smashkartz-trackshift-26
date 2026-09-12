@@ -5,3 +5,8 @@
 # Dependency manifests must stay UTF-8 text with LF, or PowerShell redirection
 # writes UTF-16 and git stores them as binary with no reviewable diff.
 requirements*.txt text eol=lf
+
+# PowerShell scripts: keep LF in the repo so core.autocrlf does not leave them
+# permanently "modified", which blocks rebase with "you have unstaged changes".
+# They carry a UTF-8 BOM, which Windows PowerShell 5.1 needs to parse them.
+*.ps1 text eol=lf

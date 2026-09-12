@@ -95,6 +95,22 @@ class Progress:
         self._last_draw = now
         self._draw()
 
+    def heartbeat(self) -> None:
+        """Redraw without advancing, so a long gap between ticks still looks alive.
+
+        Needed when work arrives in a few large chunks rather than many small
+        ones: the lake build ticks once per finished session, so a five-session
+        stage would otherwise print nothing for a minute and then everything at
+        once, which is indistinguishable from a hang.
+        """
+        if not self.enabled:
+            return
+        now = time.monotonic()
+        if now - self._last_draw < self.min_interval:
+            return
+        self._last_draw = now
+        self._draw()
+
     def close(self) -> None:
         """Clear the line and print a one-line summary."""
         if not self.enabled:
@@ -128,14 +144,14 @@ class Progress:
         rate = self.done / elapsed if elapsed > 0 else 0.0
         label = self.label[:LABEL_WIDTH].ljust(LABEL_WIDTH)
         if not self.total:
-            return f"{self.done} items  {rate:.0f}/s  {label}"
+            return f"{self.done} items  {format_duration(elapsed)} elapsed  {label}"
         pct = 100.0 * self.done / self.total
         filled = int(BAR_WIDTH * self.done / self.total)
         bar = "#" * filled + "-" * (BAR_WIDTH - filled)
-        eta = format_duration(self.eta_seconds())
+        eta = format_duration(self.eta_seconds()) if self.done else "--"
         return (
             f"[{bar}] {pct:5.1f}%  {self.done}/{self.total}  "
-            f"{rate:.0f}/s  ETA {eta}  {label}"
+            f"{format_duration(elapsed)} elapsed  ETA {eta}  {label}"
         )
 
     def _draw(self) -> None:

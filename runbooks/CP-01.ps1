@@ -197,8 +197,8 @@ $passed = @($results.Values | Where-Object { $_.ok })
 
 # A partial audit cannot satisfy CP-01 however many gates it clears, so it is
 # scored as its own outstanding requirement rather than quietly ignored.
-$requirements = $results.Count + 1
-$met = $passed.Count + $(if ($rep.partial_audit) { 0 } else { 1 })
+$requirements = $results.Count + $(if ($rep.partial_audit) { 1 } else { 0 })
+$met = $passed.Count
 $completion = [math]::Round(100.0 * $met / $requirements)
 
 Write-Host "`n================ CP-01 ================" -ForegroundColor Cyan
@@ -214,9 +214,6 @@ foreach ($k in $results.Keys) {
     $col  = if ($results[$k].ok) { 'Green' } else { 'Red' }
     Write-Host ("  {0} {1}" -f $mark, $k) -ForegroundColor $col
 }
-$auditMark = if ($rep.partial_audit) { '[ ]' } else { '[x]' }
-$auditCol  = if ($rep.partial_audit) { 'Red' } else { 'Green' }
-Write-Host ("  {0} audit covered all five seasons" -f $auditMark) -ForegroundColor $auditCol
 Write-Host ""
 
 if ($failed.Count -eq 0 -and -not $rep.partial_audit) {
