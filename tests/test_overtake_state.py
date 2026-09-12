@@ -173,3 +173,45 @@ def test_numeric_race_control_time_is_already_session_relative():
     messages, alignment = builder.align_race_control_messages(_rows(), [{"kind": "enabled", "time": 11.0, "lap": 2}])
     assert messages[0]["session_time_s"] == 11.0
     assert alignment["method"] == "unavailable"
+
+def test_unalignable_race_control_is_unknown_not_disabled():
+    """The Barcelona/Hungary 2026 regression.
+
+    Both read OVERTAKE ENABLED from lap ~2 to the flag, yet 573,849 rows came
+    out DISABLED because no message could be placed on the session clock and the
+    loop that applies ENABLED never advanced. DISABLED is a positive
+    OBSERVED_RCM claim; "we could not tell" must not be written as one.
+    """
+    builder = _builder_module()
+    unalignable = [
+        {"kind": "enabled", "session_time_s": None},
+        {"kind": "disabled", "session_time_s": None},
+    ]
+    out, info = builder.apply_2026(_rows(), rules(tier="RULE_FIA"), unalignable)
+
+    assert info["race_control_known"] is False
+    assert info["race_control_messages"] == 2
+    assert info["race_control_messages_aligned"] == 0
+    assert info["disabled_rows"] == 0, "an unalignable session must not be called DISABLED"
+    assert info["race_control_undetermined_rows"] == len(out)
+
+    assert out["overtake_state"].isna().all()
+    assert not out["overtake_eligible"].fillna(False).any(), (
+        "nothing downstream may read an undetermined session as eligible"
+    )
+    reasons = out["overtake_unavailable_reason"].dropna().unique().tolist()
+    assert len(reasons) == 1 and "undetermined" in reasons[0]
+
+
+def test_one_alignable_message_still_drives_normal_behaviour():
+    """The fix must not disarm race control whenever a single message is ragged."""
+    builder = _builder_module()
+    mixed = [
+        {"kind": "enabled", "session_time_s": 0.0},
+        {"kind": "disabled", "session_time_s": None},
+    ]
+    out, info = builder.apply_2026(_rows(), rules(tier="RULE_FIA"), mixed)
+    assert info["race_control_known"] is True
+    assert info["race_control_undetermined_rows"] == 0
+    assert out["overtake_state"].tolist() == [ARMED, ACTIVE]
+

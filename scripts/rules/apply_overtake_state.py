@@ -219,8 +219,25 @@ def apply_2026(frame, rules: Mapping[str, Any], control_messages: list[dict[str,
         "supplies Activation/zone-end proxies only; no authoritative historical "
         "Detection Line is configured"
     )
+    # Race control can only be applied where a message actually lands on the
+    # session clock. With none aligned, `disabled` below would stay True for
+    # every row and the session would be written out as DISABLED end to end --
+    # a positive OBSERVED_RCM claim that race control withdrew Overtake, which
+    # is a different thing from "we could not tell". Barcelona and Hungary 2026
+    # both read OVERTAKE ENABLED from lap ~2 to the flag, and both came out
+    # 100% DISABLED before this check existed.
+    aligned_messages = [m for m in control_messages if m.get("session_time_s") is not None]
+    race_control_known = bool(aligned_messages)
+    undetermined_reason = (
+        f"race-control state undetermined: {len(control_messages)} Overtake message(s) "
+        "present but none could be aligned to session time, so no ENABLED message "
+        "can be applied. Recorded as unknown rather than DISABLED, which would "
+        "assert a withdrawal the message feed does not support."
+    )
+
     unavailable_line_rows = 0
     disabled_rows = 0
+    undetermined_rows = 0
 
     for _, group in frame.groupby(["driver"], sort=False):
         group = group.sort_values(["lap", "distance_m"], kind="stable")
@@ -251,7 +268,13 @@ def apply_2026(frame, rules: Mapping[str, Any], control_messages: list[dict[str,
                 "previous_position_m": previous_position,
                 "previous_gap_s": previous_gap,
             }
-            if disabled or line_available:
+            if not race_control_known:
+                # Fail closed on the *action* (no state, so nothing downstream
+                # may treat this as eligible) without failing dishonest on the
+                # *label*.
+                undetermined_rows += 1
+                result.at[index, "overtake_unavailable_reason"] = undetermined_reason
+            elif disabled or line_available:
                 state = step(state, current_position, current_gap, control, rules)
                 result.at[index, "overtake_state"] = state
                 result.at[index, "overtake_eligible"] = eligible(state)
@@ -269,6 +292,10 @@ def apply_2026(frame, rules: Mapping[str, Any], control_messages: list[dict[str,
         "line_available": line_available,
         "unavailable_line_rows": unavailable_line_rows,
         "disabled_rows": disabled_rows,
+        "race_control_undetermined_rows": undetermined_rows,
+        "race_control_known": race_control_known,
+        "race_control_messages": len(control_messages),
+        "race_control_messages_aligned": len(aligned_messages),
     }
 
 
