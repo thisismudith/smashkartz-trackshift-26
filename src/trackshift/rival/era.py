@@ -32,6 +32,21 @@ def _metrics(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     return {"n": len(rows), "mean_log_likelihood": None, "mean_nll": None, "stability": None, "calibration": "UNAVAILABLE: no real tactical-state labels", "rule_configuration_versions": sorted({str(row.get("rule_configuration_version")) for row in rows if row.get("rule_configuration_version") is not None})}
 
 
+def _missing_predictive_evidence(metrics: Mapping[str, Mapping[str, Any]]) -> bool:
+    """Return true until every strategy has real held-out evidence.
+
+    Historical rows alone do not constitute a regulation-era comparison.  The
+    development harness currently leaves likelihood and stability uncomputed;
+    reporting ``COMPLETE`` in that state would allow a checkpoint to be ticked
+    without satisfying its written gates.
+    """
+    return any(
+        strategy_metrics.get("mean_nll") is None
+        or strategy_metrics.get("stability") is None
+        for strategy_metrics in metrics.values()
+    )
+
+
 def evaluate_era_strategies(
     rows: Iterable[Mapping[str, Any]],
     *,
@@ -59,6 +74,8 @@ def evaluate_era_strategies(
     if not historical:
         blocked_reason = blocked_reason or "historical M08 materialisation for 2022-2025 is unavailable"
     metrics = {strategy: _metrics(current if strategy == "2026_only" else [*current, *historical]) for strategy in STRATEGIES}
+    if not blocked_reason and _missing_predictive_evidence(metrics):
+        blocked_reason = "held-out predictive likelihood and stability evidence is not materialised by the era harness"
     return {
         "schema_version": ERA_SCHEMA_VERSION,
         "split_version": split_version,

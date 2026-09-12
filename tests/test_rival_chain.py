@@ -37,3 +37,15 @@ def test_era_harness_excludes_british_training_and_keeps_2026_only_without_evide
     try: evaluate_era_strategies([{"year":2026,"event":"British Grand Prix","training":True}],split_version="c9",rule_configuration_version="r")
     except ValueError: pass
     else: raise AssertionError("British GP training accepted")
+
+
+def test_era_harness_does_not_claim_complete_without_predictive_evidence():
+    report = evaluate_era_strategies(
+        [{"year": 2026, "event": "Australian Grand Prix"}],
+        historical_rows=[{"year": 2022, "event": "Australian Grand Prix"}],
+        split_version="c9",
+        rule_configuration_version="rules-v1",
+        materialisation={"status": "READY"},
+    )
+    assert report["status"] == "BLOCKED"
+    assert "predictive likelihood" in report["reason"]
