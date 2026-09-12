@@ -51,7 +51,7 @@ Each checkpoint has the same shape:
 | CP | Item | IDs | Status |
 |---|---|---|---|
 | 00 | Environment and dependencies | — | ✅ |
-| 01 | Local data audit | §51, §63 | ☐ |
+| 01 | Local data audit | §51, §63 | ✅ |
 | 02 | Registries scaffold | M31 | ✅ |
 | 03 | Rule config skeleton + **speed-dependent power envelope**, all tracks | M18 | ☐ |
 | 04 | Build the 20 m lake | Phase 2 | ☐ |
@@ -306,6 +306,30 @@ checkpoint listed four names that do not exist (`field_inventory.csv`,
 ### Deliverables
 
 `artifacts/schema_audit/*`, `scripts/data/inventory.py`, `src/trackshift/data/guards.py`, `tests/test_guards.py`.
+
+### ✅ Completed
+
+`.unbooks\CP-01.ps1 -SkipAudit` reports **8 of 8 requirements met**. Full mirror audited: five seasons, `partial_audit: false`, **177,288 lap files**, **zero malformed**. The lap total cross-checks exactly against the download manifests and the inventory.
+
+Audit runtime was **1h30m** at 26 laps/s for 2022–2025 — slower than the 81/s measured on a warm subset, so budget ~90 minutes rather than 40 for a cold full run.
+
+`distance_monotonic` by session type, all above the provisional floors:
+
+| session | monotonic | rejected |
+|---|---|---|
+| Race | 95.05% | 6,375 |
+| Sprint | 93.97% | — |
+| Sprint Shootout | 83.17% | — |
+| Practice 1 | 83.51% | 1,874 |
+| Sprint Qualifying | 82.80% | — |
+| Qualifying | **76.09%** | 9,014 |
+
+**Qualifying loses nearly a quarter of its laps**, because every flying lap is bracketed by an out-lap and an in-lap. That is correct behaviour, not a defect, but it means any qualifying-derived feature has materially less data than the raw lap count suggests — relevant at CP-13.
+
+Two defects found and fixed while closing this checkpoint:
+
+- The audit reported **11 malformed files** (2023 Qatar Sprint Shootout lap 2). They are not malformed: the JSON parses and the first two `distance` samples are simply missing, which the source writes as the string `"None"`. `audit_tel` compared `b >= a` filtering only on `is not None`, so the sentinel reached the comparison and raised `TypeError`. `validation.py` already handled this correctly, so the lake was never affected. Now coerced through `numeric()`, with `distance_nonnumeric_count` recorded per lap.
+- `--merge` was added so the remaining seasons could be audited without discarding a finished one. The audit rewrites its whole output directory, so auditing 2022–2025 after 2026 would have destroyed 34,336 already-audited laps and a 37 MB CSV.
 
 ---
 
