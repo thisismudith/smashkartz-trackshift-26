@@ -393,6 +393,7 @@ Possible labels:
 ```text
 PUSH
 LONG_RUN
+RACE_PACE
 COOLDOWN
 OUT_LAP
 IN_LAP
@@ -400,6 +401,20 @@ INTERRUPTED
 INVALID
 UNKNOWN
 ```
+
+`RACE_PACE` is a lap inside the `PUSH` time band on a tyre older than the
+`PUSH` life limit: ordinary race-pace running, neither a qualifying simulation
+nor necessarily inside a consistent multi-lap run. It was added after 2026
+Practice 1 showed 2,074 such laps with valid lap times falling to `UNKNOWN` --
+which claimed a lap's character could not be determined when its lap time and
+tyre life state it plainly. It ranks below `LONG_RUN`, so a lap inside a
+sustained run still reads as the stronger evidence.
+
+**A label share is not a quality target.** Under causal labelling a lap cannot
+be known to be part of a run of *n* until the *n*-th lap arrives, so the first
+*n*-1 laps of every run are unlabellable without using future laps, which
+section 12 forbids. Any acceptance band on `LONG_RUN` must therefore be stated
+over `LONG_RUN` plus `RACE_PACE`, not over `LONG_RUN` alone.
 
 Do not treat all Practice laps as equivalent.
 

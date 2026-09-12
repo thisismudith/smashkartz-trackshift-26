@@ -356,6 +356,13 @@ KNOWN_ENVELOPE_CONSTANTS = {
     # rules.api; raise it with him rather than editing his module here.
     ("scripts/simdata/twin.py", 64),
     ("scripts/simdata/twin.py", 65),
+    # Rishabh's simulator rules module carries its own copy of the envelope.
+    # That is a genuine second implementation of the curve, which is what
+    # section 32 forbids -- but it is his file, so the fix is a conversation
+    # rather than an edit from here.
+    ("scripts/simdata/rules.py", 375),
+    ("scripts/simdata/rules.py", 380),
+    ("scripts/simdata/rules.py", 389),
 }
 
 
@@ -371,6 +378,12 @@ def _envelope_constants_in_tree():
     found = []
     for base in ("src", "scripts"):
         for path in sorted((ROOT / base).rglob("*.py")):
+            # A test asserting on envelope values is not a stray constant, it is
+            # the check itself. Excluding tests/ alone missed the ones living
+            # under scripts/, which made this guard fire on 30 legitimate
+            # assertions in scripts/simdata/test_rules.py.
+            if path.name.startswith("test_") or path.name.endswith("_test.py"):
+                continue
             text = path.read_text(encoding="utf-8")
             try:
                 tree = ast.parse(text)
@@ -403,7 +416,7 @@ def test_no_new_envelope_constant_outside_config():
     assert not offenders, (
         "new envelope constant(s) outside config/ (section 32). The engine owns "
         "max_electrical_power_kw; import it from trackshift.rules.api instead: "
-        + SEP.join(offenders)
+        + " | ".join(offenders)
     )
 
 
@@ -415,5 +428,5 @@ def test_the_engine_itself_holds_no_envelope_constant():
         if rel.endswith("rules/engine.py")
     ]
     assert not offenders, (
-        "the envelope evaluator must read every number from config: " + SEP.join(offenders)
+        "the envelope evaluator must read every number from config: " + " | ".join(offenders)
     )

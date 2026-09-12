@@ -4,8 +4,8 @@
 # qualification window contain only the current and earlier laps for the same
 # driver/session.  This makes the artifact safe for subsequent calibration work
 # and deliberately forbids retrospective relabelling from future tyre behaviour.
-schema_version: m01_lap_classification_config_v2
-classifier_version: m01_practice_lap_rules_v2
+schema_version: m01_lap_classification_config_v3
+classifier_version: m01_practice_lap_rules_v3
 scope:
   years: [2026]
   sessions: [Practice 1]
@@ -27,6 +27,10 @@ precedence:
   - INTERRUPTED
   - PUSH
   - LONG_RUN
+  # RACE_PACE sits below LONG_RUN on purpose: a lap inside a sustained
+  # consistent run is more useful to calibration than the same lap described
+  # only as race pace, so the stronger evidence wins.
+  - RACE_PACE
   - COOLDOWN
   - UNKNOWN
 long_run:

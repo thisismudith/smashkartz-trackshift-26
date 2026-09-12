@@ -27,3 +27,14 @@ venv/
 # aids only (never claimable). Currently partial; regenerate with:
 #   python scripts/data/derive_drs_zones.py --all
 artifacts/drs_zones/
+
+# Fitted model outputs and generated validation reports. Each training run writes
+# a fresh timestamped directory, so this tree grows with every iteration and none
+# of it is a source of truth. Regenerate with:
+#   python scripts/train/calibrate_physics.py --year 2026
+#   python scripts/train/train_segment_time.py --year 2026
+artifacts/models/
+artifacts/validation/
+
+# Raw-mirror download log. Machine-specific paths; rewritten by the fetch.
+/download.log
