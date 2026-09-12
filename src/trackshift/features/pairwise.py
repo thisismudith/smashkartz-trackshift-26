@@ -5,10 +5,10 @@ battle segment.  It reads the contemporaneous C1 segment for each car and
 only the already-emitted rows of *that same battle* for trailing estimates.
 It never reads a battle summary, pass result, episode end, or later segment.
 
-C2 baselines and C5 energy/fuel estimates are deliberately represented as
-unavailable Quantities until their public contracts are materialised.  C2 is
-joined only from its public artifact and only against a causal current value;
-C5 values are not approximated from telemetry in this module.
+C2 baselines are consumed from the public artifact and joined only against a
+previously completed causal segment. C5 energy/fuel estimates remain
+represented as unavailable Quantities until their public contract is
+materialised; they are not approximated from telemetry in this module.
 """
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ __all__ = [
     "build_pairwise_features",
 ]
 
-PAIRWISE_FEATURE_SCHEMA_VERSION = "m06_pairwise_segment_features_v2"
+PAIRWISE_FEATURE_SCHEMA_VERSION = "m06_pairwise_segment_features_v3"
 TRAILING_WINDOW_SEGMENTS = 3
 
 # This compact schema is also written into the producer manifest.  It is
@@ -51,6 +51,10 @@ PAIRWISE_FEATURE_SCHEMA: dict[str, dict[str, Any]] = {
                                                 "definition": "Current plus at most two preceding same-battle distance gaps."},
     "gap_rate_ahead_trailing_mean_3_s_per_s": {"unit": "s/s", "provenance": "DERIVED", "live_safe": True,
                                                   "definition": "Current plus at most two preceding same-battle time-gap rates."},
+    "previous_completed_segment_time_residual_s": {"unit": "s", "provenance": "DERIVED", "live_safe": True,
+                                                       "definition": "Attacker-minus-defender C2 segment-time residual from each car's most recent completed prior segment in the same continuous normal-race context."},
+    "baseline_residual_delta_s": {"unit": "s", "provenance": "DERIVED", "live_safe": True,
+                                    "definition": "Backward-compatible alias of previous_completed_segment_time_residual_s; never a current-segment pace value."},
 }
 
 
@@ -160,9 +164,8 @@ def _unavailable_quantities(
         ),
     }
     if baseline_reason is not None:
-        unavailable["baseline_residual_delta_s"] = _quantity(
-            None, "DERIVED", "s", baseline_reason
-        )
+        for name in ("previous_completed_segment_time_residual_s", "baseline_residual_delta_s"):
+            unavailable[name] = _quantity(None, "DERIVED", "s", baseline_reason)
     if not braking_available:
         unavailable["braking_intensity_delta"] = _quantity(
             None, "DERIVED", "ratio", "C1 has no entry-aligned braking intensity; brake_fraction_offline is OFFLINE_ONLY"
@@ -207,48 +210,177 @@ def _value_or_none(row: Mapping[str, Any] | None, name: str) -> float | None:
     return _number(row.get(name)) if row is not None else None
 
 
-def _baseline_key(row: Mapping[str, Any], driver: Any) -> tuple[Any, ...] | None:
+def _baseline_key(row: Mapping[str, Any], level: str, identity: Any = None) -> tuple[Any, ...] | None:
     circuit = row.get("circuit")
     if circuit is None:
         return None
-    try:
-        year_group = assign_year_group(row.get("year"))
-    except ValueError:
-        return None
-    return (circuit, year_group, row.get("segment_id"), driver)
+    year_group = row.get("year_group")
+    if year_group is None:
+        try:
+            year_group = assign_year_group(row.get("year"))
+        except ValueError:
+            return None
+    year_group = str(year_group)
+    base = (circuit, year_group, row.get("segment_id"))
+    if level in {"driver", "team"}:
+        if identity is None:
+            return None
+        return base + (identity,)
+    return base
 
 
-def _causal_segment_time_s(row: Mapping[str, Any] | None) -> float | None:
-    """Use only a C1 value explicitly supplied as causal, never *_offline."""
-    return _value_or_none(row, "segment_time_s")
+def _completed_segment_time_s(row: Mapping[str, Any] | None) -> float | None:
+    """Read an already completed prior C1 segment summary only.
+
+    The current segment's ``*_offline`` summary is not available at entry and
+    is therefore never passed to this helper.  A prior segment's offline
+    duration is causal because that segment ended before the current entry.
+    """
+    return _value_or_none(row, "segment_time_s_offline")
+
+
+def _normal_context(row: Mapping[str, Any] | None) -> bool:
+    pit_state = row.get("pit_state") if row is not None else None
+    return bool(
+        row is not None
+        and row.get("normal_race_model_eligible") is True
+        and pit_state in {None, "ON_TRACK"}
+        and row.get("race_control_transition_flag") is not True
+        and row.get("pit_transition_flag") is not True
+    )
+
+
+def _same_lap(left: Mapping[str, Any], right: Mapping[str, Any]) -> bool:
+    return (
+        left.get("year") == right.get("year")
+        and left.get("event") == right.get("event")
+        and left.get("session") == right.get("session")
+        and left.get("lap") == right.get("lap")
+    )
+
+
+def _causal_stream_key(row: Mapping[str, Any]) -> tuple[Any, ...]:
+    return tuple(row.get(name) for name in ("year", "event", "session", "driver"))
+
+
+def _causal_sort_key(row: Mapping[str, Any], index: int) -> tuple[Any, ...]:
+    entry_time = _entry_time_s(row)
+    lap = _number(row.get("lap"))
+    distance = _number(row.get("entry_distance_m"))
+    segment = _number(row.get("segment_id"))
+    return (
+        entry_time is None, entry_time if entry_time is not None else float("inf"),
+        lap is None, lap if lap is not None else float("inf"),
+        distance is None, distance if distance is not None else float("inf"),
+        segment is None, segment if segment is not None else float("inf"), index,
+    )
+
+
+def _completed_before(previous: Mapping[str, Any], current: Mapping[str, Any]) -> bool:
+    """Require the candidate prior segment to finish before current entry."""
+    duration = _completed_segment_time_s(previous)
+    if duration is None or duration < 0.0:
+        return False
+    previous_time = _entry_time_s(previous)
+    current_time = _entry_time_s(current)
+    if previous_time is not None and current_time is not None:
+        return previous_time + duration <= current_time + 1e-6
+    previous_distance = _number(previous.get("entry_distance_m"))
+    current_distance = _number(current.get("entry_distance_m"))
+    return previous_distance is not None and current_distance is not None and previous_distance < current_distance
+
+
+def _prior_completed_rows(segment_rows: Iterable[Mapping[str, Any]]) -> dict[tuple[Any, ...], Mapping[str, Any] | None]:
+    """Index only the immediately preceding completed C1 row per car.
+
+    A transition, ineligible row, session boundary, or lap boundary resets the
+    pointer.  Thus no previous-lap outcome, future segment, or non-contiguous
+    context can leak into a live C2 feature.
+    """
+    streams: dict[tuple[Any, ...], list[tuple[int, Mapping[str, Any]]]] = defaultdict(list)
+    for index, row in enumerate(segment_rows):
+        streams[_causal_stream_key(row)].append((index, row))
+    prior_by_key: dict[tuple[Any, ...], Mapping[str, Any] | None] = {}
+    for stream in streams.values():
+        stream.sort(key=lambda item: _causal_sort_key(item[1], item[0]))
+        previous: Mapping[str, Any] | None = None
+        for index, row in stream:
+            key = _segment_key(row, row.get("driver"))
+            prior_by_key[key] = previous if (
+                _normal_context(row)
+                and previous is not None
+                and _same_lap(previous, row)
+                and _completed_before(previous, row)
+            ) else None
+            if _normal_context(row):
+                previous = row
+            else:
+                previous = None
+    return prior_by_key
+
+
+def _baseline_maps(
+    baseline_rows: Iterable[Mapping[str, Any]] | None,
+) -> dict[str, dict[tuple[Any, ...], Mapping[str, Any]]]:
+    maps: dict[str, dict[tuple[Any, ...], Mapping[str, Any]]] = {"driver": {}, "team": {}, "field": {}}
+    if baseline_rows is None:
+        return maps
+    for baseline in baseline_rows:
+        if baseline.get("schema_version") != BASELINE_SCHEMA_VERSION:
+            continue
+        level = baseline.get("baseline_level")
+        if level not in maps:
+            continue
+        key = _baseline_key(baseline, level, baseline.get(level))
+        if key is not None:
+            maps[level].setdefault(key, baseline)
+    return maps
+
+
+def _select_baseline(
+    row: Mapping[str, Any], identity: Any, maps: Mapping[str, Mapping[tuple[Any, ...], Mapping[str, Any]]],
+) -> tuple[Mapping[str, Any] | None, str | None]:
+    reasons: list[str] = []
+    for level in ("driver", "team", "field"):
+        level_identity = identity if level == "driver" else row.get("team") if level == "team" else None
+        key = _baseline_key(row, level, level_identity)
+        if key is None:
+            reasons.append(f"{level}:identity unavailable")
+            continue
+        candidate = maps[level].get(key)
+        if candidate is None:
+            reasons.append(f"{level}:missing")
+            continue
+        if not candidate.get("baseline_valid"):
+            reasons.append(f"{level}:baseline_valid=false")
+            continue
+        if _number(candidate.get("segment_time_s_median")) is None:
+            reasons.append(f"{level}:segment_time_s_median unavailable")
+            continue
+        return candidate, None
+    return None, "UNAVAILABLE_C2: no valid baseline at driver/team/field levels (" + "; ".join(reasons) + ")"
 
 
 def _c2_residual_delta_s(
-    attacker_row: Mapping[str, Any] | None,
-    defender_row: Mapping[str, Any] | None,
+    attacker_prior_row: Mapping[str, Any] | None,
+    defender_prior_row: Mapping[str, Any] | None,
     attacker: Any,
     defender: Any,
-    driver_baselines: Mapping[tuple[Any, ...], Mapping[str, Any]] | None,
+    baseline_maps: Mapping[str, Mapping[tuple[Any, ...], Mapping[str, Any]]],
 ) -> tuple[float | None, str | None]:
-    """C2 attacker-minus-defender segment-time residual, or an honest null."""
-    if driver_baselines is None:
-        return None, "UNAVAILABLE_C2: no C2 driver-baseline artifact was supplied"
-    if attacker_row is None or defender_row is None:
-        return None, "UNAVAILABLE_C2: contemporaneous C1 rows for both cars are required"
-    attacker_key = _baseline_key(attacker_row, attacker)
-    defender_key = _baseline_key(defender_row, defender)
-    if attacker_key is None or defender_key is None:
-        return None, "UNAVAILABLE_C2: C1 circuit or supported year group is unavailable"
-    attacker_baseline = driver_baselines.get(attacker_key)
-    defender_baseline = driver_baselines.get(defender_key)
+    """C2 residual from each car's immediately prior completed segment."""
+    if not any(baseline_maps.values()):
+        return None, "UNAVAILABLE_C2: no C2 baseline artifact was supplied"
+    if attacker_prior_row is None or defender_prior_row is None:
+        return None, "UNAVAILABLE_C2: no immediately prior completed C1 segment exists in the continuous normal-race context"
+    attacker_baseline, attacker_reason = _select_baseline(attacker_prior_row, attacker, baseline_maps)
+    defender_baseline, defender_reason = _select_baseline(defender_prior_row, defender, baseline_maps)
     if attacker_baseline is None or defender_baseline is None:
-        return None, "UNAVAILABLE_C2: valid driver baseline is absent for one or both cars"
-    if not attacker_baseline.get("baseline_valid") or not defender_baseline.get("baseline_valid"):
-        return None, "UNAVAILABLE_C2: driver baseline is marked baseline_valid=false"
-    attacker_time = _causal_segment_time_s(attacker_row)
-    defender_time = _causal_segment_time_s(defender_row)
+        return None, attacker_reason or defender_reason or "UNAVAILABLE_C2: a valid C2 baseline is unavailable"
+    attacker_time = _completed_segment_time_s(attacker_prior_row)
+    defender_time = _completed_segment_time_s(defender_prior_row)
     if attacker_time is None or defender_time is None:
-        return None, "UNAVAILABLE_C2: C1 has no causal segment_time_s; segment_time_s_offline is not used"
+        return None, "UNAVAILABLE_C2: prior completed C1 segment_time_s_offline is unavailable"
     attacker_residual = residual_at_use_time(
         attacker_time, attacker_baseline.get("segment_time_s_median"), baseline_valid=True,
     )
@@ -263,13 +395,19 @@ def _c2_residual_delta_s(
 def build_pairwise_features(
     battle_rows: Iterable[Mapping[str, Any]], segment_rows: Iterable[Mapping[str, Any]], *,
     driver_baseline_rows: Iterable[Mapping[str, Any]] | None = None,
+    baseline_rows: Iterable[Mapping[str, Any]] | None = None,
 ) -> PairwiseBuildResult:
     """Build one live-safe M06 row per valid C8 battle row.
 
-    ``segment_rows`` is C1 and is only used as a contemporaneous lookup for
-    the defender.  Acceleration and trends are derived from current and prior
-    rows inside one battle; a C7 transition clears that history defensively.
+    ``segment_rows`` is C1 and is only used as a contemporaneous lookup plus
+    each car's immediately prior completed segment for the causal C2 residual.
+    Acceleration and trends are derived from current and prior rows inside one
+    battle; a C7 transition clears that history defensively.
     """
+    if driver_baseline_rows is not None and baseline_rows is not None:
+        raise ValueError("supply baseline_rows or the backwards-compatible driver_baseline_rows, not both")
+    baseline_input = baseline_rows if baseline_rows is not None else driver_baseline_rows
+    segment_rows = list(segment_rows)
     segment_index: dict[tuple[Any, ...], Mapping[str, Any]] = {}
     segment_index_without_geometry: set[tuple[Any, ...]] = set()
     duplicate_keys: set[tuple[Any, ...]] = set()
@@ -282,15 +420,8 @@ def build_pairwise_features(
         else:
             segment_index[key] = row
 
-    driver_baselines: dict[tuple[Any, ...], Mapping[str, Any]] | None = None
-    if driver_baseline_rows is not None:
-        driver_baselines = {}
-        for baseline in driver_baseline_rows:
-            if baseline.get("schema_version") != BASELINE_SCHEMA_VERSION or baseline.get("baseline_level") != "driver":
-                continue
-            key = (baseline.get("circuit"), baseline.get("year_group"), baseline.get("segment_id"), baseline.get("driver"))
-            if all(value is not None for value in key):
-                driver_baselines.setdefault(key, baseline)
+    baseline_maps = _baseline_maps(baseline_input)
+    prior_rows = _prior_completed_rows(segment_rows)
 
     grouped: dict[Any, list[tuple[int, Mapping[str, Any]]]] = defaultdict(list)
     for index, row in enumerate(battle_rows):
@@ -343,6 +474,8 @@ def build_pairwise_features(
 
             attacker_key = _segment_key(battle, attacker)
             attacker_row = None if attacker_key in duplicate_keys else segment_index.get(attacker_key)
+            attacker_prior_row = prior_rows.get(attacker_key)
+            defender_prior_row = prior_rows.get(defender_key) if defender_row is not None else None
 
             attacker_speed = _entry_speed_mps(battle)
             defender_speed = _entry_speed_mps(defender_row)
@@ -374,7 +507,7 @@ def build_pairwise_features(
             attacker_life = _value_or_none(battle, "tyre_life_laps")
             defender_life = _value_or_none(defender_row, "tyre_life_laps")
             baseline_residual_delta, baseline_reason = _c2_residual_delta_s(
-                attacker_row, defender_row, attacker, defender, driver_baselines,
+                attacker_prior_row, defender_prior_row, attacker, defender, baseline_maps,
             )
 
             row = {
@@ -382,6 +515,9 @@ def build_pairwise_features(
                 "lap": battle.get("lap"), "segment_id": battle.get("segment_id"),
                 "entry_distance_m": battle.get("entry_distance_m"), "battle_id": battle_id,
                 "segment_index": battle.get("segment_index"), "attacker": attacker, "defender": defender,
+                "normal_race_model_eligible": battle.get("normal_race_model_eligible"),
+                "race_control_transition_flag": battle.get("race_control_transition_flag"),
+                "pit_transition_flag": battle.get("pit_transition_flag"),
                 "time_gap_entry_s": time_gap, "distance_gap_entry_m": distance_gap,
                 "attacker_speed_entry_mps": attacker_speed, "defender_speed_entry_mps": defender_speed,
                 "relative_speed_to_ahead_mps": relative_speed,
@@ -403,6 +539,7 @@ def build_pairwise_features(
                 "time_gap_entry_trailing_mean_3_s": _trailing_mean(history["time_gap"], time_gap),
                 "distance_gap_entry_trailing_mean_3_m": _trailing_mean(history["distance_gap"], distance_gap),
                 "gap_rate_ahead_trailing_mean_3_s_per_s": _trailing_mean(history["gap_rate"], gap_rate),
+                "previous_completed_segment_time_residual_s": baseline_residual_delta,
                 "baseline_residual_delta_s": baseline_residual_delta,
                 "fuel_load_delta_kg_est": None,
                 "fuel_load_delta_uncertainty_kg": None,

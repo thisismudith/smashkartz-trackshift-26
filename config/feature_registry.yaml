@@ -1761,6 +1761,29 @@ features:
     interaction_group: [identity]
 
   - <<: *pairwise_feature_defaults
+    name: normal_race_model_eligible
+    definition: C7 normal-race gate copied from the model-ready C8 row; every emitted pairwise row must be true.
+    unit: bool
+    provenance: DERIVED
+    interaction_group: [race_context, gate]
+
+  - <<: *pairwise_feature_defaults
+    name: race_control_transition_flag
+    definition: C7 hard boundary flag copied from the model-ready C8 row.
+    unit: bool
+    provenance: DERIVED
+    availability_scope: partial
+    interaction_group: [race_context, transition]
+
+  - <<: *pairwise_feature_defaults
+    name: pit_transition_flag
+    definition: C7 pit-state hard boundary flag copied from the model-ready C8 row.
+    unit: bool
+    provenance: DERIVED
+    availability_scope: partial
+    interaction_group: [race_context, transition]
+
+  - <<: *pairwise_feature_defaults
     name: time_gap_entry_s
     definition: Attacker-to-ahead entry time gap; never converted from distance gap.
     unit: s
@@ -1921,8 +1944,18 @@ features:
     interaction_group: [gap, rate, rolling]
 
   - <<: *pairwise_feature_defaults
+    name: previous_completed_segment_time_residual_s
+    definition: C2 attacker-minus-defender residual from each car's immediately prior completed segment in the same continuous normal-race context; never current-segment pace.
+    unit: s
+    live_safe: true
+    provenance: DERIVED
+    availability_scope: partial
+    source_gated: false
+    interaction_group: [baseline, relative, causal]
+
+  - <<: *pairwise_feature_defaults
     name: baseline_residual_delta_s
-    definition: C2 driver-baseline attacker-minus-defender causal segment-time residual; null with an API Quantity reason when C2 or a causal current segment time is unavailable.
+    definition: Backward-compatible alias of previous_completed_segment_time_residual_s; null with an API Quantity reason when C2 or a prior completed segment is unavailable.
     unit: s
     live_safe: true
     provenance: DERIVED
