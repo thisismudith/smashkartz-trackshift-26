@@ -37,6 +37,7 @@ from trackshift.twin.api import (  # noqa: E402
     check_monotonic_in_energy,
     check_sensitivity_by_segment_type,
     extrapolation_sanity,
+    read_partition,
 )
 
 SEGMENTS = ROOT / "data" / "processed" / "segments"
@@ -76,11 +77,10 @@ def main() -> int:
         if frame.empty:
             continue
         frame["circuit"] = circuit
-        twin_path = TWIN / f"circuit={circuit}" / "energy_twin.parquet"
-        if twin_path.exists():
-            twin = pd.read_parquet(twin_path,
-                                   columns=["year", "event", "session", "driver", "lap",
-                                            "segment_id", "ers_energy_used_est_mj"])
+        twin = read_partition(TWIN, "energy_twin.parquet", year=args.year, circuit=circuit,
+                              columns=["year", "event", "session", "driver", "lap",
+                                       "segment_id", "ers_energy_used_est_mj"])
+        if not twin.empty:
             keys = ["year", "event", "session", "driver", "lap", "segment_id"]
             twin = twin.sort_values(keys)
             # Per-segment deployment, not the running total.

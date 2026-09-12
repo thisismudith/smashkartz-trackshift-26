@@ -201,7 +201,11 @@ def build_circuit(circuit: str, year: str, output_root: Path, fuel_kg: float,
 
     written = None
     if rows:
-        target = output_root / f"circuit={circuit}"
+        # Partitioned by year as well as circuit. With circuit alone, building a
+        # second season overwrites the first: a --year 2024 run destroyed the
+        # 2026 twin for every circuit that had 2024 data, and the loss was
+        # silent because the readers join on year and simply saw no rows.
+        target = output_root / f"circuit={circuit}" / f"year={year}"
         target.mkdir(parents=True, exist_ok=True)
         destination = target / "energy_twin.parquet"
         pd.DataFrame(rows).to_parquet(destination, index=False)

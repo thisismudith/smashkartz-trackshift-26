@@ -74,6 +74,10 @@ class RungResult:
     violations: list[str] = field(default_factory=list)
     cells_fitted: int = 1
     cells_fallen_back: int = 0
+    #: False when none of this rung's fitted cells appears in the held-out set.
+    #: Such a rung emits the previous rung's predictions, so its error is not
+    #: its own and must never be compared as though it were.
+    applicable: bool = True
     residual_share: float | None = None
     #: Share of samples whose implied deployment exceeds the override cap under
     #: these parameters. Section 55: a calibration that lowers RMSE while raising
@@ -233,6 +237,16 @@ def compare_rungs(results: Sequence[RungResult]) -> list[RungResult]:
                                and r.envelope_violation_rate is not None), None)
     for result in ordered:
         reasons: list[str] = []
+        if not result.applicable:
+            # Not a result at all: nothing of this rung reached a held-out row.
+            # Reject it, and leave `best` alone -- folding a NaN or a borrowed
+            # MAE into the bar would let it mask the next rung's comparison.
+            result.accepted = False
+            result.rejection_reason = (
+                result.rejection_reason
+                or "NOT_APPLICABLE: no fitted cell appears in the held-out set, so this "
+                   "rung never predicted anything and its error is the previous rung's.")
+            continue
         if result.violations:
             reasons.append("physical constraint violated: " + "; ".join(result.violations))
         if result.at_bound:

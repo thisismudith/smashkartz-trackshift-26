@@ -37,8 +37,10 @@ sys.path.insert(0, str(ROOT / "src"))
 from trackshift.progress import Progress  # noqa: E402
 from trackshift.twin.api import (  # noqa: E402
     FuelError,
+    circuits_available,
     consumption_from_ice_work,
     estimate_fuel_curve,
+    read_partition,
     start_fuel_kg,
 )
 
@@ -146,12 +148,11 @@ def build_circuit(circuit: str, year: str, output_root: Path) -> dict[str, Any]:
     """Build one circuit's fuel curves. Module-level so it pickles."""
     import pandas as pd
 
-    path = TWIN / f"circuit={circuit}" / "energy_twin.parquet"
-    if not path.exists():
+    frame = read_partition(TWIN, "energy_twin.parquet", year=year, circuit=circuit,
+                           columns=["year", "event", "session", "driver", "lap",
+                                    "ice_work_est_mj"])
+    if frame.empty:
         return {"circuit": circuit, "skipped": "no energy twin output"}
-    frame = pd.read_parquet(path, columns=["year", "event", "session", "driver", "lap",
-                                           "ice_work_est_mj"])
-    frame = frame[frame["year"].astype(str) == str(year)]
     frame = frame[frame["session"].isin(RACE_SESSIONS + CALIBRATION_SESSIONS)]
     if frame.empty:
         return {"circuit": circuit, "skipped": f"no {year} race-like rows"}
@@ -298,9 +299,7 @@ def main() -> int:
     parser.add_argument("--no-progress", action="store_true")
     args = parser.parse_args()
 
-    circuits = args.circuit or sorted(
-        path.parent.name.removeprefix("circuit=")
-        for path in args.twin_dir.glob("circuit=*/energy_twin.parquet"))
+    circuits = args.circuit or circuits_available(args.twin_dir, "energy_twin.parquet")
     if not circuits:
         parser.error(f"no energy twin output under {args.twin_dir}; run build_energy_twin.py first")
 
