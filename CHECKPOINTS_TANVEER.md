@@ -50,7 +50,7 @@ Each checkpoint has the same shape:
 
 | CP | Item | IDs | Status |
 |---|---|---|---|
-| 00 | Environment and dependencies | — | ☐ |
+| 00 | Environment and dependencies | — | ✅ |
 | 01 | Local data audit | §51, §63 | ☐ |
 | 02 | Registries scaffold | M31 | ☐ |
 | 03 | Rule config skeleton + **speed-dependent power envelope**, all tracks | M18 | ☐ |
@@ -232,6 +232,17 @@ python -c "import pandas as pd; pd.DataFrame({'a':[1]}).to_parquet('_t.parquet')
 ### Deliverables
 
 `requirements.txt`, `requirements.lock.txt`, `requirements-gpu.txt`, `.gitignore` updated, `.venv/` working.
+
+### ✅ Completed
+
+All wheels resolved on **Python 3.13.14** with no source build, so the 3.12 fallback in the table above was not needed and that warning is now stale. 50 packages pinned in `requirements.lock.txt`.
+
+Verified: `all import OK`; `17 passed` (6 before merging `origin/main`, plus Rishabh's `test_race_context.py` and `test_splits.py`); Parquet round-trip `(1, 1)`; and the real blocker cleared — `build_phase2_dataset.py` now writes Parquet (2026 British GP Race, HAM+ANT, 3 laps each: 6 discovered, 4 accepted, **1162 rows**).
+
+Two defects found and fixed while closing this checkpoint:
+
+- `pip freeze >` under PowerShell wrote `requirements.lock.txt` as **UTF-16LE**, which git stored as binary (`Bin 0 -> 1784 bytes`, zero insertions) — a lock file with no reviewable diff. Converted to UTF-8/LF and pinned via `.gitattributes`.
+- `data/processed/` was **not** gitignored. One full session is 300,809 rows; CP-04 builds the whole lake. Added `data/processed/` and `data/interim/`.
 
 ---
 
