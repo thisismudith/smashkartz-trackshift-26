@@ -48,7 +48,7 @@ Each checkpoint uses the same structure.
 | 06 | Synthetic labelled trajectories | M09b | ☐ |
 | 07 | Rival-state benchmark | M09, C10 | ☐ |
 | 08 | Rival-side regulation-era evaluation | M13 | ☐ |
-| 09 | Strategic-state adapter and stubs | C3 to C6 | ☐ |
+| 09 | Strategic-state adapter and stubs | C3 to C6 | ☑ |
 | 10 | Dynamic programming and shadow price | M22 | ☐ |
 | 11 | Counterattack valuation | M23 | ☐ |
 | 12 | Planner | M24 | ☐ |
@@ -342,6 +342,17 @@ Each checkpoint uses the same structure.
 **Depends on:** CP-00 and CP-04. Real C3 to C6 replace stubs as they land.
 
 **Inputs / outputs:** C7, C8, C9, C10 plus public stub contracts in. Typed StrategicState and transition adapters out.
+
+### ✅ Completed
+
+Completed as a development-safe Chain V boundary.
+
+- Battle steps convert to API-compatible, JSON-only StrategicState payloads through the shared contract validator.
+- Future-derived and offline-summary inputs are rejected.
+- C3 is consumed only through its public API; excluded actions never enter selectable candidates.
+- C4, C5, C6, and C10 remain explicit deterministic stubs or unavailable values with `STUB_RESPONSE`, provenance, and reason.
+- Final evaluation and replay generation reject any state containing stubs.
+- Validation: `510 passed, 7 skipped`.
 
 ### Steps
 
