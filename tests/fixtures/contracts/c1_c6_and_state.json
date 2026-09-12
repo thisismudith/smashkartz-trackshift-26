@@ -1,0 +1,70 @@
+{
+  "c1_segments": {
+    "segment_id": 22,
+    "start_distance_m": 3080.0,
+    "end_distance_m": 3260.0,
+    "segment_time_s": 2.91,
+    "entry_speed_kmh": 287.0,
+    "normal_race_model_eligible": true,
+    "provenance": "DERIVED"
+  },
+  "c2_baselines": {
+    "track": "silverstone",
+    "segment_id": 22,
+    "driver": "HAM",
+    "segment_time_s_median": 2.94,
+    "n": 31,
+    "baseline_valid": true,
+    "provenance": "DERIVED"
+  },
+  "c3_rules": {
+    "event": "british_grand_prix",
+    "power_envelope": {
+      "normal": {"breakpoints_kmh": [0, 290, 340], "max_power_kw": [350, 350, 0]},
+      "override": {"breakpoints_kmh": [0, 337, 355], "max_power_kw": [350, 350, 0]},
+      "separation_speed_kmh": 290.0,
+      "verified": false,
+      "provenance": "RULE"
+    }
+  },
+  "c4_pass_prediction": {
+    "decision_checkpoint": "DETECTION",
+    "p_pass_by_outcome_horizon": 0.58,
+    "outcome_horizon": "zone_exit_v1",
+    "ensemble_spread": 0.04,
+    "provenance": "INFERRED"
+  },
+  "c5_energy_twin": {
+    "ers_soc_est_mj": {"mean": null, "provenance": "SIMULATED", "unit": "MJ", "reason": "energy twin not yet available"},
+    "fuel_kg": {"mean": null, "provenance": "INFERRED", "unit": "kg", "reason": "fuel estimator not yet available"}
+  },
+  "c6_opportunity_features": {
+    "time_gap_s": 0.78,
+    "distance_gap_m": 61.4,
+    "relative_speed_mps": 2.1,
+    "decision_checkpoint": "DETECTION",
+    "provenance": "DERIVED"
+  },
+  "strategic_state_normal": {
+    "ref": {"year": 2026, "event": "british_grand_prix", "session": "Race", "lap": 31, "segment_id": 22, "distance_m": 3140.0},
+    "energy": {"ers_soc_est_mj": {"mean": null, "provenance": "SIMULATED", "unit": "MJ", "reason": "energy twin not yet available"}},
+    "tyre": {"compound": "MEDIUM", "performance_state": {"mean": null, "provenance": "INFERRED", "unit": "ratio", "reason": "tyre model not yet available"}},
+    "gap": {"time_gap_s": 0.78, "distance_gap_m": 61.4, "relative_speed_mps": 2.1, "relative_acceleration_mps2": 0.1, "gap_rate_s_per_s": -0.03},
+    "overtake_state": {"state": "ARMED", "provenance": "RULE"},
+    "race_control": {"pit_state": "ON_TRACK", "race_control_state": "GREEN", "normal_race_model_eligible": true, "provenance": "DERIVED"},
+    "power_envelope": {"verified": false, "provenance": "RULE", "reason": "FIA citation pending"},
+    "rival_state": {"mean": null, "provenance": "INFERRED", "reason": "rival model not yet available"},
+    "uncertainty": {"available": false, "reason": "upstream models not yet available"}
+  },
+  "strategic_state_ineligible": {
+    "ref": {"year": 2026, "event": "british_grand_prix", "session": "Race", "lap": 49, "segment_id": 22, "distance_m": 3140.0},
+    "energy": {"ers_soc_est_mj": {"mean": null, "provenance": "SIMULATED", "unit": "MJ", "reason": "not normal-race eligible"}},
+    "tyre": {"compound": "MEDIUM"},
+    "gap": {"time_gap_s": 0.78, "distance_gap_m": 61.4},
+    "overtake_state": {"state": "DISABLED", "provenance": "RULE"},
+    "race_control": {"pit_state": "ON_TRACK", "race_control_state": "SC", "normal_race_model_eligible": false, "provenance": "DERIVED"},
+    "power_envelope": {"verified": false, "provenance": "RULE", "reason": "FIA citation pending"},
+    "rival_state": {"mean": null, "provenance": "INFERRED", "reason": "not normal-race eligible"},
+    "uncertainty": {"available": false, "reason": "not normal-race eligible"}
+  }
+}
