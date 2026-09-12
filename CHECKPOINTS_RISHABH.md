@@ -46,7 +46,7 @@ Each checkpoint uses the same structure.
 | 04 | Causal pairwise features | M06, C8 | ☑ |
 | 05 | Rival-state feature dataset | M08 | ☑ |
 | 06 | Synthetic labelled trajectories | M09b | ☑ |
-| 07 | Rival-state benchmark | M09, C10 | ☐ |
+| 07 | Rival-state benchmark | M09, C10 | ☑ |
 | 08 | Rival-side regulation-era evaluation | M13 | ☐ |
 | 09 | Strategic-state adapter and stubs | C3 to C6 | ☑ |
 | 10 | Dynamic programming and shadow price | M22 | ☐ |
@@ -347,12 +347,41 @@ Separate-seed recovery was 1.00 versus 0.25 chance, with CPU inference about
 
 **src/trackshift/rival/api.py**, HMM, HSMM, GBM, neural modules, training and evaluation scripts, rival artifacts, rival report.
 
-### Validation — not complete
+### ✅ Validation — complete (2026-09-13)
 
-CPU-only interpretable candidate comparison returns a normalised C10
-distribution on synthetic data. Australian Race now has C9-assigned M08 rows,
-but no real tactical labels exist for likelihood/calibration or next-step
-validation; the simple baseline is not promoted to production.
+CP-07 consumes only the versioned CP-05 non-British 2026 M08 Parquet and
+persistent battle-level C9 assignments. Every eligible sequence has exactly
+one C9 fold; British Grand Prix rows are rejected before fitting/evaluation,
+and C5 fuel/ERS placeholders remain unavailable rather than becoming numeric
+features. The causal feature allow-list excludes raw identity, coordinates,
+timestamps, outcomes, pass labels, and future fields.
+
+The benchmark trains all candidates from the fixed M09b regression seed 1701
+and evaluates the fixed benchmark seed 2903 plus the same persistent C9
+five-fold battle split. The CPU candidates are an interpretable Gaussian HMM,
+an explicitly documented sticky/dwell-aware HSMM-equivalent, and a
+rolling-window stump GBM. GRU/TCN were not retained: the interpretable HMM
+clears the recovery gates and is selected by the simplicity-first rule. The
+four-state space is retained because the synthetic CONSERVING/DERATING
+emission separation is 5.354 z (above the 0.75 merge gate).
+
+Synthetic recovery at 5/10/20 segments is 1.000/1.000/1.000 for the selected
+HMM (48 held-out sequences; four-state chance 0.25). Real M08 next-segment
+observation predictive NLL is reported per C9 fold; it is not tactical-state
+calibration because M08 has no tactical labels. Posterior perturbation
+stability and CPU latency also pass, and all distributions are normalized.
+
+Versioned local artifacts are under
+`data/processed/cp07_rival_benchmark_v1/`: `selected_model.json`, the three
+candidate JSON artifacts, `benchmark_report.json`, `CP07_REPORT.md`, and
+`run_manifest.json`. C10 is exposed by
+`trackshift.rival.api.rival_state`; it returns `INFERRED`, model/split version,
+merged-state metadata, and raises `ModelUnavailableError` when no artifact is
+loaded.
+
+CP-08 remains unchecked. Its next blocker is historical M08 materialisation
+for 2022–2025; a regulation-era comparison is not possible from 2026-only M08
+data.
 
 ---
 

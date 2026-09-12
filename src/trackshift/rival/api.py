@@ -1,11 +1,54 @@
-"""Public Owner A boundary for the future C10 rival-belief contract.
+"""Public C10 rival-belief boundary (CP-07).
 
-Rishabh CP-05 to CP-08 provide the implementation. No tactical-state model is
-stubbed here, because a placeholder prediction would be misleading.
+The API returns an ``INFERRED`` distribution only when a versioned CPU model
+is supplied.  Calling it without a loaded artifact fails explicitly instead
+of fabricating a tactical state.
 """
 
-from .model import MODEL_VERSION, benchmark, fit_centroid, rival_state
+from .model import (
+    M08_SCHEMA_VERSION,
+    MODEL_SCHEMA_VERSION,
+    MODEL_VERSION,
+    ManifestMismatchError,
+    ModelUnavailableError,
+    RivalModel,
+    benchmark,
+    benchmark_candidates,
+    build_battle_sequences,
+    extract_observation,
+    fit_centroid,
+    fit_model,
+    load_m08_sequences,
+    load_model,
+    rival_state as _rival_state,
+)
 from .synthetic import BENCHMARK_SEED, REGRESSION_SEED, STATES, SYNTHETIC_PROVENANCE, SyntheticConfig, generate
 from .era import evaluate_era_strategies
+from typing import Any, Iterable, Mapping, TypedDict
 
-__all__ = ["MODEL_VERSION", "STATES", "SYNTHETIC_PROVENANCE", "REGRESSION_SEED", "BENCHMARK_SEED", "SyntheticConfig", "generate", "fit_centroid", "rival_state", "benchmark", "evaluate_era_strategies"]
+
+class StateDistribution(TypedDict, total=False):
+    """C10 JSON response shape returned by :func:`rival_state`."""
+
+    api_version: str
+    p: dict[str, float]
+    merged: list[list[str]]
+    merged_states: list[list[str]]
+    provenance: str
+    model_version: str
+    split_version: str
+    causal_cutoff: int | None
+    uncertainty: dict[str, Any]
+
+
+def rival_state(battle_segments: Iterable[Mapping[str, Any]], model: RivalModel | Mapping[str, Any] | None = None) -> StateDistribution:
+    """Return the causal, normalized C10 distribution."""
+    return _rival_state(battle_segments, model)
+
+__all__ = [
+    "MODEL_VERSION", "MODEL_SCHEMA_VERSION", "M08_SCHEMA_VERSION", "STATES",
+    "SYNTHETIC_PROVENANCE", "REGRESSION_SEED", "BENCHMARK_SEED", "SyntheticConfig", "generate",
+    "RivalModel", "ManifestMismatchError", "ModelUnavailableError", "extract_observation",
+    "build_battle_sequences", "load_m08_sequences", "fit_model", "load_model", "fit_centroid",
+    "StateDistribution", "rival_state", "benchmark", "benchmark_candidates", "evaluate_era_strategies",
+]
