@@ -13,6 +13,31 @@ npm run lint
 npm test         # vitest: physics + effects unit tests (node, no DOM)
 ```
 
+## Data (required before anything renders)
+
+Every chart, table and replay reads `public/sim/*.json|.bin`. Those are **gitignored build
+output**, not repo content, so a fresh clone has none and the app comes up empty. Two steps
+from the repo root produce them:
+
+```powershell
+# 1. the raw mirror -- data/raw/tracinginsights/<year>, ~8 GB per season, once
+.\scripts\data\download_initial_dataset.ps1 -Years 2026
+
+# 2. the artifacts -- ~40 s for all 13 circuits
+python scripts/build_sim_data.py --year 2026 --all --jobs 0 --fresh --prune
+```
+
+`--prune` deletes artifacts the new index no longer references; without it the directory
+keeps every superseded rebuild (it had grown to 326 MB against a live set of 166 MB).
+
+One build directory holds exactly ONE season: artifact filenames carry the circuit slug but
+no year, so `--year 2024` into the same directory is refused unless you also pass `--fresh`.
+The season that was built is recorded as `year` in `index.json`'s target.
+
+Deploying: `public/sim` is not in the repo, so a hosted build serves no artifacts and every
+panel falls back to its no-data state. Host them somewhere and set `NEXT_PUBLIC_SIM_BASE` to
+that base URL; unset, the app reads `/sim` locally as before.
+
 ## Palette (strict)
 
 | Token           | Hex       | Use                                              |

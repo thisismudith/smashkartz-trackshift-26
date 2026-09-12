@@ -1,8 +1,9 @@
 """The configurator may only offer cars that were on the grid, so the catalogue's
-per-event entry list is what these tests pin down. Reads data/2026 directly."""
+per-event entry list is what these tests pin down. Reads the raw mirror directly."""
 import sys, pathlib
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
-from simdata.catalogue import DATA_ROOT, build_catalogue, discover_events, driver_registry, race_entries
+from simdata.catalogue import build_catalogue, discover_events, driver_registry, race_entries
+from simdata.paths import data_root
 
 CAT = build_catalogue()
 TRACKS = {t["slug"]: t for t in CAT["tracks"]}
@@ -22,7 +23,7 @@ def test_entries_never_include_a_practice_only_reserve():
     assert len(CAT["drivers"]) > 22, "registry should still be the full season union"
     for event in discover_events():
         slug = event.lower().replace(" ", "-")
-        race_dir = DATA_ROOT / event / "Race"
+        race_dir = data_root() / event / "Race"
         seen = {d.name for d in race_dir.iterdir() if d.is_dir() and len(d.name) == 3}
         import json
         drv_file = race_dir / "drivers.json"

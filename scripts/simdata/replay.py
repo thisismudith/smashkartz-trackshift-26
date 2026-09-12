@@ -60,11 +60,10 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from simdata.build_track import prepare_ring, slugify
+from simdata.paths import data_root
 from simdata.rawio import LapTable, SentinelIndex, load_lap
 from simdata.rcm import build_rcm_feed, neutralisation_intervals
 from simdata.twin import TwinParams, estimate_ers, lap_summary
-
-DATA_ROOT = Path(__file__).resolve().parent.parent.parent / "data" / "2026"
 
 
 def _num(v):
@@ -281,7 +280,7 @@ def encode_lap(ring, lap, session_scale: float = 1.0,
 
 def build_replay_pack(event: str, session: str):
     ring, geom_dir, geom_session, _, _ = prepare_ring(event)
-    sdir = DATA_ROOT / event / session
+    sdir = data_root() / event / session
     table = LapTable(sdir)
     rows = list(table.rows())
 

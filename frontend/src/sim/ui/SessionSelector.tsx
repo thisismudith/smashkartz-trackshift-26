@@ -17,7 +17,7 @@ export interface Selection {
 }
 
 /**
- * Every option here comes from the built catalogue/index (data/2026 only, via
+ * Every option here comes from the built catalogue/index (one season per build, via
  * scripts/simdata/catalogue.py and build_sim_data.py) -- a track only appears if it
  * is actually present in data/, and a session only appears if a replay pack has
  * actually been built for it. Nothing in this list is typed in by hand.

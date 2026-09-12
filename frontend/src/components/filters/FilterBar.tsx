@@ -6,9 +6,10 @@
  * discards your pick is a filter that misrepresents what is on screen.
  *
  * Two honesty details baked in:
- *   - The YEAR facet has exactly one value (2026), because only 2026 artifacts are built. It is
- *     shown, disabled, with the reason, rather than omitted (which would imply the dimension does
- *     not exist) or faked with years we have no data for.
+ *   - The YEAR facet usually has exactly one value, because a build directory holds exactly one
+ *     season (artifact names carry the circuit slug but no year -- scripts/build_sim_data.py
+ *     --year). It is shown, disabled, with the reason, rather than omitted (which would imply
+ *     the dimension does not exist) or faked with years we have no data for.
  *   - A driver who changed team mid-season appears in the catalogue once PER TEAM. Those entries
  *     are merged into one option here, with the teams listed, so the list shows people rather than
  *     contracts -- but the merge is stated in the panel note rather than done silently.
@@ -56,7 +57,11 @@ export function FilterBar({
           emptyMeans="all"
           showChips={false}
           disabled={facets.years.length <= 1}
-          disabledReason="Only 2026 artifacts are built. The 2025 raw mirror exists but has not been processed."
+          disabledReason={
+            facets.years.length === 1
+              ? `Only ${facets.years[0].label} artifacts are built. Other seasons are mirrored raw but not processed.`
+              : "No built artifacts carry a season."
+          }
         />
       ) : null}
 

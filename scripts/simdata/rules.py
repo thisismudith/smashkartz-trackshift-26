@@ -53,7 +53,7 @@ MODES = (MODE_NORMAL, MODE_OVERRIDE)
 #: LINEAR curve, which cannot otherwise represent a discontinuity. The curve therefore
 #: carries a breakpoint at (X - CLIFF_EPSILON_KMH, last formula value) and another at
 #: (X, 0.0). 0.001 km/h is four orders of magnitude below the resolution of any speed
-#: channel in data/2026, so it is not a physically meaningful interpolation region.
+#: channel in the 2026 feed, so it is not a physically meaningful interpolation region.
 CLIFF_EPSILON_KMH = 0.001
 
 #: Default speed step for the sampled curve table (API.md section 5.3a `step_kmh`). A

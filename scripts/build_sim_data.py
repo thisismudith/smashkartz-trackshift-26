@@ -1,8 +1,20 @@
 """Orchestrator: build every derived-data artifact the frontend needs and place them
-under frontend/public/sim/. Read-only over data/2026; reproducible; deterministic given
-the same raw data (aside from float rounding).
+under frontend/public/sim/. Read-only over the raw mirror; reproducible; deterministic
+given the same raw data (aside from float rounding).
 
-Usage: python scripts/build_sim_data.py [--events "British Grand Prix" ...]
+The mirror is data/raw/tracinginsights/<year>, resolved by simdata/paths.py, which also
+accepts the two earlier layouts (data/raw/<year>, data/<year>) so an un-migrated machine
+keeps building. --year picks which mirror feeds the build, and every run prints the path
+it resolved to.
+
+ONE YEAR PER ARTIFACT SET. Artifact filenames are keyed by circuit slug alone
+(british-grand-prix-race.<hash>.bin), so a second year written into the same output
+directory would overwrite the first circuit-for-circuit while the index still listed
+both. The index records the year it was built from, and a differing --year is refused
+unless --fresh says to start over.
+
+Usage: python scripts/build_sim_data.py [--year 2026] [--prune]
+                                        [--events "British Grand Prix" ...]
 Default: builds the catalogue, fitted parameters, and British Grand Prix (Race +
 Sprint) track model and replay packs -- the plan's chosen first dataset.
 """
@@ -22,11 +34,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from simdata.build_track import build_track_model, write_artifact as write_track
 from simdata.catalogue import build_catalogue
 from simdata.fit_params import build_params
+from simdata.paths import (DEFAULT_YEAR, active_year, available_years, data_root,
+                            layout_note, set_year)
 from simdata.replay import build_replay_pack
 from simdata.rules import default_event_rules, event_rules_to_mapping
 
 OUT_DIR = Path(__file__).resolve().parent.parent / "frontend" / "public" / "sim"
-DATA_ROOT = Path(__file__).resolve().parent.parent / "data" / "2026"
 
 
 def _json_safe(o):
@@ -77,17 +90,18 @@ def build_rules() -> dict:
 def discover_events(sessions: list[str]) -> list[str]:
     """Event directories that actually hold a buildable session.
 
-    NOT a directory listing. `data/2026` also contains .git, .github, cache,
-    cache_preseason and schemas, and it holds a Spanish Grand Prix that only ever ran
+    NOT a directory listing. A mirror also contains .git, .github, cache,
+    cache_preseason and schemas, and 2026 holds a Spanish Grand Prix that only ever ran
     Practice -- 19 entries for 13 real circuits. A naive glob hands build_track_model
     ".git" and the whole rebuild dies on it. An event qualifies only if one of the
     REQUESTED sessions exists under it and that session has at least one driver
     directory carrying a lap file, which is the same evidence the builders need.
     """
     out = []
-    if not DATA_ROOT.is_dir():
+    root = data_root()
+    if not root.is_dir():
         return out
-    for d in sorted(DATA_ROOT.iterdir()):
+    for d in sorted(root.iterdir()):
         if not d.is_dir() or d.name.startswith(".") or "Testing" in d.name:
             continue
         for session in sessions:
@@ -121,7 +135,7 @@ def build_one_event(event: str, sessions: list[str]) -> dict:
            "ring": model["ring"]["lengthMetres"], "sessions": {}, "errors": []}
 
     for session in sessions:
-        session_dir = DATA_ROOT / event / session
+        session_dir = data_root() / event / session
         if not session_dir.exists():
             continue
         try:
@@ -140,23 +154,101 @@ def build_one_event(event: str, sessions: list[str]) -> dict:
     return out
 
 
+def assert_year_matches(prev: dict, how: str) -> None:
+    """Refuse to reuse an index built from a different season.
+
+    Artifacts are named by circuit slug with no year (british-grand-prix-race.<hash>.bin),
+    so one output directory holds exactly one season. Reusing another year's entries --
+    by merging into them, or by keeping them across a catalogue-only rebuild -- produces
+    an index that LOOKS complete while the files behind half its circuits came from a
+    different season. There is no way to tell afterwards, so it is refused up front.
+    """
+    prev_year = str(prev.get("year") or "")
+    if prev_year and prev_year != active_year():
+        raise SystemExit(
+            f"the existing index was built from {prev_year} and this run is "
+            f"{active_year()}. Artifact names carry no year, so the two cannot share "
+            f"{OUT_DIR}. Re-run a FULL build with --fresh to replace it, or build into "
+            f"a different output directory. ({how})")
+    if not prev_year:
+        print("(the existing index predates year stamping; assuming it is "
+              f"{active_year()} -- rebuild with --fresh if it is not)")
+
+
+def referenced_files(manifest: dict, index_name: str) -> set:
+    """Every artifact the freshly written index can reach, by filename."""
+    live = {"index.json", index_name}
+    for key in ("catalogue", "params", "rules"):
+        if manifest.get(key):
+            live.add(manifest[key])
+    live.update(manifest.get("tracks", {}).values())
+    for per_session in manifest.get("sessions", {}).values():
+        for files in per_session.values():
+            live.add(files["manifest"])
+            live.add(files["bin"])
+    return live
+
+
+def prune(manifest: dict, index_name: str) -> tuple:
+    """Delete artifacts no longer reachable from the index. Returns (count, bytes).
+
+    Artifact names are content hashes and a build never overwrites: every rebuild of a
+    circuit writes a NEW file and simply stops referencing the old one. Left alone the
+    directory grows without bound -- measured at 199 files / 326 MB where the index
+    reached only 54 files / 173 MB, so more than half was superseded output.
+
+    Reachability is computed from the index that was just written, which is the same set
+    the frontend can request, so anything removed here was already unreachable from the
+    app. Superseded index.<hash>.json files go too: index.json names the current one and
+    nothing reads the others.
+    """
+    live = referenced_files(manifest, index_name)
+    removed, freed = 0, 0
+    for path in sorted(OUT_DIR.iterdir()):
+        if not path.is_file() or path.name in live:
+            continue
+        size = path.stat().st_size
+        path.unlink()
+        removed += 1
+        freed += size
+    return removed, freed
+
+
 def main():
     ap = argparse.ArgumentParser()
+    ap.add_argument("--year", default=DEFAULT_YEAR,
+                    help=f"which raw mirror to build from (default {DEFAULT_YEAR}). "
+                          f"Years with a mirror on disk: "
+                          f"{', '.join(available_years()) or 'none found'}")
     ap.add_argument("--events", nargs="*", default=["British Grand Prix"])
     ap.add_argument("--sessions", nargs="*", default=["Race", "Sprint"])
     ap.add_argument("--catalogue-only", action="store_true",
                     help="rebuild only the catalogue and re-point the existing index at it; "
                           "track models and replay packs are left alone (minutes -> a second)")
     ap.add_argument("--all", action="store_true",
-                    help="build every event found under data/2026")
+                    help="build every event found in the year mirror")
     ap.add_argument("--jobs", type=int, default=1,
                     help="build this many EVENTS concurrently, in separate processes "
                           "(events are independent; the index is still written once, by "
                           "the parent). 0 means one per core, capped to leave headroom.")
+    ap.add_argument("--prune", action="store_true",
+                    help="after writing the index, delete artifacts it no longer "
+                          "references (superseded rebuilds of the same circuit, and old "
+                          "index files). Only ever removes files already unreachable "
+                          "from index.json")
     ap.add_argument("--fresh", action="store_true",
                     help="start the index from empty instead of merging into the existing "
                           "one; use when removing an event, never for a routine subset build")
     args = ap.parse_args()
+
+    # Before any worker is spawned: set_year writes the environment those workers
+    # inherit, which is how a --jobs N build stays on one mirror (simdata/paths.py).
+    set_year(args.year)
+    root = data_root()
+    print(f"raw mirror: {layout_note()}")
+    if not root.is_dir():
+        found = ", ".join(available_years()) or "none"
+        ap.error(f"no raw mirror for {active_year()} at {root}. Years on disk: {found}")
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -173,6 +265,7 @@ def main():
             try:
                 pointer = json.loads(pointer_path.read_text(encoding="utf-8"))
                 prev = json.loads((OUT_DIR / pointer["latest"]).read_text(encoding="utf-8"))
+                assert_year_matches(prev, "merging into the existing index")
                 manifest["tracks"] = dict(prev.get("tracks") or {})
                 manifest["sessions"] = {k: dict(v) for k, v in (prev.get("sessions") or {}).items()}
                 kept = len(manifest["tracks"])
@@ -184,7 +277,12 @@ def main():
     if args.catalogue_only:
         pointer = json.loads((OUT_DIR / "index.json").read_text(encoding="utf-8"))
         manifest = json.loads((OUT_DIR / pointer["latest"]).read_text(encoding="utf-8"))
+        # Independently of the merge block above, which --fresh skips: this branch keeps
+        # every existing track and session entry and only swaps the catalogue, so a
+        # differing --year would relabel another season's artifacts as this one.
+        assert_year_matches(manifest, "--catalogue-only reuses the existing track entries")
         print("== catalogue (only) ==")
+        manifest["year"] = active_year()
         manifest["catalogue"] = write_json(build_catalogue(), OUT_DIR, "catalogue")
         print(f"  {manifest['catalogue']}")
         manifest["rules"] = write_json(build_rules(), OUT_DIR, "rules")
@@ -193,7 +291,12 @@ def main():
         (OUT_DIR / "index.json").write_bytes(
             json.dumps({"latest": index_name}, separators=(",", ":")).encode("utf-8"))
         print(f"\nindex: {index_name} (pointer: index.json)")
+        if args.prune:
+            removed, freed = prune(manifest, index_name)
+            print(f"pruned {removed} unreferenced artifact(s), {freed / 1e6:.1f} MB")
         return
+
+    manifest["year"] = active_year()
 
     print("== catalogue ==")
     cat = build_catalogue()
@@ -267,6 +370,10 @@ def main():
     (OUT_DIR / "index.json").write_bytes(
         json.dumps({"latest": index_name}, separators=(",", ":")).encode("utf-8"))
     print(f"\nindex: {index_name} (pointer: index.json)")
+
+    if args.prune:
+        removed, freed = prune(manifest, index_name)
+        print(f"pruned {removed} unreferenced artifact(s), {freed / 1e6:.1f} MB")
 
 
 if __name__ == "__main__":

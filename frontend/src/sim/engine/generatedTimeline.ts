@@ -5,13 +5,32 @@
  * (profileWarp.ts) rather than decoded telemetry, but the crossing-tower ordering and
  * station-based gap logic are the same idea as timeline.ts, simplified because a
  * generated race has none of the real data's missing-lap/mismatched-frame problems.
+ *
+ * Lap 1 is a STANDING START: until each car hands over at the fitted validity ceiling it
+ * is placed by scripts/simdata/launch.py's model (grid box, reaction, constant-
+ * acceleration launch), with a hard non-interpenetration gap of one car length applied
+ * in grid order exactly as launch_state's `min_gap_m` does. Every number behind that
+ * comes from params.json; this file only applies it.
  */
 import type {
-  CarState, NeutralisationInterval, RaceEvent, RaceTimeline, TrackModel, WeatherSeries,
+  CarState, NeutralisationInterval, Provenance, RaceEvent, RaceTimeline, TrackModel,
+  WeatherSeries,
 } from "../contract/types";
 import { trackPointAt } from "../data/manifest";
-import { buildLapWarp, buildRefTimeTable, type LapWarp, type RefTimeTable } from "../motion/profileWarp";
-import type { GeneratedRaceResult } from "./raceEngine";
+import {
+  buildLapWarp, buildRefTimeTable, buildStandingStartLap, launchStateAt,
+  type LaunchGridCar, type LaunchPhase, type MotionSample, type RefTimeTable,
+} from "../motion/profileWarp";
+import type { GeneratedRaceResult, GridPlacement } from "./raceEngine";
+
+/** One car's resolved state for a single sampleAt, before it becomes a CarState. */
+interface Progress {
+  entry: GeneratedRaceResult["entries"][number];
+  idx: number;
+  motion: MotionSample;
+  finished: boolean;
+  placement: GridPlacement | null;
+}
 
 export class GeneratedTimeline implements RaceTimeline {
   readonly provenance = "SIMULATED" as const;
@@ -22,8 +41,25 @@ export class GeneratedTimeline implements RaceTimeline {
   readonly duration: number;
 
   private refTable: RefTimeTable;
-  private warpCache = new Map<string, LapWarp>();
+  private warpCache = new Map<string, (t: number) => MotionSample>();
   private result: GeneratedRaceResult;
+  /** The grid, in grid order, as launchStateAt consumes it. */
+  private launchGrid: LaunchGridCar[] = [];
+  /**
+   * ONE instant at which the WHOLE field leaves the fitted launch for the pace model:
+   * the last car's own handover, reaction + v / a. The caller has to choose this, and
+   * choosing it per car is what does not work -- a car that reached 120 kph half a second
+   * early would join the flying-lap profile at ~260 kph while the car 8 m in front was
+   * still at 120, and measured, that drove 9 to 17 pairs straight through each other
+   * inside the launch. Holding early finishers at 120 kph until the field is ready is not
+   * an invention either: it is launch_profile's own third phase, which runs at constant
+   * handoverSpeed for as long as the caller keeps asking.
+   */
+  private handoverTimeS = 0;
+  /** Each car's progress at handoverTimeS, AFTER the non-interpenetration constraint.
+   * Computed once: it is what every lap-1 tail is entered at, so the launch and the pace
+   * model join with no jump even for a car that was held. */
+  private handoverProgressM = new Map<string, number>();
 
   constructor(result: GeneratedRaceResult, track: TrackModel) {
     this.result = result;
@@ -33,124 +69,215 @@ export class GeneratedTimeline implements RaceTimeline {
     this.totalLaps = result.totalLaps;
     this.duration = result.duration;
     this.refTable = buildRefTimeTable(track);
+    const start = result.standingStart;
+    if (start) {
+      this.launchGrid = start.placements.map((p) => ({
+        driver: p.driver, offsetM: p.offsetM, launch: p.launch,
+      }));
+      for (const p of start.placements) {
+        this.handoverTimeS = Math.max(
+          this.handoverTimeS,
+          p.launch.reactionS + p.launch.handoverSpeedMps / p.launch.accelMps2,
+        );
+      }
+      for (const car of this.launchField(this.handoverTimeS)) {
+        this.handoverProgressM.set(car.driver, car.progressM);
+      }
+    }
   }
 
-  private warpFor(driver: string, lap: number): LapWarp | null {
+  /** The constrained field at `t`, or an empty list when this race has no grid. */
+  private launchField(t: number) {
+    const start = this.result.standingStart;
+    if (!start) return [];
+    return launchStateAt(this.launchGrid, t, {
+      ringLengthM: this.track.lengthMetres,
+      minGapM: start.minGapMetres,
+    });
+  }
+
+  /** The standing start this race was laid out from, or null when params.json carried no
+   * fitted block. Exposed so a panel can show the anchor, the pitch, their provenance and
+   * the artifact's own words when a circuit has none, instead of re-deriving any of it. */
+  standingStart(): GeneratedRaceResult["standingStart"] {
+    return this.result.standingStart;
+  }
+
+  /** Lap 1 is the launch + reference profile; every later lap is the three-sector warp.
+   * Both are returned as the same MotionSample so the sampler has one code path. */
+  private motionFor(driver: string, lap: number): ((t: number) => MotionSample) | null {
     const key = `${driver}:${lap}`;
     const cached = this.warpCache.get(key);
     if (cached) return cached;
     const entry = this.result.entries.find((e) => e.driver === driver);
     const lapRow = entry?.laps.find((l) => l.lap === lap);
     if (!lapRow) return null;
-    const warp = buildLapWarp(this.track, this.refTable, { s1: lapRow.s1, s2: lapRow.s2, s3: lapRow.s3 });
-    this.warpCache.set(key, warp);
-    return warp;
+    const L = this.track.lengthMetres;
+    const start = this.result.standingStart;
+    const placement = lap === 1 ? start?.byDriver.get(driver) ?? null : null;
+
+    let sampler: (t: number) => MotionSample;
+    if (placement && start) {
+      const ssLap = buildStandingStartLap(this.track, this.refTable, {
+        handoverTimeS: this.handoverTimeS,
+        handoverProgressM: this.handoverProgressM.get(driver) ?? placement.offsetM,
+        lapTime: lapRow.sesT - lapRow.lST,
+      });
+      sampler = (t) => ssLap.sampleAt(t);
+    } else {
+      const warp = buildLapWarp(this.track, this.refTable, {
+        s1: lapRow.s1, s2: lapRow.s2, s3: lapRow.s3,
+      });
+      const base = (lap - 1) * L;
+      sampler = (t) => {
+        const s = warp.sampleAt(t);
+        return {
+          progressM: base + s.stationM,
+          stationM: s.stationM,
+          speedKph: s.speedKph,
+          gear: s.gear,
+          phase: "HANDOVER" as LaunchPhase,
+        };
+      };
+    }
+    this.warpCache.set(key, sampler);
+    return sampler;
   }
 
   sampleAt(t: number): Map<string, CarState> {
-    const out = new Map<string, CarState>();
-    const progress = this.result.entries.map((entry) => {
+    const L = this.track.lengthMetres;
+    // Inside the launch window the field is ONE computation, not a car at a time: the
+    // non-interpenetration constraint couples every car to the one ahead of it.
+    const launching = this.result.standingStart !== null && t < this.handoverTimeS;
+    const field = launching
+      ? new Map(this.launchField(t).map((c) => [c.driver, c as MotionSample]))
+      : null;
+
+    const progress: Progress[] = this.result.entries.map((entry) => {
       let idx = -1;
       for (let i = 0; i < entry.laps.length; i++) {
         if (entry.laps[i].lST <= t) idx = i; else break;
       }
-      return { entry, idx };
-    });
-
-    const ranked = progress.slice().sort(
-      (a, b) => GeneratedTimeline.progressOf(b, t) - GeneratedTimeline.progressOf(a, t),
-    );
-
-    ranked.forEach(({ entry, idx }, i) => {
+      const placement = this.result.standingStart?.byDriver.get(entry.driver) ?? null;
+      const launched = idx <= 0 ? field?.get(entry.driver) : undefined;
+      if (launched) {
+        return { entry, idx: Math.max(0, idx), motion: launched, placement, finished: false };
+      }
       if (idx < 0) {
-        out.set(entry.driver, this.gridState(entry.driver, entry.team, i + 1));
-        return;
+        // Unreachable while the worker keeps sessionTime >= 0 and lap 1 starts at the
+        // signal, but a car with no lap yet is on its box, not at station 0 doing 250.
+        return { entry, idx, finished: false, placement, motion: gridMotion(placement) };
       }
       const lapRow = entry.laps[idx];
-      const finished = t > lapRow.sesT && idx === entry.laps.length - 1;
       const relT = Math.min(lapRow.sesT - lapRow.lST, Math.max(0, t - lapRow.lST));
-      const warp = this.warpFor(entry.driver, lapRow.lap);
-      const sample = warp ? warp.sampleAt(relT) : { stationM: 0, speedKph: 0, gear: 1 };
-      const pt = trackPointAt(this.track, sample.stationM);
+      const sampler = this.motionFor(entry.driver, lapRow.lap);
+      const motion = sampler
+        ? sampler(relT)
+        : { progressM: idx * L, stationM: 0, speedKph: 0, gear: 1, phase: "HANDOVER" as LaunchPhase };
+      return {
+        entry, idx, motion, placement,
+        finished: t > lapRow.sesT && idx === entry.laps.length - 1,
+      };
+    });
+
+    const ranked = progress.slice().sort((a, b) => b.motion.progressM - a.motion.progressM);
+    const out = new Map<string, CarState>();
+    ranked.forEach((p, i) => {
+      const { entry, idx, motion } = p;
+      const lapRow = idx >= 0 ? entry.laps[idx] : null;
+      const pt = trackPointAt(this.track, motion.stationM);
+      const onGrid = motion.phase === "GRID";
+      const inPit = lapRow !== null && lapRow.pin !== null && t >= lapRow.pin;
+      const lapSpan = lapRow ? Math.max(1e-6, lapRow.sesT - lapRow.lST) : 1;
+      const relT = lapRow ? Math.min(lapSpan, Math.max(0, t - lapRow.lST)) : 0;
 
       out.set(entry.driver, {
         driver: entry.driver, team: entry.team,
-        stationM: sample.stationM, lateralM: 0, elevationM: pt.z, headingRad: pt.heading,
-        speedKph: sample.speedKph, gear: sample.gear, throttlePct: sample.speedKph > 5 ? 100 : 30,
+        stationM: motion.stationM,
+        // The two-column stagger's metric offset is NOT in the feed (it ships as null,
+        // tagged RULE), so no lateral is invented here. GridPlacement.lateralColumnSign
+        // carries the regulation STRUCTURE for a renderer that wants to draw it from the
+        // track's own measured half-width and say that is where it came from.
+        lateralM: 0,
+        elevationM: pt.z, headingRad: pt.heading,
+        speedKph: motion.speedKph, gear: motion.gear,
+        throttlePct: onGrid ? 0 : (motion.speedKph > 5 ? 100 : 30),
         brake: false,
-        tyreCompound: lapRow.compound, tyreLife: lapRow.life,
-        lapsDone: idx + (t > lapRow.sesT ? 1 : 0),
-        lapProgress: Math.max(0, Math.min(0.9999, relT / Math.max(1e-6, lapRow.sesT - lapRow.lST))),
+        tyreCompound: lapRow?.compound ?? null, tyreLife: lapRow?.life ?? null,
+        lapsDone: lapRow ? idx + (t > lapRow.sesT ? 1 : 0) : 0,
+        lapProgress: lapRow ? Math.max(0, Math.min(0.9999, relT / lapSpan)) : 0,
         position: i + 1,
         gapToLeaderS: i === 0 ? null : this.gapToLeader(ranked, i, t),
-        lapsDownFromLeader: this.lapsDownFromLeader(ranked, i, t),
+        lapsDownFromLeader: this.lapsDownFromLeader(ranked, i),
         intervalS: i === 0 ? null : this.intervalToAhead(ranked, i),
-        inPit: lapRow.pin !== null && t >= lapRow.pin,
-        status: finished ? "finished" : (lapRow.pin !== null && t >= lapRow.pin ? "pit" : "track"),
+        inPit,
+        status: onGrid ? "grid"
+          : p.finished ? "finished"
+          : inPit ? "pit" : "track",
         provenance: "SIMULATED",
-        positionProvenance: "SIMULATED",
+        // Every position in a generated race is SIMULATED, including the grid boxes: the
+        // grid's SPACING and order are fitted, and where a circuit has no measured anchor
+        // the whole grid's position along the lap is a documented DEFAULT that
+        // standingStart().placementProvenance reports. That distinction belongs on the
+        // grid block, not here -- downgrading a car's positionProvenance would make the
+        // dashboard suppress car-to-car gaps that the fitted pitch fully supports.
+        positionProvenance: "SIMULATED" as Provenance,
         energy: null,
       });
     });
     return out;
   }
 
-  private gridState(driver: string, team: string | null, position: number): CarState {
-    return {
-      driver, team, stationM: 0, lateralM: 0, elevationM: 0, headingRad: 0,
-      speedKph: 0, gear: 0, throttlePct: 0, brake: false, tyreCompound: null, tyreLife: null,
-      lapsDone: 0, lapProgress: 0, position, gapToLeaderS: null, lapsDownFromLeader: 0,
-      intervalS: null, inPit: false, status: "grid", provenance: "SIMULATED", positionProvenance: "SIMULATED", energy: null,
-    };
-  }
-
-  /** Laps + fraction of the current lap: the car's true position in the race. */
-  private static progressOf(
-    p: { entry: GeneratedRaceResult["entries"][number]; idx: number }, t: number,
-  ): number {
-    if (p.idx < 0) return -1e9;
-    const row = p.entry.laps[p.idx];
-    const span = row.sesT - row.lST;
-    const frac = t > row.sesT ? 1 : (span > 0 ? (t - row.lST) / span : 0);
-    return row.lap + frac;
-  }
-
-  /** A car is only lapped once it is a FULL lap of progress behind. Comparing bare
-   * lap NUMBERS reported every car that had not yet crossed the line as "+1 LAP"
-   * the moment the leader crossed it, even when it was a second behind. */
-  private lapsDownFromLeader(
-    ranked: { entry: GeneratedRaceResult["entries"][number]; idx: number }[], i: number, t: number,
-  ): number {
-    const lead = GeneratedTimeline.progressOf(ranked[0], t);
-    const mine = GeneratedTimeline.progressOf(ranked[i], t);
-    if (mine < -1e8) return 0;
-    return Math.max(0, Math.floor(lead - mine));
+  /** Laps of progress a car is down on the leader, from METRES rather than lap numbers:
+   * a car is only lapped once it is a FULL lap behind. Comparing bare lap NUMBERS
+   * reported every car that had not yet crossed the line as "+1 LAP" the moment the
+   * leader crossed it, even when it was a second behind. */
+  private lapsDownFromLeader(ranked: Progress[], i: number): number {
+    const lead = ranked[0].motion.progressM;
+    const mine = ranked[i].motion.progressM;
+    return Math.max(0, Math.floor((lead - mine) / this.track.lengthMetres));
   }
 
   /** Gap to the leader, in seconds, for a car on the SAME lap number as the leader.
    * Approximated as the difference between when each car started this shared lap --
    * a reasonable stand-in for the replay adapter's exact station-crossing search
    * (plan section 4), since both cars are, by construction, on self-consistent
-   * generated laps rather than real telemetry with its per-car distance-frame noise. */
-  private gapToLeader(
-    ranked: { entry: GeneratedRaceResult["entries"][number]; idx: number }[], i: number, t: number,
-  ): number | null {
-    if (this.lapsDownFromLeader(ranked, i, t) > 0) return null;
+   * generated laps rather than real telemetry with its per-car distance-frame noise.
+   *
+   * On lap 1 the cars share a lap START (the signal) but not a starting POINT, so that
+   * stand-in reports 0.0 for the whole field. The lap-1 gap is taken from the metres
+   * between the cars instead, converted at the car's own current speed. */
+  private gapToLeader(ranked: Progress[], i: number, t: number): number | null {
+    if (this.lapsDownFromLeader(ranked, i) > 0) return null;
     const leader = ranked[0];
-    const leaderLap = leader.idx < 0 ? null : leader.entry.laps[leader.idx];
-    const mine = ranked[i].entry.laps[ranked[i].idx];
-    if (!leaderLap || mine.lap !== leaderLap.lap) return null;
-    return Math.max(0, mine.lST - leaderLap.lST);
+    const mine = ranked[i];
+    if (leader.idx < 0 || mine.idx < 0) return null;
+    const leaderLap = leader.entry.laps[leader.idx];
+    const myLap = mine.entry.laps[mine.idx];
+    if (myLap.lap !== leaderLap.lap) return null;
+    if (myLap.lap === 1) return this.metresToSeconds(leader.motion, mine.motion);
+    return Math.max(0, myLap.lST - leaderLap.lST);
   }
 
-  private intervalToAhead(
-    ranked: { entry: GeneratedRaceResult["entries"][number]; idx: number }[], i: number,
-  ): number | null {
+  private intervalToAhead(ranked: Progress[], i: number): number | null {
     const ahead = ranked[i - 1];
-    const mine = ranked[i].entry.laps[ranked[i].idx];
-    const aheadLap = ahead.idx < 0 ? null : ahead.entry.laps[ahead.idx];
-    if (!aheadLap || mine.lap !== aheadLap.lap) return null;
-    return Math.max(0, mine.lST - aheadLap.lST);
+    const mine = ranked[i];
+    if (ahead.idx < 0 || mine.idx < 0) return null;
+    const aheadLap = ahead.entry.laps[ahead.idx];
+    const myLap = mine.entry.laps[mine.idx];
+    if (myLap.lap !== aheadLap.lap) return null;
+    if (myLap.lap === 1) return this.metresToSeconds(ahead.motion, mine.motion);
+    return Math.max(0, myLap.lST - aheadLap.lST);
+  }
+
+  /** Metres of deficit, expressed as the seconds the trailing car needs to cover them at
+   * its own current speed. Null while it is stationary: a stopped car's deficit is not a
+   * time, and a made-up divisor would turn one into a number that looks like timing. */
+  private metresToSeconds(ahead: MotionSample, mine: MotionSample): number | null {
+    const metres = Math.max(0, ahead.progressM - mine.progressM);
+    const mps = mine.speedKph / 3.6;
+    if (!(mps > 1)) return null;
+    return metres / mps;
   }
 
   events(): RaceEvent[] {
@@ -178,4 +305,15 @@ export class GeneratedTimeline implements RaceTimeline {
     return null; // New Race's configured weather is a fixed value, not a series; the
     // configurator surfaces it directly rather than through this time-series shape.
   }
+}
+
+/** A car with no lap row yet, sitting in its box. Station 0 only if there is no grid. */
+function gridMotion(placement: GridPlacement | null): MotionSample {
+  return {
+    progressM: placement ? placement.offsetM : 0,
+    stationM: placement ? placement.stationM : 0,
+    speedKph: 0,
+    gear: 0,
+    phase: "GRID",
+  };
 }

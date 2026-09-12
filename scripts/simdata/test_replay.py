@@ -14,7 +14,7 @@ position. Before these tests the encoder invented one in four different ways --
 
 -- and `ring.project` aliased a Suzuka lap across the figure-8 crossover. Each test
 below fails on that code and passes on the current encoder. Where the fault is visible
-in data/2026 the test measures the real lap rather than a fixture.
+in the raw mirror the test measures the real lap rather than a fixture.
 """
 from __future__ import annotations
 
@@ -25,12 +25,13 @@ import numpy as np
 import pytest
 
 from simdata import replay
+from simdata.paths import data_root
 from simdata.geom import Ring
 from simdata.rawio import LapTable, SentinelIndex, load_lap
 from simdata.replay import (FRAME_B_FULL_LAP_BAND, LATERAL_ABSENT_CM,
                             LATERAL_ABS_MAX_M, encode_lap)
 
-DATA_ROOT = Path(__file__).resolve().parent.parent.parent / "data" / "2026"
+DATA_ROOT = data_root()
 
 SAMPLE_DTYPE = np.dtype([("dtMs", "<u2"), ("stationM", "<f4"), ("lateralCm", "<i2"),
                          ("speedKph", "<u2"), ("gearBrake", "u1"), ("throttle", "u1")])

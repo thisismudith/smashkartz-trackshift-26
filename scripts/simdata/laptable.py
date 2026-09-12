@@ -4,11 +4,10 @@ parameters. Streams one session_laptimes.json at a time; never opens telemetry.
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
 import numpy as np
 
-DATA_ROOT = Path(__file__).resolve().parent.parent.parent / "data" / "2026"
+from simdata.paths import data_root
 
 NUMERIC_NONE_COLS = ("time", "life", "s1", "s2", "s3", "vi1", "vi2", "vfl", "vst",
                      "wAT", "wTT", "wH", "wP", "wWS", "wWD", "s1T", "s2T", "s3T")
@@ -19,7 +18,7 @@ def _num_or_nan(v):
 
 
 def load_session(event: str, session: str) -> "dict[str, np.ndarray] | None":
-    p = DATA_ROOT / event / session / "session_laptimes.json"
+    p = data_root() / event / session / "session_laptimes.json"
     if not p.exists():
         return None
     raw = json.loads(p.read_text(encoding="utf-8"))
@@ -48,7 +47,7 @@ def load_session(event: str, session: str) -> "dict[str, np.ndarray] | None":
 
 def discover_events() -> list[str]:
     out = []
-    for d in sorted(DATA_ROOT.iterdir()):
+    for d in sorted(data_root().iterdir()):
         if d.is_dir() and (d / "Race").exists():
             out.append(d.name)
     return out

@@ -1,6 +1,6 @@
 """Tests for the geometry-session chooser, the sentinel wiring and the capabilities block.
 
-The real-data tests measure against data/2026 rather than a fixture, because the whole
+The real-data tests measure against the raw mirror rather than a fixture, because the whole
 point of the chooser is that it discriminates between two sessions of the SAME circuit
 and no synthetic fixture can stand in for the failure modes the feed actually has
 (a stale-anchor sample-and-hold at Hungary, a "position unknown" sentinel at China, a
@@ -20,11 +20,13 @@ import numpy as np
 import pytest
 
 from simdata import build_track as bt
+from simdata.paths import data_root
 from simdata.geom import Ring
 
 
-DATA_PRESENT = bt.DATA_ROOT.exists()
-needs_data = pytest.mark.skipif(not DATA_PRESENT, reason="data/2026 not available")
+DATA_PRESENT = data_root().exists()
+needs_data = pytest.mark.skipif(not DATA_PRESENT,
+                                 reason=f"no raw mirror at {data_root()}")
 
 
 # --------------------------------------------------------------- pure / fast
@@ -253,8 +255,8 @@ def test_hungary_race_position_channel_fails_the_gate_and_qualifying_does_not():
     the laps the picker survives would hide this, because the picker upstream already
     discards them -- the session would then look as good as its leftovers.
     """
-    race = bt.scan_session(bt.DATA_ROOT / "Hungarian Grand Prix" / "Race")
-    qual = bt.scan_session(bt.DATA_ROOT / "Hungarian Grand Prix" / "Qualifying")
+    race = bt.scan_session(data_root() / "Hungarian Grand Prix" / "Race")
+    qual = bt.scan_session(data_root() / "Hungarian Grand Prix" / "Qualifying")
     assert race["cleanLaps"] > 500          # it is not short of laps...
     assert race["lapQuality"] < 0.5         # ...they just are not positions
     assert qual["lapQuality"] > 0.95
@@ -267,10 +269,10 @@ def test_hungary_race_position_channel_fails_the_gate_and_qualifying_does_not():
 def test_hungary_geometry_comes_from_qualifying():
     """Before: geometry_session took the first session clearing a lap floor, i.e. Race,
     and the ring came out 4583 m for a 4308.5 m polyline."""
-    choice = bt.geometry_choice(bt.DATA_ROOT / "Hungarian Grand Prix")
+    choice = bt.geometry_choice(data_root() / "Hungarian Grand Prix")
     assert choice["chosen"] == "Qualifying"
     assert choice["margin"] > bt.SCORE_TIE_MARGIN
-    sdir, name = bt.geometry_session(bt.DATA_ROOT / "Hungarian Grand Prix")
+    sdir, name = bt.geometry_session(data_root() / "Hungarian Grand Prix")
     assert (sdir.name, name) == ("Qualifying", "Qualifying")
 
 
@@ -278,13 +280,13 @@ def test_hungary_geometry_comes_from_qualifying():
 def test_monaco_geometry_comes_from_qualifying_on_coverage_not_lap_count():
     """Monaco's Race clears any lap-count floor yet has a position on 106 of 1452 laps,
     spanning 5 lap numbers of 78. The chooser has to see that, not the lap count."""
-    race = bt.score_session(bt.DATA_ROOT / "Monaco Grand Prix" / "Race", "Race")
+    race = bt.score_session(data_root() / "Monaco Grand Prix" / "Race", "Race")
     m = race["measured"]
     assert m["geometryLaps"] >= bt.MIN_RING_LAPS        # it clears the old floor...
     assert m["sessionLapsWithPositions"] < 0.1 * m["sessionLaps"]   # ...and is still blind
     assert m["sessionLapNumbersWithPositions"] <= 6
     assert race["components"]["positionCoverage"] < 0.1
-    choice = bt.geometry_choice(bt.DATA_ROOT / "Monaco Grand Prix")
+    choice = bt.geometry_choice(data_root() / "Monaco Grand Prix")
     assert choice["chosen"] == "Qualifying"
     assert choice["margin"] > bt.SCORE_TIE_MARGIN
 
@@ -293,29 +295,29 @@ def test_monaco_geometry_comes_from_qualifying_on_coverage_not_lap_count():
 def test_china_keeps_the_race_because_qualifying_is_the_sentinel_session():
     """The chooser must not simply prefer Qualifying: China's Qualifying is 40 % sentinel
     while its Race is under 1 %."""
-    race = bt.score_session(bt.DATA_ROOT / "Chinese Grand Prix" / "Race", "Race")
-    qual = bt.score_session(bt.DATA_ROOT / "Chinese Grand Prix" / "Qualifying",
+    race = bt.score_session(data_root() / "Chinese Grand Prix" / "Race", "Race")
+    qual = bt.score_session(data_root() / "Chinese Grand Prix" / "Qualifying",
                             "Qualifying")
     assert race["measured"]["withdrawnFraction"] < 0.02
     assert qual["measured"]["withdrawnFraction"] > 0.35
     assert race["score"] > qual["score"]
-    assert bt.geometry_choice(bt.DATA_ROOT / "Chinese Grand Prix")["chosen"] == "Race"
+    assert bt.geometry_choice(data_root() / "Chinese Grand Prix")["chosen"] == "Race"
 
 
 @needs_data
 def test_the_chinese_sentinel_is_discovered_and_withdrawn_not_left_in_place():
     """The sentinel must be found once per session and every sample on it withdrawn."""
-    scan = bt.scan_session(bt.DATA_ROOT / "Chinese Grand Prix" / "Race")
+    scan = bt.scan_session(data_root() / "Chinese Grand Prix" / "Race")
     assert scan["sentinelCount"] == 1
     px, py = scan["sentinelPoints"][0]
     assert math.hypot(px - (-832.5), py - (-705.8)) < 2.0
     assert scan["positionsWithdrawn"] > 5000
     # a withdrawn sample is ABSENT, not replaced: nothing may still sit on the sentinel
     from simdata.rawio import LapTable, load_lap
-    table = LapTable(bt.DATA_ROOT / "Chinese Grand Prix" / "Race")
+    table = LapTable(data_root() / "Chinese Grand Prix" / "Race")
     rows = [r for r in table.rows() if r["lap"] == 1][:4]
     for r in rows:
-        lap = load_lap(bt.DATA_ROOT / "Chinese Grand Prix" / "Race", r["drv"], r["lap"])
+        lap = load_lap(data_root() / "Chinese Grand Prix" / "Race", r["drv"], r["lap"])
         before = int(scan["_sentinel"].mask(lap.x, lap.y).sum())
         dropped = bt.apply_sentinel([lap], scan["_sentinel"])
         assert dropped == before
@@ -325,7 +327,7 @@ def test_the_chinese_sentinel_is_discovered_and_withdrawn_not_left_in_place():
 @needs_data
 def test_a_clean_circuit_keeps_the_race():
     """Regression guard: nothing may move the eleven circuits whose Race measures clean."""
-    choice = bt.geometry_choice(bt.DATA_ROOT / "British Grand Prix")
+    choice = bt.geometry_choice(data_root() / "British Grand Prix")
     assert choice["chosen"] == "Race"
     race = choice["candidates"][0]
     assert race["components"]["lapQuality"] > 0.95

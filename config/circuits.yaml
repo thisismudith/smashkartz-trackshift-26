@@ -1,0 +1,125 @@
+# Real GLB circuit models, keyed by the sim's own slug.
+#
+# The telemetry ring is the ground truth, not the model. Everything in `fit` -- position,
+# rotation AND scale -- was MEASURED by fitting the ring onto the model's drivable
+# surface (scripts/simdata/glb_surface.py), never read out of the model's own metadata.
+# That both models come back at scale ~1.0 is a RESULT of the fit, not an assumption
+# baked into it: the search brackets scale from drivable area against known ring length
+# and covers 0.35x to 3.3x. `measured` records what the fit then achieved against the gate.
+#
+# A circuit may only draw its real model when `measured.gate` is `pass`. A circuit that
+# fails keeps the procedural ribbon, which costs nothing. Do NOT loosen the gate to make
+# a circuit pass, and do NOT edit `measured` by hand: it is reproduced by
+# test_glb_surface.test_registry_measurements_are_reproducible, which is what stops a
+# stale block keeping a circuit shipping after it has stopped aligning.
+#
+# Reproduce either row with:
+#     python -m simdata.glb_surface fit  "<event>"    # global search from cold, ~2 min
+#     python -m simdata.glb_surface bake "<event>"    # from the transform below, ~10 s
+# Both print the entry they measured, ready to paste back here.
+#
+# `glb` paths are repo-relative and point into data/, which is gitignored: the assets are
+# 97-158 MB and are not committed.
+version: 1
+
+gate:
+  # The bake FAILS below either of these. Same two numbers as glb_surface.GATE_*, restated
+  # here so a reader of the registry can see what `pass` means.
+  minCoverage: 0.99
+  maxResidualStdM: 0.15
+
+# The transform maps telemetry metres to the model's Y-up world frame:
+#     u  = (scale * x, scale * mirror * y)
+#     wx = cos(yaw) * u.x - sin(yaw) * u.y + txM
+#     wz = sin(yaw) * u.x + cos(yaw) * u.y + tzM
+#     wy = scale * z + tyM
+# Both Sketchfab node chains compose to world = (raw_x, -raw_z, raw_y), so the same fit in
+# the raw Z-up coordinates env_sim.md quotes is raw = (wx, wz, -wy).
+circuits:
+  british-grand-prix:
+    event: British Grand Prix
+    glb: data/tracks/silverstone.glb
+    sha256: 228c897e5c15674fd62d936160f0599602ca28c61e13aaf32555fd0084d58783
+    profile: edelta-scorer
+    fit:
+      scale: 0.999404
+      yawDeg: 0.203281
+      mirror: -1
+      txM: -277.7467
+      tzM: 442.3924
+      tyM: -203.2841
+    measured:
+      stations: 5832
+      stationsValid: 5832
+      coverage: 1.000000
+      roadCoverage: 0.998457
+      residualStdM: 0.050814
+      residualMaxM: 0.165197
+      largestGapStations: 0
+      camberCoverage: 0.984739
+      gate: pass
+    # PASSES. env_sim.md had already measured this same geometry at coverage 99.8 %
+    # (5822/5832 on asphalt), residual std 0.054 m, max 0.179 m, scale 1.0; this bake
+    # reproduces all four.
+    #
+    # 5513 stations land on `asphalt.001`, 310 on `Curb_new.001` at apex kerbs, 9 on a
+    # racing-line decal. Nothing forces that -- the scorer would take any dark horizontal
+    # surface -- so it is evidence the alignment is right rather than merely
+    # self-consistent. |residual| p50 0.026 m, p95 0.109 m, p99 0.139 m; vertical
+    # regression surface_z = 1.00198 * telem_z - 0.406, against the 1.00131 env_sim.md
+    # measured independently. Slope p50 0.367 deg, p99 1.853 deg; camber p50 0.567 deg,
+    # p99 1.724 deg, both smoothed 25 m.
+    #
+    # The in-plane optimum is SHALLOW: env_sim.md's transform (glb_x offset -276.01,
+    # glb_y offset 443.01, yaw -0.0235 deg) is 1.7 m away and also lands 100 % on
+    # asphalt, at residual std 0.0554 m against 0.0508 m here. Silverstone's RUNOFF is
+    # the same asphalt as its road, so coverage alone cannot separate the two; the
+    # elevation residual can, which is why the fit optimises on it.
+
+  chinese-grand-prix:
+    event: Chinese Grand Prix
+    glb: data/tracks/shanghai.glb
+    sha256: 4bc4b1023fb79a76d5e9a9979d32c6f06f03c628d388ae77df52d521157fa464
+    profile: edelta-scorer
+    fit:
+      scale: 1.008645
+      yawDeg: 359.323594
+      mirror: -1
+      txM: 63.7404
+      tzM: 187.4186
+      tyM: -17.6173
+    measured:
+      stations: 5451
+      stationsValid: 5451
+      coverage: 1.000000
+      roadCoverage: 0.000000
+      residualStdM: 0.306146
+      residualMaxM: 1.193308
+      largestGapStations: 0
+      camberCoverage: 1.000000
+      gate: FAIL
+    # FAILS the gate at 2.0x the residual limit, and stays failing. It keeps the
+    # procedural ribbon.
+    #
+    # This is already far better than the geometry-only attempt env_sim.md recorded
+    # (coverage 93.8 %, residual std 0.699 m, p95 0.896 m, max 7.15 m, elevation
+    # correlation 0.869). The e-delta scorer plus an exact barycentric raycast and height
+    # hysteresis give coverage 100 %, std 0.306 m, p50 0.111 m, p95 0.662 m, max 1.193 m,
+    # correlation 0.974. The 7.15 m hits -- a station landing on a wall or a kerb -- are
+    # gone entirely.
+    #
+    # What remains is not method error. The residual is REGIONAL, not noise: eight
+    # contiguous runs of 38-163 stations sit above 0.5 m, and the model's vertical relief
+    # is 7 % flatter than the telemetry's (regression surface_z = 0.92897 * telem_z +
+    # 1.089). Even allowing a free vertical scale -- which we do NOT, because rescaling a
+    # model until it fits is fudging rather than fitting -- the residual is still 0.289 m,
+    # 1.9x the limit. This is a 2018 layout against 2026 telemetry on a 256-pixel-texture
+    # export: it needs a better asset, not a better bake.
+    #
+    # roadCoverage is 0.000000 because the model names nothing: 100 materials called
+    # Merged_materials and advert_side_a_1..97, meshes called Object_N, road and grass and
+    # buildings mixed into single 61.5k-triangle chunks. Coverage of 100 % here is carried
+    # entirely by geometry, colour and texture, which is exactly the graceful degradation
+    # the single scorer exists for. It also means the COARSE stage is uninformative here
+    # -- 42 % of the model is near-horizontal, so many hypotheses score frac 1.000 -- and
+    # the elevation residual is what actually picks the alignment out.

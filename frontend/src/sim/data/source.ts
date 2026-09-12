@@ -42,6 +42,11 @@ export interface SimIndex {
   params: string;
   /** Absent from artifacts built before the rule engine landed. */
   rules?: string;
+  /** The season these artifacts were built from, e.g. "2026". Written by
+   * scripts/build_sim_data.py --year. Artifact filenames carry the circuit slug but no
+   * year, so one build directory holds exactly one season; this states which.
+   * Absent from artifacts built before the build became year-selectable. */
+  year?: string;
   tracks: Record<string, string>;
   sessions: Record<string, Record<string, { manifest: string; bin: string }>>;
 }
@@ -222,4 +227,8 @@ export class StaticSimSource implements SimSource {
  * scripts/simdata/*; nothing in the maths moves.
  */
 
-export const defaultSimSource: SimSource = new StaticSimSource();
+/** The artifacts are gitignored build output, not repo content, so a deployed build has
+ * no /sim to serve. Point NEXT_PUBLIC_SIM_BASE at wherever they are hosted (a bucket, a
+ * release asset) and the whole app follows; unset, it reads the local build as before. */
+export const defaultSimSource: SimSource = new StaticSimSource(
+  process.env.NEXT_PUBLIC_SIM_BASE || "/sim");

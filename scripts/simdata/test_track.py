@@ -1,7 +1,7 @@
 """Tests for the track model's POSITION POLICY: which laps may define a circuit, which
 samples may define a timing line, a pit lane or a grid.
 
-Measured against the real 2026 feed in data/2026 wherever the defect lives in the data,
+Measured against the real 2026 feed in the raw mirror wherever the defect lives in the data,
 and synthetically only where the point is a pure algorithm property. Every assertion
 below fails on the code as it stood before this file existed; the numbers in the
 docstrings are measured, not illustrative.

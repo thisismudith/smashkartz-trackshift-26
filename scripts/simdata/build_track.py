@@ -35,12 +35,12 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from simdata.paths import data_root
 from simdata.rawio import MIN_SAMPLES, LapTable, SentinelIndex, load_lap
 from simdata.track import (build_ring, corner_stations, grid, pick_geometry_laps,
                             pit_lane, pit_lane_path, reference_speed_profile,
                             timing_lines, width_estimate)
 
-DATA_ROOT = Path(__file__).resolve().parent.parent.parent / "data" / "2026"
 SCHEMA_VERSION = 1
 
 # Sessions that may define the circuit's geometry. Practice is deliberately NOT here:
@@ -493,7 +493,7 @@ def prepare_ring(event: str):
     if hit is not None:
         return hit[:5]
 
-    event_dir = DATA_ROOT / event
+    event_dir = data_root() / event
     choice = geometry_choice(event_dir)
     failures = []
     for cand in choice["candidates"]:
@@ -636,11 +636,131 @@ def _ring_emission_error(ring, x_cm, y_cm) -> float:
     return abs((seg + wrap) - ring.length)
 
 
+# ---------------------------------------------------------------------------
+# The optional 3D drive surface
+#
+# A circuit with a real GLB model that PASSES the quality gate gains a `surface` sibling
+# of `ring`: the model's road height, slope and camber sampled under every ring station.
+# Every other circuit gains nothing and keeps the procedural ribbon, which is exactly
+# today's behaviour -- "for available use the 3d environment, otherwise normal sim as it
+# is working".
+#
+# So the gate is a REGISTRY ADMISSION TEST, not a build failure. env_sim.md Part A says
+# the build should fail below the gate; that is deliberately overridden here, because a
+# failing circuit already has a correct renderer path and stopping the whole build would
+# cost the other twelve circuits their artifacts. There are four ways to decline, and all
+# four degrade to the same place:
+#
+#   * no config/circuits.yaml entry            -- the eleven circuits with no model
+#   * the entry's measured.gate is not "pass"  -- chinese-grand-prix, residual 0.31 m
+#   * the asset is not on disk                 -- data/ is gitignored, so this is normal
+#   * the bake raises, disagrees with the registry, or fails the gate on THIS build
+#
+# Each one logs the reason and returns None. None means the `surface` key is absent --
+# absence, not a default, and not a seventh provenance word.
+
+# The published-asset contract, frozen so the build, the publisher and the renderer could
+# be written in parallel:
+#     published path   frontend/public/sim/glb/<slug>.<sha10>.glb
+#     served URL       /sim/glb/<slug>.<sha10>.glb
+# <sha10> is the first 10 hex characters of the sha256 of the PUBLISHED bytes. Publishing
+# is a byte-for-byte copy of the asset that was fitted and baked, so that is the same hash
+# this module measures off the file it read -- and `_surface_for` refuses to emit a block
+# when the file on disk is not the one the recorded transform was fitted to, which is what
+# keeps the two halves of the contract from drifting apart. An asset-prep step that ever
+# rewrites the bytes has to re-fit and re-record the registry; it cannot just republish.
+GLB_URL_PREFIX = "/sim/glb"
+GLB_SHA_CHARS = 10
+
+# Arrays the frontend reads per station. They must be exactly as long as ring.xCm, in the
+# same order, or a renderer would stand cars on the wrong part of the circuit.
+SURFACE_STATION_ARRAYS = ("zCm", "slopePermille", "camberPermille", "validMask")
+
+
+def glb_asset_url(slug: str, sha256: str) -> str:
+    """The served URL for a published circuit asset. One definition of the name."""
+    return f"{GLB_URL_PREFIX}/{slug}.{sha256[:GLB_SHA_CHARS]}.glb"
+
+
+def _no_surface(slug: str, why: str) -> None:
+    """Decline, out loud. The build continues; the circuit keeps its procedural ribbon."""
+    print(f"  {slug}: no 3D surface ({why}); keeping the procedural ribbon", flush=True)
+    return None
+
+
+def _bake_surface_for(entry: dict, glb_path: Path, ring):
+    """Read the asset and bake the drive surface under `ring`. The IO and the geometry.
+
+    Split out from `_surface_for` so the admission decisions above it are testable
+    without a 158 MB asset, and so a test can prove a declined circuit never reaches it.
+    """
+    surface = load_surface(glb_path)
+    return bake_surface(TriangleIndex(surface), ring, Fit.from_dict(entry["fit"]))
+
+
+def _surface_for(slug: str, ring) -> dict | None:
+    """The `surface` block for `slug`, or None with a logged reason.
+
+    `ring` must be the FINAL ring -- the one prepare_ring returns, already rotated so
+    start/finish is station 0. Baking earlier and rotating afterwards would silently
+    desynchronise: Ring.rotated rolls x, y and z and knows nothing about these arrays.
+    """
+    entry = registry_entry(slug)
+    if not entry:
+        return _no_surface(slug, "not in config/circuits.yaml")
+
+    gate = (entry.get("measured") or {}).get("gate")
+    if gate != "pass":
+        return _no_surface(slug, f"registry gate is {gate!r}, not 'pass'")
+    if not entry.get("fit"):
+        return _no_surface(slug, "registry entry records no fitted transform")
+    profile = entry.get("profile")
+    if not profile:
+        return _no_surface(slug, "registry entry names no profile")
+
+    rel = entry.get("glb")
+    glb_path = REPO_ROOT / rel if rel else None
+    if glb_path is None or not glb_path.is_file():
+        return _no_surface(slug, f"asset {rel or '(unnamed)'} is not on disk")
+
+    try:
+        bake = _bake_surface_for(entry, glb_path, ring)
+    except Exception as exc:      # noqa: BLE001 - reported, never hidden, never fatal
+        return _no_surface(slug, f"bake failed: {type(exc).__name__}: {exc}")
+
+    # The recorded transform belongs to specific bytes. Different bytes, different model:
+    # the fit would be meaningless and the published sha10 would name the wrong file.
+    recorded = entry.get("sha256")
+    if recorded and bake.sha256 != recorded:
+        return _no_surface(slug, f"asset sha256 {bake.sha256[:10]} is not the fitted "
+                                 f"{str(recorded)[:10]}")
+
+    # The registry says this alignment passed when it was measured. Re-measuring it here
+    # costs nothing extra -- the bake has already computed both numbers -- and it is the
+    # difference between shipping a surface and shipping a stale claim about one.
+    ok, fails = bake.gate()
+    if not ok:
+        return _no_surface(slug, "this build measures " + "; ".join(fails)
+                           + ", although the registry records a pass")
+
+    block = surface_block(bake, profile)
+    wrong = [k for k in SURFACE_STATION_ARRAYS if len(block.get(k, ())) != ring.n]
+    if wrong:
+        return _no_surface(slug, f"baked arrays {wrong} are not {ring.n} stations long")
+
+    # Per the frozen contract: which file to fetch, and the hash that names it.
+    block["assetUrl"] = glb_asset_url(slug, bake.sha256)
+    block["assetSha256"] = bake.sha256
+    print(f"  {slug}: 3D surface from {glb_path.name} -- coverage {bake.coverage:.2%}, "
+          f"residual std {bake.residual_std_m:.3f} m, {ring.n} stations", flush=True)
+    return block
+
+
 def build_track_model(event: str) -> dict:
     ring, sdir, session_name, laps, tl = prepare_ring(event)
     choice = _PREPARE_CACHE[event][5]
     table = LapTable(sdir)
-    event_dir = DATA_ROOT / event
+    event_dir = data_root() / event
 
     corners = corner_stations(sdir, ring)
     pit = pit_lane(sdir, table, ring)
@@ -670,6 +790,9 @@ def build_track_model(event: str) -> dict:
 
     scan = scan_session(sdir)
     capabilities = _capabilities(choice, grid_model, grid_field, gname, tl, corners, pit)
+    # After the ring is final AND after the emission check: a ring the build is about to
+    # reject must not first spend a minute reading a 158 MB model.
+    surface = _surface_for(slugify(event), ring)
 
     return {
         "schemaVersion": SCHEMA_VERSION,
@@ -721,6 +844,10 @@ def build_track_model(event: str) -> dict:
             "yCm": y_cm,
             "zCm": z_cm,
         },
+        # A sibling of `ring`, present only for a circuit whose real model is registered,
+        # on disk and passing the gate. Same stations, same order, same cm quantisation.
+        # When it is absent the artifact is what version 1 emitted, key for key.
+        **({"surface": surface} if surface else {}),
         "timingLines": tl,
         "corners": corners,
         "pitLane": pit,
@@ -734,6 +861,11 @@ def build_track_model(event: str) -> dict:
         },
         "provenance": {
             "ring": "DERIVED (median of clean laps, circularly smoothed)",
+            # DERIVED, never OBSERVED: no car measured these heights. They are a
+            # third-party model's geometry read under a transform fitted to the OBSERVED
+            # ring, and AGENTS.md 13.6 forbids calling that OBSERVED merely because its
+            # inputs were. A station the raycast missed is null, not a default.
+            **({"surface": surface["provenance"]} if surface else {}),
             "geometrySession": ("DERIVED (highest measured position-quality score of "
                                 + ", ".join(CANDIDATE_SESSIONS) + ")"),
             "gridSession": "OBSERVED (the session that has a standing start)",

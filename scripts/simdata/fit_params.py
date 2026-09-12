@@ -1,7 +1,12 @@
 """Build sim/params.json: every fitted parameter the New Race engine needs, with value,
-n, se, ci95, provenance and source on every leaf. Streams session_laptimes.json only
-(never opens telemetry). See plan section 5.2 for what each parameter means and what
-the data does and does not support.
+n, se, ci95, provenance and source on every leaf. See plan section 5.2 for what each
+parameter means and what the data does and does not support.
+
+Everything here streams session_laptimes.json, with ONE exception: the standing-start
+block. A grid box and a launch exist only in the position and speed channels, so
+scripts/simdata/launch.py reads each race's lap-1 telemetry (one lap per driver, plus
+lap 2 for the timing line) and hands back leaves in this file's own shape. That is the
+whole of the telemetry this module touches, and it costs about two seconds.
 
 Usage: python scripts/simdata/fit_params.py <out_dir>
 """
@@ -22,6 +27,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from simdata.laptable import build_tidy_table, clean_mask
 from simdata.fit_pace import (driver_team_offsets, fit_track_model, leaf,
                               noise_model, session_pace_trend, track_degradation_index)
+from simdata.launch import fit_standing_start
 
 SCHEMA_VERSION = 1
 
@@ -254,6 +260,11 @@ def build_params() -> dict:
     neut = neutralisation_rates(t)
     dnf = retirement_rate(t)
     facts = field_and_tyre_facts(t)
+    # The standing start is the one block here that needs TELEMETRY, not just the lap
+    # table: a grid box and a launch only exist in the position and speed channels. It
+    # owns its own reading (scripts/simdata/launch.py) and hands back leaves in exactly
+    # this file's shape, so nothing below has to know where a grid came from.
+    start = fit_standing_start()
 
     out = {
         "schemaVersion": SCHEMA_VERSION,
@@ -285,6 +296,7 @@ def build_params() -> dict:
                                                        "the undercut must EMERGE from this "
                                                        "against tyre-age delta, never be a "
                                                        "stored constant"),
+        "standingStart": start,
         "defaultLaps": default_laps_formula(),
         "fieldAndTyre": facts,
         "wetWeather": {

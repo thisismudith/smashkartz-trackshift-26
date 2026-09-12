@@ -6,6 +6,7 @@ this artifact.
 from __future__ import annotations
 
 import json
+import sys
 from collections import defaultdict
 from pathlib import Path
 
@@ -22,7 +23,7 @@ SCHEMA_VERSION = 1
 def discover_events() -> list[str]:
     """Events that have a Race session, discovered from the directory listing."""
     out = []
-    for d in sorted(DATA_ROOT.iterdir()):
+    for d in sorted(data_root().iterdir()):
         if not d.is_dir() or d.name in ("schemas", "cache", "cache_preseason"):
             continue
         if (d / "Race").exists():
@@ -31,7 +32,7 @@ def discover_events() -> list[str]:
 
 
 def event_sessions(event: str) -> list[str]:
-    d = DATA_ROOT / event
+    d = data_root() / event
     return sorted(s.name for s in d.iterdir() if s.is_dir())
 
 
@@ -50,7 +51,7 @@ def driver_registry(events: list[str]) -> dict:
 
     for event in events:
         for session in event_sessions(event):
-            sdir = DATA_ROOT / event / session
+            sdir = data_root() / event / session
             drv_file = sdir / "drivers.json"
             attrs_by_code = {}
             if drv_file.exists():
@@ -138,7 +139,7 @@ def race_entries(event: str, registry: dict) -> list[dict]:
     at all. Attributes come from the event's own drivers.json first, then from the
     registry, so a code present only as a directory still arrives fully described.
     """
-    race_dir = DATA_ROOT / event / "Race"
+    race_dir = data_root() / event / "Race"
     if not race_dir.exists():
         return []
 
@@ -184,7 +185,7 @@ def weather_envelope(event: str) -> dict:
     rain_total = 0
     rain_n = 0
     for session in event_sessions(event):
-        wpath = DATA_ROOT / event / session / "weather.json"
+        wpath = data_root() / event / session / "weather.json"
         if not wpath.exists():
             continue
         try:
@@ -220,7 +221,7 @@ def weather_envelope(event: str) -> dict:
 
 def tyre_allocation(event: str) -> dict:
     from collections import Counter
-    race_dir = DATA_ROOT / event / "Race"
+    race_dir = data_root() / event / "Race"
     if not race_dir.exists():
         return {"compounds": ["SOFT", "MEDIUM", "HARD"], "provenance": "DEFAULT (no Race session)"}
     p = race_dir / "session_laptimes.json"
@@ -240,7 +241,7 @@ def tyre_allocation(event: str) -> dict:
 
 
 def race_length(event: str) -> dict:
-    p = DATA_ROOT / event / "Race" / "session_laptimes.json"
+    p = data_root() / event / "Race" / "session_laptimes.json"
     if not p.exists():
         return {"raceLaps": None}
     try:
@@ -248,7 +249,7 @@ def race_length(event: str) -> dict:
     except json.JSONDecodeError:
         return {"raceLaps": None}
     laps = [l for l in sl.get("lap", []) if isinstance(l, int)]
-    sprint_dir = DATA_ROOT / event / "Sprint"
+    sprint_dir = data_root() / event / "Sprint"
     sprint_laps = None
     if sprint_dir.exists():
         sp = sprint_dir / "session_laptimes.json"
@@ -266,7 +267,8 @@ def build_catalogue() -> dict:
     events = discover_events()
     driver_reg = driver_registry(events)
     team_reg = team_registry(driver_reg)
-    year = int(DATA_ROOT.name) if DATA_ROOT.name.isdigit() else None
+    root = data_root()
+    year = int(root.name) if root.name.isdigit() else None
     tracks = []
     for event in events:
         rl = race_length(event)
@@ -285,7 +287,8 @@ def build_catalogue() -> dict:
         "drivers": driver_reg["drivers"],
         "teams": team_reg["teams"],
         "tracks": tracks,
-        "provenance": "Built by scripts/simdata/catalogue.py from data/2026; see per-field notes",
+        "provenance": f"Built by scripts/simdata/catalogue.py from {relative_root()}; "
+                       "see per-field notes",
     }
 
 
