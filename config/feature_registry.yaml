@@ -2728,3 +2728,23 @@ features:
     regulation_source: "Not a regulatory value. Outcome observed from C1."
     interaction_group: [overtake_outcome]
     consuming_models: ["M07"]
+
+  - name: gap_at_checkpoint
+    definition: "Time gap to the car ahead at this decision checkpoint."
+    unit: "s"
+    source: "C1 gap_ahead_m and speed_kmh at the checkpoint cutoff"
+    derivation: "gap_ahead_m divided by speed in m/s, sampled at or before feature_cutoff_distance_m."
+    allowed_sessions: [Race, Sprint]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: DERIVED
+    availability_scope: partial
+    source_gated: true
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: rules-2026-common-v1
+    regulation_source: "Not a regulatory value. Measured from C1 telemetry."
+    interaction_group: [overtake_eligibility]
+    consuming_models: ["M21", "M07", "M10"]
