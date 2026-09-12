@@ -54,14 +54,14 @@ Each checkpoint has the same shape:
 | 01 | Local data audit | §51, §63 | ✅ |
 | 02 | Registries scaffold | M31 | ✅ |
 | 03 | Rule config skeleton + **speed-dependent power envelope**, all tracks | M18 | ✅ |
-| 04 | Build the 20 m lake | Phase 2 | ☐ |
+| 04 | Build the 20 m lake | Phase 2 | ✅ |
 | 05 | **Track segmentation — freeze `segment_id`** | M03 | ✅ |
-| 06 | Track-relative weather | M33 | ☐ |
+| 06 | Track-relative weather | M33 | ◐ |
 | 07 | Practice lap classifier | M01 | ☐ |
-| 08 | Tyre degradation and normalised pace | M30 | ☐ |
-| 09 | Segment baselines | M04 | ☐ |
-| 10 | Overtake state machine | M20 | ☐ |
-| 11 | Rule engine (owns the envelope evaluator) | M19 | ☐ |
+| 08 | Tyre degradation and normalised pace | M30 | ◐ |
+| 09 | Segment baselines | M04 | ✅ |
+| 10 | Overtake state machine | M20 | ◐ |
+| 11 | Rule engine (owns the envelope evaluator) | M19 | ✅ |
 | 12 | Eligibility probability | M21 | ☐ |
 | 13 | Overtake-opportunity dataset | M07 | ☐ |
 | 14 | Pass-model benchmark | M10 | ☐ |
@@ -76,6 +76,17 @@ Each checkpoint has the same shape:
 | 22 | Physics uncertainty | M17 | ☐ |
 | 23 | Ablation harness | M28 | ☐ |
 | 24 | Service routes and replay bundle | API.md | ☐ |
+
+✅ built and its acceptance gates measured. ◐ code merged but not yet
+complete: the outputs do not exist, or they exist and a gate does not pass.
+☐ not started. Verified 2026-09-12 against what is actually on disk, not
+against what has been committed — four of these checkpoints had code on `main`
+and no outputs at all, which reads as done until you look.
+
+**Owner drift.** Rishabh has taken CP-06, CP-07, CP-08, CP-09 and CP-10 from this
+plan onto his own branches (`rishabh/takeover-*`). They are still Owner B
+contracts and are still checked against the gates below; agree ownership before
+starting one, because three of them were already in flight when this was written.
 
 ---
 
@@ -960,6 +971,53 @@ Residuals are `x_current - baseline`, computed at consumption time, not stored p
 
 `src/trackshift/track/baselines.py`, `scripts/features/build_baselines.py`, `data/processed/{driver,team,field}_segment_baselines/`, `config/baselines.yaml`, `tests/test_baselines.py`.
 
+### ✅ Completed
+
+Built on the 2026 lake: **8,440 driver, 3,957 team, 355 field** groups over 13
+circuits. British GP is absent by design — 75,672 rows held out as the frozen
+final test.
+
+| Gate | Measured |
+|---|---|
+| Field `n` >= 100 for every segment | **min 325**, none below |
+| Driver baselines across circuits | 32 drivers, 13 circuits, 22+ per circuit |
+| Driver residuals centred on field | **+0.0008 s** (gate: +/- 0.02) |
+| `baseline_valid: false` retained, not dropped | 534 driver, 42 team |
+| A fast driver is negative vs field | ANT **-0.035 s**, negative at 79.4% of 355 segments |
+
+Gate 5 is the one that carries information: the five fastest by residual came out
+ANT, RUS, VER, NOR, PIA. A plausible pace order rather than noise is what tells
+you the residuals mean something.
+
+**`brake_onset_m` was missing entirely** — 0 of 8,440 non-null. CP-05 computed
+`brake_fraction` but never recorded *where* braking began, so one of the five
+required metrics had no source column at all. Fixed in
+`scripts/features/build_segments.py`, which now emits `brake_onset_m_offline`.
+Verified additive before rebuilding all 14 circuits: identical row count, all 42
+pre-existing columns byte-identical, one column added. Braking is now detected on
+**45.5% of 744,655** segment rows, and the per-circuit spread is the physical
+ordering you would want — hungarian 73.8% highest, italian 35.3% among the
+lowest. Flat across circuits would have meant the detection was wrong.
+
+**Completing C1 then broke the Parquet write.** `unavailable_metrics` is keyed by
+whichever metrics were missing, so with nothing missing it became a struct with no
+child fields, which Arrow cannot represent. The failure was triggered by the data
+getting *better*, and would have fired for whoever completed C1. Fixed at the
+write boundary — the dict shape is right in memory — by JSON-encoding to one
+stable column.
+
+Two honest limits to carry forward:
+
+- **2026 only.** The spec says all years and the code implements the section 41
+  `year_group` split correctly, but every group came back `year_group: 2026`
+  because the lake is 2026-only. The `drs_era` half fills in when the historical
+  lake is built for CP-14; no code change needed.
+- **C7 is not available yet**, so this ran on the track-status bridge this plan
+  prescribes as the stand-in. `c7_source: legacy_track_status_bridge_v1` is in the
+  manifest, so it is auditable and swappable when M02 lands. The filter did bite:
+  **145,296 rows** excluded as `NOT_NORMAL_RACE_MODEL_ELIGIBLE`, which is the
+  section 37 failure — baselines dominated by Safety Car laps — not happening.
+
 ---
 
 # CP-10 — Overtake state machine (M20)
@@ -1085,6 +1143,43 @@ So `legal_actions` now **requires `speed_kmh` in the state**, and returns `cap_k
 ### Deliverables
 
 `src/trackshift/rules/engine.py`, `src/trackshift/rules/api.py` (C3), `tests/test_rules.py` extended, stub mode.
+
+### ✅ Completed
+
+`src/trackshift/rules/engine.py` and `src/trackshift/rules/api.py` (the C3
+boundary did not exist), with `tests/test_rules.py` at **27 tests**. Suite 496
+passed.
+
+| Gate | Measured |
+|---|---|
+| Zero illegal actions | 10,000 seeded states across 0-360 km/h, every action re-checked against a freshly evaluated cap |
+| `actions` never empty; coasting always legal | asserted at every speed; the engine **raises** if coast is ever filtered |
+| Threshold triples | below/at/above every breakpoint of both curves, plus both clamped regions and the separation speed |
+| Deploy buys less above the taper | asserted directly |
+| Cap varies along a straight | asserted — a constant cap silently reverts section 20.1 and will not otherwise announce itself |
+| Every exclusion names a real rule key | each fed back through `resolve()`, which raises if the key does not exist |
+| Strict mode refuses `UNVERIFIED` | raises on the current config |
+
+**Null limits are reported, not assumed.** All three energy limits are
+`null`/`UNVERIFIED`, so those filters cannot run. Instead of behaving as "no
+limit", the result carries `filters_not_applied` naming each skipped filter and
+why. They activate with no code change when the FIA values land.
+
+**The section 32 check is AST-based, not grep**, so prose mentions of 350 kW in
+docstrings do not cry wolf — a check that cries wolf gets muted. It immediately
+caught a hardcoded `350.0` in this checkpoint's own stub mode, now removed: the
+stub short-circuits the *filters*, never the envelope. Three pre-existing
+violations are allowlisted with the reason each is not a free fix, so anything new
+fails the build:
+
+| Location | Constant | Why it is not free |
+|---|---|---|
+| `src/trackshift/track/segmentation.py:108` | `envelope_taper_kmh: 290.0` | duplicates `power_envelope.separation_speed_kmh`; closing it bumps `geometry_version` |
+| `scripts/simdata/twin.py:64-65` | `350.0` twice | Rishabh's simulator; raise it with him rather than editing his module |
+
+**Tell Rishabh:** `legal_actions` requires `speed_kmh` in the state and returns
+`cap_kw`, `applicable_mode` and `delivered_power_kw` per action. That changes his
+DP state, which is why section 31 says to tell him the moment the signature moves.
 
 ---
 
