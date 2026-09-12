@@ -57,6 +57,25 @@ datasets:
       tyre behaviour. The build emits a run manifest with complete label and
       unknown/excluded counts, and does not mutate telemetry_20m in place.
 
+  - name: tyre_pace_overlay
+    description: >-
+      Immutable C1-keyed M30 overlay with causal tyre-degradation pace context
+      and conservative tyre-normalised segment pace. It is explicitly not a
+      tyre temperature, pressure, or physical tyre-performance sensor.
+    source: segments, telemetry_20m lap metadata, C7 race-context normalizer
+    schema_version: m30_tyre_pace_overlay_v1
+    partitioning: circuit / year / event / session
+    primary_key: [year, event, session, driver, lap, segment_id, geometry_version, boundary_hash]
+    producer: scripts/features/build_tyre_pace.py
+    consumers: [M06, M07, M08, M10, M14, M15, M16, M30]
+    live_status: OFFLINE_ONLY
+    status: built
+    notes: >-
+      M30 / CP-08. Race and Sprint only. C7-normal-race eligibility and pit/
+      race-control transitions are reconstructed from matching lake metadata
+      where C1 lacks materialized C7 fields. Fuel correction is unavailable
+      until C5/M34; all unavailable values are null with explicit reasons.
+
   - name: segments
     description: >-
       Strategic track segments, roughly 30-40 per lap, bounded by braking onset,

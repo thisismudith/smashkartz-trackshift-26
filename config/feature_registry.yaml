@@ -69,6 +69,22 @@ pairwise_feature_defaults: &pairwise_feature_defaults
   interaction_group: [pairwise]
   consuming_models: [M06, M08]
 
+tyre_pace_defaults: &tyre_pace_defaults
+  allowed_sessions: [Sprint, Race]
+  supported_years: [2026]
+  live_safe: false
+  provenance: DERIVED
+  availability_scope: partial
+  source_gated: false
+  decision_checkpoint: null
+  uncertainty_field: null
+  causal_status: CAUSAL
+  counterfactual_safe: true
+  regulation_version: null
+  regulation_source: null
+  interaction_group: [tyre, pace, offline]
+  consuming_models: [M06, M07, M08, M10, M14, M15, M16, M30]
+
 features:
 
   # ------------------------------------------------------- M33 weather overlay
@@ -2307,3 +2323,81 @@ features:
     regulation_source: null
     interaction_group: [practice, pace]
     consuming_models: [M01]
+
+  # --------------------------------------------- M30 tyre pace overlay
+  - <<: *tyre_pace_defaults
+    name: tyre_stint_id
+    definition: Deterministic M30 stint identifier reset at source-stint, tyre, pit, control, quality, and lap-gap boundaries.
+    unit: null
+    source: C1 lap metadata plus matching telemetry_20m pit metadata and C7 context
+    derivation: Per-driver/session deterministic stint reconstruction.
+
+  - <<: *tyre_pace_defaults
+    name: tyre_stint_reset_reason
+    definition: Explicit reason the reconstructed M30 stint was reset, where a reset occurs.
+    unit: null
+    source: M30 stint reconstruction
+    derivation: Boundary audit field; null away from a reset.
+    consuming_models: [M30]
+
+  - <<: *tyre_pace_defaults
+    name: tyre_pace_retained_lap
+    definition: Whether the lap passed C7, timing quality, tyre and lap-time requirements for M30 causal history.
+    unit: null
+    source: C7 and observed lap metadata
+    derivation: True only for clean green on-track retained laps.
+    consuming_models: [M30]
+
+  - <<: *tyre_pace_defaults
+    name: tyre_degradation_proxy_s
+    definition: Causal rolling-median lap-time context minus the first-three-retained-lap median for its reconstructed stint; not a physical tyre sensor.
+    unit: s
+    source: observed lap_time_s and M30 retained-lap history
+    derivation: median(retained laps k-4..k) minus median(first three retained stint laps), with no future laps.
+
+  - <<: *tyre_pace_defaults
+    name: tyre_degradation_proxy_reason
+    definition: Explicit unavailable reason for tyre_degradation_proxy_s; never represented by zero.
+    unit: null
+    source: M30 causal eligibility and history checks
+    derivation: null when the proxy is available.
+    consuming_models: [M30]
+
+  - <<: *tyre_pace_defaults
+    name: tyre_degradation_proxy_provenance
+    definition: Provenance tag for tyre_degradation_proxy_s; always DERIVED.
+    unit: null
+    source: M30 overlay
+    derivation: Constant provenance tag.
+    consuming_models: [M30]
+
+  - <<: *tyre_pace_defaults
+    name: tyre_normalized_pace_s
+    definition: Current offline segment time minus a causal median of at least three prior same-driver/session/circuit/compound/stint segment times at similar tyre life.
+    unit: s
+    source: C1 segment_time_s_offline and M30 causal history
+    derivation: Current segment time minus prior-history median; no C2 or future reference is used.
+
+  - <<: *tyre_pace_defaults
+    name: tyre_normalized_pace_reason
+    definition: Explicit unavailable reason for tyre_normalized_pace_s, including insufficient causal similar-life history.
+    unit: null
+    source: M30 causal history checks
+    derivation: null when the normalised pace residual is available.
+    consuming_models: [M30]
+
+  - <<: *tyre_pace_defaults
+    name: tyre_normalized_pace_provenance
+    definition: Provenance tag for tyre_normalized_pace_s; always DERIVED.
+    unit: null
+    source: M30 overlay
+    derivation: Constant provenance tag.
+    consuming_models: [M30]
+
+  - <<: *tyre_pace_defaults
+    name: tyre_pace_schema_version
+    definition: Version of the M30 overlay schema used to derive this row.
+    unit: null
+    source: M30 overlay builder
+    derivation: Constant version tag.
+    consuming_models: [M30]
