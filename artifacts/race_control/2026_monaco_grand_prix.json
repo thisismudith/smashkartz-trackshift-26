@@ -1,0 +1,6229 @@
+{
+  "schema_version": 1,
+  "generated_utc": "2026-09-12T12:05:55.691775+00:00",
+  "value_source": "OBSERVED_RCM",
+  "source": "race-control messages in data\\raw\\tracinginsights\\2026\\Monaco Grand Prix",
+  "note": "Tier B. Race control states WHETHER Overtake is available, never WHERE. Detection and Activation Line positions are not derivable from these messages and remain Tier A (FIA event note) or Tier C (DRS proxy).",
+  "year": "2026",
+  "event": "monaco_grand_prix",
+  "event_display": "Monaco Grand Prix",
+  "sessions": {
+    "Practice 1": {
+      "messages_total": 124,
+      "counts": {
+        "flag_black_and_white": 1,
+        "flag_chequered": 1,
+        "flag_clear": 21,
+        "flag_double_yellow": 6,
+        "flag_green": 3,
+        "flag_red": 2,
+        "flag_yellow": 14,
+        "overtake_enabled": 3,
+        "vsc_deployed": 1,
+        "vsc_ending": 1
+      },
+      "overtake_windows": [
+        {
+          "start": "2026-06-05T12:00:03.000000000",
+          "start_message": "OVERTAKE ENABLED",
+          "end": null,
+          "end_message": null,
+          "note": "still open at the end of the message feed"
+        }
+      ],
+      "safety_car": [],
+      "virtual_safety_car": [
+        {
+          "start": "2026-06-05T11:59:38.000000000",
+          "start_message": "VSC DEPLOYED",
+          "end": "2026-06-05T11:59:48.000000000",
+          "end_message": "VSC ENDING"
+        }
+      ],
+      "flags": [
+        {
+          "time": "2026-06-05T11:30:00.000000000",
+          "flag": "GREEN",
+          "scope": "Track",
+          "sector": null,
+          "message": "GREEN LIGHT - PIT EXIT OPEN"
+        },
+        {
+          "time": "2026-06-05T11:31:18.000000000",
+          "flag": "YELLOW",
+          "scope": "Sector",
+          "sector": 7.0,
+          "message": "YELLOW IN TRACK SECTOR 7"
+        },
+        {
+          "time": "2026-06-05T11:31:40.000000000",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 7.0,
+          "message": "CLEAR IN TRACK SECTOR 7"
+        },
+        {
+          "time": "2026-06-05T11:41:27.000000000",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 8.0,
+          "message": "CLEAR IN TRACK SECTOR 8"
+        },
+        {
+          "time": "2026-06-05T11:55:35.000000000",
+          "flag": "YELLOW",
+          "scope": "Sector",
+          "sector": 2.0,
+          "message": "YELLOW IN TRACK SECTOR 2"
+        },
+        {
+          "time": "2026-06-05T11:55:38.000000000",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 2.0,
+          "message": "CLEAR IN TRACK SECTOR 2"
+        },
+        {
+          "time": "2026-06-05T11:59:38.000000000",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 17.0,
+          "message": "CLEAR IN TRACK SECTOR 17"
+        },
+        {
+          "time": "2026-06-05T11:59:39.000000000",
+          "flag": "DOUBLE YELLOW",
+          "scope": "Sector",
+          "sector": 17.0,
+          "message": "DOUBLE YELLOW IN TRACK SECTOR 17"
+        },
+        {
+          "time": "2026-06-05T11:59:42.000000000",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 17.0,
+          "message": "CLEAR IN TRACK SECTOR 17"
+        },
+        {
+          "time": "2026-06-05T12:00:00.000000000",
+          "flag": "CLEAR",
+          "scope": "Track",
+          "sector": null,
+          "message": "TRACK CLEAR"
+        },
+        {
+          "time": "2026-06-05T12:05:16.000000000",
+          "flag": "YELLOW",
+          "scope": "Sector",
+          "sector": 16.0,
+          "message": "YELLOW IN TRACK SECTOR 16"
+        },
+        {
+          "time": "2026-06-05T12:05:17.000000000",
+          "flag": "DOUBLE YELLOW",
+          "scope": "Sector",
+          "sector": 16.0,
+          "message": "DOUBLE YELLOW IN TRACK SECTOR 16"
+        },
+        {
+          "time": "2026-06-05T12:05:21.000000000",
+          "flag": "YELLOW",
+          "scope": "Sector",
+          "sector": 15.0,
+          "message": "YELLOW IN TRACK SECTOR 15"
+        },
+        {
+          "time": "2026-06-05T12:05:21.000000000",
+          "flag": "YELLOW",
+          "scope": "Sector",
+          "sector": 14.0,
+          "message": "YELLOW IN TRACK SECTOR 14"
+        },
+        {
+          "time": "2026-06-05T12:05:24.000000000",
+          "flag": "RED",
+          "scope": "Track",
+          "sector": null,
+          "message": "RED FLAG"
+        },
+        {
+          "time": "2026-06-05T12:05:24.000000000",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 14.0,
+          "message": "CLEAR IN TRACK SECTOR 14"
+        },
+        {
+          "time": "2026-06-05T12:05:24.000000000",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 15.0,
+          "message": "CLEAR IN TRACK SECTOR 15"
+        },
+        {
+          "time": "2026-06-05T12:05:24.000000000",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 16.0,
+          "message": "CLEAR IN TRACK SECTOR 16"
+        },
+        {
+          "time": "2026-06-05T12:05:33.000000000",
+          "flag": "DOUBLE YELLOW",
+          "scope": "Sector",
+          "sector": 16.0,
+          "message": "DOUBLE YELLOW IN TRACK SECTOR 16"
+        },
+        {
+          "time": "2026-06-05T12:07:13.000000000",
+          "flag": "CLEAR",
+          "scope": "Track",
+          "sector": null,
+          "message": "TRACK CLEAR"
+        },
+        {
+          "time": "2026-06-05T12:07:45.000000000",
+          "flag": "DOUBLE YELLOW",
+          "scope": "Sector",
+          "sector": 16.0,
+          "message": "DOUBLE YELLOW IN TRACK SECTOR 16"
+        },
+        {
+          "time": "2026-06-05T12:11:43.000000000",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 16.0,
+          "message": "CLEAR IN TRACK SECTOR 16"
+        },
+        {
+          "time": "2026-06-05T12:13:00.000000000",
+          "flag": "GREEN",
+          "scope": "Track",
+          "sector": null,
+          "message": "GREEN LIGHT - PIT EXIT OPEN"
+        },
+        {
+          "time": "2026-06-05T12:16:45.000000000",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 16.0,
+          "message": "CLEAR IN TRACK SECTOR 16"
+        },
+        {
+          "time": "2026-06-05T12:22:53.000000000",
+          "flag": "YELLOW",
+          "scope": "Sector",
+          "sector": 10.0,
+          "message": "YELLOW IN TRACK SECTOR 10"
+        },
+        {
+          "time": "2026-06-05T12:22:54.000000000",
+          "flag": "YELLOW",
+          "scope": "Sector",
+          "sector": 11.0,
+          "message": "YELLOW IN TRACK SECTOR 11"
+        },
+        {
+          "time": "2026-06-05T12:22:55.000000000",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 10.0,
+          "message": "CLEAR IN TRACK SECTOR 10"
+        },
+        {
+          "time": "2026-06-05T12:22:55.000000000",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 11.0,
+          "message": "CLEAR IN TRACK SECTOR 11"
+        },
+        {
+          "time": "2026-06-05T12:25:50.000000000",
+          "flag": "YELLOW",
+          "scope": "Sector",
+          "sector": 13.0,
+          "message": "YELLOW IN TRACK SECTOR 13"
+        },
+        {
+          "time": "2026-06-05T12:25:54.000000000",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 13.0,
+          "message": "CLEAR IN TRACK SECTOR 13"
+        },
+        {
+          "time": "2026-06-05T12:25:56.000000000",
+          "flag": "YELLOW",
+          "scope": "Sector",
+          "sector": 13.0,
+          "message": "YELLOW IN TRACK SECTOR 13"
+        },
+        {
+          "time": "2026-06-05T12:25:57.000000000",
+          "flag": "YELLOW",
+          "scope": "Sector",
+          "sector": 7.0,
+          "message": "YELLOW IN TRACK SECTOR 7"
+        },
+        {
+          "time": "2026-06-05T12:26:13.000000000",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 7.0,
+          "message": "CLEAR IN TRACK SECTOR 7"
+        },
+        {
+          "time": "2026-06-05T12:26:15.000000000",
+          "flag": "YELLOW",
+          "scope": "Sector",
+          "sector": 13.0,
+          "message": "YELLOW IN TRACK SECTOR 13"
+        },
+        {
+          "time": "2026-06-05T12:26:19.000000000",
+          "flag": "YELLOW",
+          "scope": "Sector",
+          "sector": 13.0,
+          "message": "YELLOW IN TRACK SECTOR 13"
+        },
+        {
+          "time": "2026-06-05T12:26:26.000000000",
+          "flag": "YELLOW",
+          "scope": "Sector",
+          "sector": 13.0,
+          "message": "YELLOW IN TRACK SECTOR 13"
+        },
+        {
+          "time": "2026-06-05T12:26:32.000000000",
+          "flag": "RED",
+          "scope": "Track",
+          "sector": null,
+          "message": "RED FLAG"
+        },
+        {
+          "time": "2026-06-05T12:26:32.000000000",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 13.0,
+          "message": "CLEAR IN TRACK SECTOR 13"
+        },
+        {
+          "time": "2026-06-05T12:28:59.000000000",
+          "flag": "CLEAR",
+          "scope": "Track",
+          "sector": null,
+          "message": "TRACK CLEAR"
+        },
+        {
+          "time": "2026-06-05T12:29:20.000000000",
+          "flag": "GREEN",
+          "scope": "Track",
+          "sector": null,
+          "message": "GREEN LIGHT - PIT EXIT OPEN"
+        },
+        {
+          "time": "2026-06-05T12:30:00.000000000",
+          "flag": "CHEQUERED",
+          "scope": "Track",
+          "sector": null,
+          "message": "CHEQUERED FLAG"
+        },
+        {
+          "time": "2026-06-05T12:33:49.000000000",
+          "flag": "YELLOW",
+          "scope": "Sector",
+          "sector": 19.0,
+          "message": "YELLOW IN TRACK SECTOR 19"
+        },
+        {
+          "time": "2026-06-05T12:33:54.000000000",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 19.0,
+          "message": "CLEAR IN TRACK SECTOR 19"
+        },
+        {
+          "time": "2026-06-05T12:36:05.000000000",
+          "flag": "BLACK AND WHITE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "BLACK AND WHITE FLAG FOR CAR 44 (HAM) - FAILING TO FOLLOW RACE DIRECTORS INSTRUCTIONS (14:29:49)"
+        },
+        {
+          "time": "2026-06-05T12:38:36.000000000",
+          "flag": "DOUBLE YELLOW",
+          "scope": "Sector",
+          "sector": 13.0,
+          "message": "DOUBLE YELLOW IN TRACK SECTOR 13"
+        },
+        {
+          "time": "2026-06-05T12:39:17.000000000",
+          "flag": "DOUBLE YELLOW",
+          "scope": "Sector",
+          "sector": 16.0,
+          "message": "DOUBLE YELLOW IN TRACK SECTOR 16"
+        },
+        {
+          "time": "2026-06-05T12:40:45.000000000",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 13.0,
+          "message": "CLEAR IN TRACK SECTOR 13"
+        },
+        {
+          "time": "2026-06-05T12:45:13.000000000",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 16.0,
+          "message": "CLEAR IN TRACK SECTOR 16"
+        }
+      ],
+      "messages": [
+        {
+          "time": "2026-06-05T11:30:00.000000000",
+          "category": "Flag",
+          "flag": "GREEN",
+          "scope": "Track",
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "GREEN LIGHT - PIT EXIT OPEN"
+        },
+        {
+          "time": "2026-06-05T11:31:18.000000000",
+          "category": "Flag",
+          "flag": "YELLOW",
+          "scope": "Sector",
+          "sector": 7.0,
+          "status": null,
+          "lap": null,
+          "message": "YELLOW IN TRACK SECTOR 7"
+        },
+        {
+          "time": "2026-06-05T11:31:40.000000000",
+          "category": "Flag",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 7.0,
+          "status": null,
+          "lap": null,
+          "message": "CLEAR IN TRACK SECTOR 7"
+        },
+        {
+          "time": "2026-06-05T11:34:23.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "CAR 16 (LEC) TIME 2:14.473 DELETED - TRACK LIMITS AT TURN 5 LAP 2 13:31:16"
+        },
+        {
+          "time": "2026-06-05T11:34:24.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "CAR 43 (COL) TIME 1:26.305 DELETED - TRACK LIMITS AT TURN 10 LAP 3 13:32:58"
+        },
+        {
+          "time": "2026-06-05T11:37:13.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "CAR 16 (LEC) LAP DELETED - TRACK LIMITS AT TURN 10 LAP 5 13:36:30 (PIT)"
+        },
+        {
+          "time": "2026-06-05T11:39:01.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "INCIDENT INVOLVING CARS 6 (HAD) AND 41 (LIN) NOTED (13:36:49)"
+        },
+        {
+          "time": "2026-06-05T11:39:13.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "CAR 14 (ALO) LAP DELETED - TRACK LIMITS AT TURN 10 LAP 5 13:37:10 (PIT)"
+        },
+        {
+          "time": "2026-06-05T11:39:17.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "CAR 55 (SAI) TIME 1:20.942 DELETED - TRACK LIMITS AT TURN 10 LAP 5 13:37:26"
+        },
+        {
+          "time": "2026-06-05T11:39:21.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "CAR 10 (GAS) TIME 1:18.683 DELETED - TRACK LIMITS AT TURN 10 LAP 6 13:38:28"
+        },
+        {
+          "time": "2026-06-05T11:40:39.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "CAR 41 (LIN) TIME 1:37.102 DELETED - TRACK LIMITS AT TURN 10 LAP 8 13:39:53"
+        },
+        {
+          "time": "2026-06-05T11:41:01.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "CAR 10 (GAS) TIME 1:39.572 DELETED - TRACK LIMITS AT TURN 11 LAP 7 13:39:55"
+        },
+        {
+          "time": "2026-06-05T11:41:10.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "TRACK SURFACE SLIPPERY IN TRACK SECTOR 8"
+        },
+        {
+          "time": "2026-06-05T11:41:27.000000000",
+          "category": "Flag",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 8.0,
+          "status": null,
+          "lap": null,
+          "message": "CLEAR IN TRACK SECTOR 8"
+        },
+        {
+          "time": "2026-06-05T11:43:32.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "CAR 63 (RUS) TIME 1:37.923 DELETED - TRACK LIMITS AT TURN 10 LAP 8 13:41:27"
+        },
+        {
+          "time": "2026-06-05T11:43:41.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "CAR 55 (SAI) LAP DELETED - TRACK LIMITS AT TURN 10 LAP 8 13:41:36 (PIT)"
+        },
+        {
+          "time": "2026-06-05T11:44:01.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "CAR 16 (LEC) TIME 1:21.839 DELETED - TRACK LIMITS AT TURN 10 LAP 8 13:41:42"
+        },
+        {
+          "time": "2026-06-05T11:44:11.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "CAR 30 (LAW) TIME 1:44.285 DELETED - TRACK LIMITS AT TURN 10 LAP 9 13:41:49"
+        },
+        {
+          "time": "2026-06-05T11:44:21.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "FIA STEWARDS: INCIDENT INVOLVING CARS 6 (HAD) AND 41 (LIN) REVIEWED NO FURTHER INVESTIGATION (13:36:49)"
+        },
+        {
+          "time": "2026-06-05T11:44:48.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "CAR 87 (BEA) TIME 1:24.068 DELETED - TRACK LIMITS AT TURN 10 LAP 10 13:43:37"
+        },
+        {
+          "time": "2026-06-05T11:46:03.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "CAR 41 (LIN) TIME 1:26.099 DELETED - TRACK LIMITS AT TURN 10 LAP 11 13:44:36"
+        },
+        {
+          "time": "2026-06-05T11:46:16.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "CAR 44 (HAM) TIME 1:20.659 DELETED - TRACK LIMITS AT TURN 16 LAP 11 13:45:09"
+        },
+        {
+          "time": "2026-06-05T11:46:31.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "CAR 10 (GAS) TIME 1:22.623 DELETED - TRACK LIMITS AT TURN 10 LAP 11 13:45:42"
+        },
+        {
+          "time": "2026-06-05T11:46:37.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "CAR 16 (LEC) TIME 1:32.974 DELETED - TRACK LIMITS AT TURN 10 LAP 11 13:45:41"
+        },
+        {
+          "time": "2026-06-05T11:47:20.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "CAR 30 (LAW) LAP DELETED - TRACK LIMITS AT TURN 10 LAP 12 13:46:21 (PIT)"
+        },
+        {
+          "time": "2026-06-05T11:47:28.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "CAR 87 (BEA) TIME 1:38.207 DELETED - TRACK LIMITS AT TURN 10 LAP 12 13:46:33"
+        },
+        {
+          "time": "2026-06-05T11:47:36.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "CAR 41 (LIN) TIME 1:26.099 DELETED - TRACK LIMITS AT TURN 16 LAP 11 13:44:54"
+        },
+        {
+          "time": "2026-06-05T11:47:52.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "CAR 44 (HAM) TIME 1:48.165 DELETED - TRACK LIMITS AT TURN 1 LAP 12 13:45:35"
+        },
+        {
+          "time": "2026-06-05T11:48:02.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "CAR 16 (LEC) TIME 1:23.128 DELETED - TRACK LIMITS AT TURN 10 LAP 12 13:47:16"
+        },
+        {
+          "time": "2026-06-05T11:49:32.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "CAR 12 (ANT) LAP DELETED - TRACK LIMITS AT TURN 16 LAP 14 13:49:09 (PIT)"
+        },
+        {
+          "time": "2026-06-05T11:52:18.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "CAR 27 (HUL) LAP DELETED - TRACK LIMITS AT TURN 10 LAP 15 13:51:39 (PIT)"
+        },
+        {
+          "time": "2026-06-05T11:53:59.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "CAR 41 (LIN) TIME 1:19.903 DELETED - TRACK LIMITS AT TURN 10 LAP 17 13:53:20"
+        },
+        {
+          "time": "2026-06-05T11:54:51.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "CAR 55 (SAI) TIME 1:25.408 DELETED - TRACK LIMITS AT TURN 10 LAP 12 13:54:08"
+        },
+        {
+          "time": "2026-06-05T11:55:35.000000000",
+          "category": "Flag",
+          "flag": "YELLOW",
+          "scope": "Sector",
+          "sector": 2.0,
+          "status": null,
+          "lap": null,
+          "message": "YELLOW IN TRACK SECTOR 2"
+        },
+        {
+          "time": "2026-06-05T11:55:38.000000000",
+          "category": "Flag",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 2.0,
+          "status": null,
+          "lap": null,
+          "message": "CLEAR IN TRACK SECTOR 2"
+        },
+        {
+          "time": "2026-06-05T11:57:07.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "CAR 44 (HAM) LAP DELETED - TRACK LIMITS AT TURN 1 LAP 18 13:55:34 (PIT)"
+        },
+        {
+          "time": "2026-06-05T11:57:20.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "TRACK SURFACE SLIPPERY IN TRACK SECTOR 17"
+        },
+        {
+          "time": "2026-06-05T11:58:11.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "CAR 55 (SAI) TIME 1:25.163 DELETED - TRACK LIMITS AT TURN 10 LAP 14 13:57:00"
+        },
+        {
+          "time": "2026-06-05T11:59:38.000000000",
+          "category": "SafetyCar",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": "DEPLOYED",
+          "lap": null,
+          "message": "VSC DEPLOYED"
+        },
+        {
+          "time": "2026-06-05T11:59:38.000000000",
+          "category": "Flag",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 17.0,
+          "status": null,
+          "lap": null,
+          "message": "CLEAR IN TRACK SECTOR 17"
+        },
+        {
+          "time": "2026-06-05T11:59:39.000000000",
+          "category": "Flag",
+          "flag": "DOUBLE YELLOW",
+          "scope": "Sector",
+          "sector": 17.0,
+          "status": null,
+          "lap": null,
+          "message": "DOUBLE YELLOW IN TRACK SECTOR 17"
+        },
+        {
+          "time": "2026-06-05T11:59:40.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "MARSHALS ON TRACK AT TURN 18"
+        },
+        {
+          "time": "2026-06-05T11:59:42.000000000",
+          "category": "Flag",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 17.0,
+          "status": null,
+          "lap": null,
+          "message": "CLEAR IN TRACK SECTOR 17"
+        },
+        {
+          "time": "2026-06-05T11:59:48.000000000",
+          "category": "SafetyCar",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": "ENDING",
+          "lap": null,
+          "message": "VSC ENDING"
+        },
+        {
+          "time": "2026-06-05T12:00:00.000000000",
+          "category": "Flag",
+          "flag": "CLEAR",
+          "scope": "Track",
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "TRACK CLEAR"
+        },
+        {
+          "time": "2026-06-05T12:00:03.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "OVERTAKE ENABLED"
+        },
+        {
+          "time": "2026-06-05T12:00:27.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "CAR 55 (SAI) TIME 1:27.064 DELETED - TRACK LIMITS AT TURN 10 LAP 16 13:59:40"
+        },
+        {
+          "time": "2026-06-05T12:01:48.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "CAR 41 (LIN) TIME 1:30.539 DELETED - TRACK LIMITS AT TURN 10 LAP 20 14:00:57"
+        },
+        {
+          "time": "2026-06-05T12:04:49.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "CAR 30 (LAW) TIME 1:19.380 DELETED - TRACK LIMITS AT TURN 10 LAP 21 14:04:00"
+        },
+        {
+          "time": "2026-06-05T12:05:16.000000000",
+          "category": "Flag",
+          "flag": "YELLOW",
+          "scope": "Sector",
+          "sector": 16.0,
+          "status": null,
+          "lap": null,
+          "message": "YELLOW IN TRACK SECTOR 16"
+        },
+        {
+          "time": "2026-06-05T12:05:17.000000000",
+          "category": "Flag",
+          "flag": "DOUBLE YELLOW",
+          "scope": "Sector",
+          "sector": 16.0,
+          "status": null,
+          "lap": null,
+          "message": "DOUBLE YELLOW IN TRACK SECTOR 16"
+        },
+        {
+          "time": "2026-06-05T12:05:21.000000000",
+          "category": "Flag",
+          "flag": "YELLOW",
+          "scope": "Sector",
+          "sector": 15.0,
+          "status": null,
+          "lap": null,
+          "message": "YELLOW IN TRACK SECTOR 15"
+        },
+        {
+          "time": "2026-06-05T12:05:21.000000000",
+          "category": "Flag",
+          "flag": "YELLOW",
+          "scope": "Sector",
+          "sector": 14.0,
+          "status": null,
+          "lap": null,
+          "message": "YELLOW IN TRACK SECTOR 14"
+        },
+        {
+          "time": "2026-06-05T12:05:24.000000000",
+          "category": "Flag",
+          "flag": "RED",
+          "scope": "Track",
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "RED FLAG"
+        },
+        {
+          "time": "2026-06-05T12:05:24.000000000",
+          "category": "Flag",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 14.0,
+          "status": null,
+          "lap": null,
+          "message": "CLEAR IN TRACK SECTOR 14"
+        },
+        {
+          "time": "2026-06-05T12:05:24.000000000",
+          "category": "Flag",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 15.0,
+          "status": null,
+          "lap": null,
+          "message": "CLEAR IN TRACK SECTOR 15"
+        },
+        {
+          "time": "2026-06-05T12:05:24.000000000",
+          "category": "Flag",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 16.0,
+          "status": null,
+          "lap": null,
+          "message": "CLEAR IN TRACK SECTOR 16"
+        },
+        {
+          "time": "2026-06-05T12:05:33.000000000",
+          "category": "Flag",
+          "flag": "DOUBLE YELLOW",
+          "scope": "Sector",
+          "sector": 16.0,
+          "status": null,
+          "lap": null,
+          "message": "DOUBLE YELLOW IN TRACK SECTOR 16"
+        },
+        {
+          "time": "2026-06-05T12:05:47.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "CAR 41 (LIN) LAP DELETED - TRACK LIMITS AT TURN 1 LAP 23 14:04:06 (PIT)"
+        },
+        {
+          "time": "2026-06-05T12:07:13.000000000",
+          "category": "Flag",
+          "flag": "CLEAR",
+          "scope": "Track",
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "TRACK CLEAR"
+        },
+        {
+          "time": "2026-06-05T12:07:18.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "OVERTAKE ENABLED"
+        },
+        {
+          "time": "2026-06-05T12:07:45.000000000",
+          "category": "Flag",
+          "flag": "DOUBLE YELLOW",
+          "scope": "Sector",
+          "sector": 16.0,
+          "status": null,
+          "lap": null,
+          "message": "DOUBLE YELLOW IN TRACK SECTOR 16"
+        },
+        {
+          "time": "2026-06-05T12:08:41.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "CAR 55 (SAI) LAP DELETED - TRACK LIMITS AT TURN 10 LAP 20 14:05:26 (PIT)"
+        },
+        {
+          "time": "2026-06-05T12:11:43.000000000",
+          "category": "Flag",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 16.0,
+          "status": null,
+          "lap": null,
+          "message": "CLEAR IN TRACK SECTOR 16"
+        },
+        {
+          "time": "2026-06-05T12:11:47.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "SESSION WILL RESUME AT 14:13"
+        },
+        {
+          "time": "2026-06-05T12:12:18.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "TRACK SURFACE SLIPPERY IN TRACK SECTOR 16"
+        },
+        {
+          "time": "2026-06-05T12:13:00.000000000",
+          "category": "Flag",
+          "flag": "GREEN",
+          "scope": "Track",
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "GREEN LIGHT - PIT EXIT OPEN"
+        },
+        {
+          "time": "2026-06-05T12:16:27.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "CAR 41 (LIN) TIME 1:20.117 DELETED - TRACK LIMITS AT TURN 10 LAP 25 14:15:51"
+        },
+        {
+          "time": "2026-06-05T12:16:45.000000000",
+          "category": "Flag",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 16.0,
+          "status": null,
+          "lap": null,
+          "message": "CLEAR IN TRACK SECTOR 16"
+        },
+        {
+          "time": "2026-06-05T12:17:58.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "CAR 1 (NOR) TIME 1:21.391 DELETED - TRACK LIMITS AT TURN 10 LAP 18 14:17:15"
+        },
+        {
+          "time": "2026-06-05T12:18:04.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "CAR 55 (SAI) TIME 1:20.304 DELETED - TRACK LIMITS AT TURN 10 LAP 23 14:17:24"
+        },
+        {
+          "time": "2026-06-05T12:19:09.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "TURN 18 INCIDENT INVOLVING CARS 16 (LEC) AND 30 (LAW) NOTED - IMPEDING (14:18:00)"
+        },
+        {
+          "time": "2026-06-05T12:19:22.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "CAR 10 (GAS) TIME 1:50.234 DELETED - TRACK LIMITS AT TURN 1 LAP 24 14:17:30"
+        },
+        {
+          "time": "2026-06-05T12:19:43.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "CAR 14 (ALO) TIME 1:37.047 DELETED - TRACK LIMITS AT TURN 10 LAP 17 14:18:40"
+        },
+        {
+          "time": "2026-06-05T12:19:49.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "CAR 41 (LIN) TIME 1:48.439 DELETED - TRACK LIMITS AT TURN 10 LAP 27 14:18:42"
+        },
+        {
+          "time": "2026-06-05T12:19:50.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "CAR 55 (SAI) TIME 1:22.786 DELETED - TRACK LIMITS AT TURN 16 LAP 24 14:18:58"
+        },
+        {
+          "time": "2026-06-05T12:19:55.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "CAR 11 (PER) TIME 1:34.014 DELETED - TRACK LIMITS AT TURN 10 LAP 21 14:18:52"
+        },
+        {
+          "time": "2026-06-05T12:19:57.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "CAR 16 (LEC) TIME 1:28.431 DELETED - TRACK LIMITS AT TURN 10 LAP 24 14:19:01"
+        },
+        {
+          "time": "2026-06-05T12:20:10.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "CAR 5 (BOR) TIME 1:16.439 DELETED - TRACK LIMITS AT TURN 10 LAP 24 14:19:36"
+        },
+        {
+          "time": "2026-06-05T12:22:46.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "CAR 30 (LAW) TIME 1:20.114 DELETED - TRACK LIMITS AT TURN 16 LAP 28 14:22:22"
+        },
+        {
+          "time": "2026-06-05T12:22:53.000000000",
+          "category": "Flag",
+          "flag": "YELLOW",
+          "scope": "Sector",
+          "sector": 10.0,
+          "status": null,
+          "lap": null,
+          "message": "YELLOW IN TRACK SECTOR 10"
+        },
+        {
+          "time": "2026-06-05T12:22:54.000000000",
+          "category": "Flag",
+          "flag": "YELLOW",
+          "scope": "Sector",
+          "sector": 11.0,
+          "status": null,
+          "lap": null,
+          "message": "YELLOW IN TRACK SECTOR 11"
+        },
+        {
+          "time": "2026-06-05T12:22:55.000000000",
+          "category": "Flag",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 10.0,
+          "status": null,
+          "lap": null,
+          "message": "CLEAR IN TRACK SECTOR 10"
+        },
+        {
+          "time": "2026-06-05T12:22:55.000000000",
+          "category": "Flag",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 11.0,
+          "status": null,
+          "lap": null,
+          "message": "CLEAR IN TRACK SECTOR 11"
+        },
+        {
+          "time": "2026-06-05T12:23:10.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "FIA STEWARDS: TURN 18 INCIDENT INVOLVING CARS 16 (LEC) AND 30 (LAW) WILL BE INVESTIGATED AFTER THE SESSION - IMPEDING (14:18:00)"
+        },
+        {
+          "time": "2026-06-05T12:23:13.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "CAR 87 (BEA) TIME 1:44.556 DELETED - TRACK LIMITS AT TURN 10 LAP 26 14:22:03"
+        },
+        {
+          "time": "2026-06-05T12:23:15.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "CAR 23 (ALB) TIME 1:38.008 DELETED - TRACK LIMITS AT TURN 1 LAP 28 14:21:23"
+        },
+        {
+          "time": "2026-06-05T12:23:51.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "CAR 63 (RUS) TIME 1:51.115 DELETED - TRACK LIMITS AT TURN 10 LAP 25 14:23:01"
+        },
+        {
+          "time": "2026-06-05T12:24:31.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "CAR 23 (ALB) TIME 1:24.872 DELETED - TRACK LIMITS AT TURN 10 LAP 29 14:23:44"
+        },
+        {
+          "time": "2026-06-05T12:25:50.000000000",
+          "category": "Flag",
+          "flag": "YELLOW",
+          "scope": "Sector",
+          "sector": 13.0,
+          "status": null,
+          "lap": null,
+          "message": "YELLOW IN TRACK SECTOR 13"
+        },
+        {
+          "time": "2026-06-05T12:25:54.000000000",
+          "category": "Flag",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 13.0,
+          "status": null,
+          "lap": null,
+          "message": "CLEAR IN TRACK SECTOR 13"
+        },
+        {
+          "time": "2026-06-05T12:25:56.000000000",
+          "category": "Flag",
+          "flag": "YELLOW",
+          "scope": "Sector",
+          "sector": 13.0,
+          "status": null,
+          "lap": null,
+          "message": "YELLOW IN TRACK SECTOR 13"
+        },
+        {
+          "time": "2026-06-05T12:25:57.000000000",
+          "category": "Flag",
+          "flag": "YELLOW",
+          "scope": "Sector",
+          "sector": 7.0,
+          "status": null,
+          "lap": null,
+          "message": "YELLOW IN TRACK SECTOR 7"
+        },
+        {
+          "time": "2026-06-05T12:26:05.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "TURN 12 INCIDENT INVOLVING CARS 41 (LIN) AND 81 (PIA) NOTED - IMPEDING (14:23:27)"
+        },
+        {
+          "time": "2026-06-05T12:26:13.000000000",
+          "category": "Flag",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 7.0,
+          "status": null,
+          "lap": null,
+          "message": "CLEAR IN TRACK SECTOR 7"
+        },
+        {
+          "time": "2026-06-05T12:26:14.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "TRACK SURFACE SLIPPERY IN TRACK SECTOR 13"
+        },
+        {
+          "time": "2026-06-05T12:26:15.000000000",
+          "category": "Flag",
+          "flag": "YELLOW",
+          "scope": "Sector",
+          "sector": 13.0,
+          "status": null,
+          "lap": null,
+          "message": "YELLOW IN TRACK SECTOR 13"
+        },
+        {
+          "time": "2026-06-05T12:26:18.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "TRACK SURFACE SLIPPERY IN TRACK SECTOR 13"
+        },
+        {
+          "time": "2026-06-05T12:26:19.000000000",
+          "category": "Flag",
+          "flag": "YELLOW",
+          "scope": "Sector",
+          "sector": 13.0,
+          "status": null,
+          "lap": null,
+          "message": "YELLOW IN TRACK SECTOR 13"
+        },
+        {
+          "time": "2026-06-05T12:26:25.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "TRACK SURFACE SLIPPERY IN TRACK SECTOR 13"
+        },
+        {
+          "time": "2026-06-05T12:26:26.000000000",
+          "category": "Flag",
+          "flag": "YELLOW",
+          "scope": "Sector",
+          "sector": 13.0,
+          "status": null,
+          "lap": null,
+          "message": "YELLOW IN TRACK SECTOR 13"
+        },
+        {
+          "time": "2026-06-05T12:26:32.000000000",
+          "category": "Flag",
+          "flag": "RED",
+          "scope": "Track",
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "RED FLAG"
+        },
+        {
+          "time": "2026-06-05T12:26:32.000000000",
+          "category": "Flag",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 13.0,
+          "status": null,
+          "lap": null,
+          "message": "CLEAR IN TRACK SECTOR 13"
+        },
+        {
+          "time": "2026-06-05T12:26:36.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "CAR 10 (GAS) TIME 1:21.958 DELETED - TRACK LIMITS AT TURN 10 LAP 29 14:25:38"
+        },
+        {
+          "time": "2026-06-05T12:28:21.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "CAR 31 (OCO) TIME 1:36.052 DELETED - TRACK LIMITS AT TURN 1 LAP 28 14:24:38"
+        },
+        {
+          "time": "2026-06-05T12:28:56.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "SESSION WILL RESUME AT 14:29"
+        },
+        {
+          "time": "2026-06-05T12:28:59.000000000",
+          "category": "Flag",
+          "flag": "CLEAR",
+          "scope": "Track",
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "TRACK CLEAR"
+        },
+        {
+          "time": "2026-06-05T12:29:02.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "OVERTAKE ENABLED"
+        },
+        {
+          "time": "2026-06-05T12:29:20.000000000",
+          "category": "Flag",
+          "flag": "GREEN",
+          "scope": "Track",
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "GREEN LIGHT - PIT EXIT OPEN"
+        },
+        {
+          "time": "2026-06-05T12:29:41.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "CAR 14 (ALO) LAP DELETED - TRACK LIMITS AT TURN 16 LAP 22 14:26:08 (PIT)"
+        },
+        {
+          "time": "2026-06-05T12:30:00.000000000",
+          "category": "Flag",
+          "flag": "CHEQUERED",
+          "scope": "Track",
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "CHEQUERED FLAG"
+        },
+        {
+          "time": "2026-06-05T12:30:13.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "CAR 14 (ALO) LAP DELETED - TRACK LIMITS AT TURN 10 LAP 22 14:25:50 (PIT)"
+        },
+        {
+          "time": "2026-06-05T12:30:48.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "FIRST CAR TO TAKE THE FLAG - CAR 77 (BOT)"
+        },
+        {
+          "time": "2026-06-05T12:31:21.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "FIA STEWARDS: TURN 12 INCIDENT INVOLVING CARS 41 (LIN) AND 81 (PIA) WILL BE INVESTIGATED AFTER THE SESSION - IMPEDING (14:23:27)"
+        },
+        {
+          "time": "2026-06-05T12:32:06.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "INCIDENT INVOLVING CAR 30 (LAW) NOTED - LEAVING PIT EXIT ON RED LIGHT (14:30:01)"
+        },
+        {
+          "time": "2026-06-05T12:32:52.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "CAR 77 (BOT) TIME 2:10.117 DELETED - TRACK LIMITS AT TURN 16 LAP 27 14:31:46"
+        },
+        {
+          "time": "2026-06-05T12:33:49.000000000",
+          "category": "Flag",
+          "flag": "YELLOW",
+          "scope": "Sector",
+          "sector": 19.0,
+          "status": null,
+          "lap": null,
+          "message": "YELLOW IN TRACK SECTOR 19"
+        },
+        {
+          "time": "2026-06-05T12:33:54.000000000",
+          "category": "Flag",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 19.0,
+          "status": null,
+          "lap": null,
+          "message": "CLEAR IN TRACK SECTOR 19"
+        },
+        {
+          "time": "2026-06-05T12:36:05.000000000",
+          "category": "Flag",
+          "flag": "BLACK AND WHITE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "BLACK AND WHITE FLAG FOR CAR 44 (HAM) - FAILING TO FOLLOW RACE DIRECTORS INSTRUCTIONS (14:29:49)"
+        },
+        {
+          "time": "2026-06-05T12:38:36.000000000",
+          "category": "Flag",
+          "flag": "DOUBLE YELLOW",
+          "scope": "Sector",
+          "sector": 13.0,
+          "status": null,
+          "lap": null,
+          "message": "DOUBLE YELLOW IN TRACK SECTOR 13"
+        },
+        {
+          "time": "2026-06-05T12:39:11.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "FIA STEWARDS: INCIDENT INVOLVING CAR 30 (LAW) WILL BE INVESTIGATED AFTER THE SESSION - LEAVING PIT EXIT ON RED LIGHT (14:30:01)"
+        },
+        {
+          "time": "2026-06-05T12:39:17.000000000",
+          "category": "Flag",
+          "flag": "DOUBLE YELLOW",
+          "scope": "Sector",
+          "sector": 16.0,
+          "status": null,
+          "lap": null,
+          "message": "DOUBLE YELLOW IN TRACK SECTOR 16"
+        },
+        {
+          "time": "2026-06-05T12:40:45.000000000",
+          "category": "Flag",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 13.0,
+          "status": null,
+          "lap": null,
+          "message": "CLEAR IN TRACK SECTOR 13"
+        },
+        {
+          "time": "2026-06-05T12:45:13.000000000",
+          "category": "Flag",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 16.0,
+          "status": null,
+          "lap": null,
+          "message": "CLEAR IN TRACK SECTOR 16"
+        }
+      ]
+    },
+    "Qualifying": {
+      "messages_total": 65,
+      "counts": {
+        "flag_black_and_white": 2,
+        "flag_chequered": 3,
+        "flag_clear": 6,
+        "flag_double_yellow": 5,
+        "flag_green": 4,
+        "flag_red": 1,
+        "flag_yellow": 1,
+        "overtake_enabled": 1
+      },
+      "overtake_windows": [
+        {
+          "start": "2026-06-06T14:17:56.000000000",
+          "start_message": "OVERTAKE ENABLED",
+          "end": null,
+          "end_message": null,
+          "note": "still open at the end of the message feed"
+        }
+      ],
+      "safety_car": [],
+      "virtual_safety_car": [],
+      "flags": [
+        {
+          "time": "2026-06-06T14:00:00.000000000",
+          "flag": "GREEN",
+          "scope": "Track",
+          "sector": null,
+          "message": "GREEN LIGHT - PIT EXIT OPEN"
+        },
+        {
+          "time": "2026-06-06T14:14:50.000000000",
+          "flag": "BLACK AND WHITE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "BLACK AND WHITE FLAG FOR CAR 12 (ANT) - FAILING TO FOLLOW RACE DIRECTORS INSTRUCTIONS"
+        },
+        {
+          "time": "2026-06-06T14:15:22.000000000",
+          "flag": "DOUBLE YELLOW",
+          "scope": "Sector",
+          "sector": 13.0,
+          "message": "DOUBLE YELLOW IN TRACK SECTOR 13"
+        },
+        {
+          "time": "2026-06-06T14:15:49.000000000",
+          "flag": "RED",
+          "scope": "Track",
+          "sector": null,
+          "message": "RED FLAG"
+        },
+        {
+          "time": "2026-06-06T14:15:49.000000000",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 13.0,
+          "message": "CLEAR IN TRACK SECTOR 13"
+        },
+        {
+          "time": "2026-06-06T14:16:43.000000000",
+          "flag": "DOUBLE YELLOW",
+          "scope": "Sector",
+          "sector": 13.0,
+          "message": "DOUBLE YELLOW IN TRACK SECTOR 13"
+        },
+        {
+          "time": "2026-06-06T14:17:03.000000000",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 13.0,
+          "message": "CLEAR IN TRACK SECTOR 13"
+        },
+        {
+          "time": "2026-06-06T14:17:53.000000000",
+          "flag": "CLEAR",
+          "scope": "Track",
+          "sector": null,
+          "message": "TRACK CLEAR"
+        },
+        {
+          "time": "2026-06-06T14:18:10.000000000",
+          "flag": "DOUBLE YELLOW",
+          "scope": "Sector",
+          "sector": 13.0,
+          "message": "DOUBLE YELLOW IN TRACK SECTOR 13"
+        },
+        {
+          "time": "2026-06-06T14:18:50.000000000",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 13.0,
+          "message": "CLEAR IN TRACK SECTOR 13"
+        },
+        {
+          "time": "2026-06-06T14:22:00.000000000",
+          "flag": "GREEN",
+          "scope": "Track",
+          "sector": null,
+          "message": "GREEN LIGHT - PIT EXIT OPEN"
+        },
+        {
+          "time": "2026-06-06T14:24:11.000000000",
+          "flag": "CHEQUERED",
+          "scope": "Track",
+          "sector": null,
+          "message": "CHEQUERED FLAG"
+        },
+        {
+          "time": "2026-06-06T14:32:00.000000000",
+          "flag": "GREEN",
+          "scope": "Track",
+          "sector": null,
+          "message": "GREEN LIGHT - PIT EXIT OPEN"
+        },
+        {
+          "time": "2026-06-06T14:47:00.000000000",
+          "flag": "CHEQUERED",
+          "scope": "Track",
+          "sector": null,
+          "message": "CHEQUERED FLAG"
+        },
+        {
+          "time": "2026-06-06T14:54:00.000000000",
+          "flag": "GREEN",
+          "scope": "Track",
+          "sector": null,
+          "message": "GREEN LIGHT - PIT EXIT OPEN"
+        },
+        {
+          "time": "2026-06-06T14:59:04.000000000",
+          "flag": "BLACK AND WHITE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "BLACK AND WHITE FLAG FOR CAR 44 (HAM) - FAILING TO FOLLOW RACE DIRECTORS INSTRUCTIONS"
+        },
+        {
+          "time": "2026-06-06T15:07:00.000000000",
+          "flag": "CHEQUERED",
+          "scope": "Track",
+          "sector": null,
+          "message": "CHEQUERED FLAG"
+        },
+        {
+          "time": "2026-06-06T15:07:37.000000000",
+          "flag": "YELLOW",
+          "scope": "Sector",
+          "sector": 14.0,
+          "message": "YELLOW IN TRACK SECTOR 14"
+        },
+        {
+          "time": "2026-06-06T15:07:41.000000000",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 14.0,
+          "message": "CLEAR IN TRACK SECTOR 14"
+        },
+        {
+          "time": "2026-06-06T15:12:44.000000000",
+          "flag": "DOUBLE YELLOW",
+          "scope": "Sector",
+          "sector": 17.0,
+          "message": "DOUBLE YELLOW IN TRACK SECTOR 17"
+        },
+        {
+          "time": "2026-06-06T15:14:06.000000000",
+          "flag": "DOUBLE YELLOW",
+          "scope": "Sector",
+          "sector": 13.0,
+          "message": "DOUBLE YELLOW IN TRACK SECTOR 13"
+        },
+        {
+          "time": "2026-06-06T15:20:20.000000000",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 13.0,
+          "message": "CLEAR IN TRACK SECTOR 13"
+        }
+      ],
+      "messages": [
+        {
+          "time": "2026-06-06T13:46:46.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "RISK OF RAIN FOR F1 QUALIFYING IS 0%"
+        },
+        {
+          "time": "2026-06-06T14:00:00.000000000",
+          "category": "Flag",
+          "flag": "GREEN",
+          "scope": "Track",
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "GREEN LIGHT - PIT EXIT OPEN"
+        },
+        {
+          "time": "2026-06-06T14:03:43.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "CAR 63 (RUS) TIME 1:35.179 DELETED - TRACK LIMITS AT TURN 10 LAP 2 16:02:59"
+        },
+        {
+          "time": "2026-06-06T14:05:14.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "CAR 63 (RUS) TIME 1:33.532 DELETED - TRACK LIMITS AT TURN 10 LAP 3 16:04:26"
+        },
+        {
+          "time": "2026-06-06T14:05:52.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "CAR 11 (PER) TIME 1:30.897 DELETED - TRACK LIMITS AT TURN 10 LAP 5 16:05:06"
+        },
+        {
+          "time": "2026-06-06T14:08:46.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "CAR 63 (RUS) TIME 1:39.599 DELETED - TRACK LIMITS AT TURN 10 LAP 5 16:07:16"
+        },
+        {
+          "time": "2026-06-06T14:08:48.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "CAR 11 (PER) LAP DELETED - TRACK LIMITS AT TURN 10 LAP 7 16:07:51 (PIT)"
+        },
+        {
+          "time": "2026-06-06T14:09:49.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "CAR 63 (RUS) TIME 1:33.562 DELETED - TRACK LIMITS AT TURN 10 LAP 6 16:08:50"
+        },
+        {
+          "time": "2026-06-06T14:09:50.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "CAR 63 (RUS) TIME 1:33.562 DELETED - TRACK LIMITS AT TURN 16 LAP 6 16:09:12"
+        },
+        {
+          "time": "2026-06-06T14:10:40.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "CAR 23 (ALB) LAP DELETED - TRACK LIMITS AT TURN 1 LAP 8 16:09:23 (PIT)"
+        },
+        {
+          "time": "2026-06-06T14:10:53.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "CAR 55 (SAI) LAP DELETED - TRACK LIMITS AT TURN 16 LAP 8 16:10:31 (PIT)"
+        },
+        {
+          "time": "2026-06-06T14:12:45.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "CAR 12 (ANT) TIME 1:34.829 DELETED - TRACK LIMITS AT TURN 1 LAP 8 16:10:30"
+        },
+        {
+          "time": "2026-06-06T14:14:20.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "CAR 31 (OCO) TIME 1:21.099 DELETED - TRACK LIMITS AT TURN 16 LAP 10 16:13:15"
+        },
+        {
+          "time": "2026-06-06T14:14:50.000000000",
+          "category": "Flag",
+          "flag": "BLACK AND WHITE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "BLACK AND WHITE FLAG FOR CAR 12 (ANT) - FAILING TO FOLLOW RACE DIRECTORS INSTRUCTIONS"
+        },
+        {
+          "time": "2026-06-06T14:14:55.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "CAR 44 (HAM) TIME 1:36.716 DELETED - TRACK LIMITS AT TURN 1 LAP 9 16:12:12"
+        },
+        {
+          "time": "2026-06-06T14:14:58.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "CAR 18 (STR) TIME 1:17.435 DELETED - TRACK LIMITS AT TURN 10 LAP 10 16:13:49"
+        },
+        {
+          "time": "2026-06-06T14:14:59.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "CAR 5 (BOR) TIME 1:35.069 DELETED - TRACK LIMITS AT TURN 10 LAP 10 16:13:47"
+        },
+        {
+          "time": "2026-06-06T14:15:22.000000000",
+          "category": "Flag",
+          "flag": "DOUBLE YELLOW",
+          "scope": "Sector",
+          "sector": 13.0,
+          "status": null,
+          "lap": null,
+          "message": "DOUBLE YELLOW IN TRACK SECTOR 13"
+        },
+        {
+          "time": "2026-06-06T14:15:49.000000000",
+          "category": "Flag",
+          "flag": "RED",
+          "scope": "Track",
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "RED FLAG"
+        },
+        {
+          "time": "2026-06-06T14:15:49.000000000",
+          "category": "Flag",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 13.0,
+          "status": null,
+          "lap": null,
+          "message": "CLEAR IN TRACK SECTOR 13"
+        },
+        {
+          "time": "2026-06-06T14:16:43.000000000",
+          "category": "Flag",
+          "flag": "DOUBLE YELLOW",
+          "scope": "Sector",
+          "sector": 13.0,
+          "status": null,
+          "lap": null,
+          "message": "DOUBLE YELLOW IN TRACK SECTOR 13"
+        },
+        {
+          "time": "2026-06-06T14:17:03.000000000",
+          "category": "Flag",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 13.0,
+          "status": null,
+          "lap": null,
+          "message": "CLEAR IN TRACK SECTOR 13"
+        },
+        {
+          "time": "2026-06-06T14:17:29.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "MARSHALS ON TRACK AT TURN 10"
+        },
+        {
+          "time": "2026-06-06T14:17:32.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "CAR 18 (STR) TIME 1:17.435 DELETED - TRACK LIMITS AT TURN 16 LAP 10 16:14:03"
+        },
+        {
+          "time": "2026-06-06T14:17:33.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "CAR 18 (STR) LAP DELETED - TRACK LIMITS AT TURN 10 LAP 11 16:15:17 (PIT)"
+        },
+        {
+          "time": "2026-06-06T14:17:48.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "CAR 63 (RUS) LAP DELETED - TRACK LIMITS AT TURN 1 LAP 11 16:15:41 (PIT)"
+        },
+        {
+          "time": "2026-06-06T14:17:53.000000000",
+          "category": "Flag",
+          "flag": "CLEAR",
+          "scope": "Track",
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "TRACK CLEAR"
+        },
+        {
+          "time": "2026-06-06T14:17:56.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "OVERTAKE ENABLED"
+        },
+        {
+          "time": "2026-06-06T14:18:10.000000000",
+          "category": "Flag",
+          "flag": "DOUBLE YELLOW",
+          "scope": "Sector",
+          "sector": 13.0,
+          "status": null,
+          "lap": null,
+          "message": "DOUBLE YELLOW IN TRACK SECTOR 13"
+        },
+        {
+          "time": "2026-06-06T14:18:36.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "Q1 WILL RESUME AT 16:22"
+        },
+        {
+          "time": "2026-06-06T14:18:50.000000000",
+          "category": "Flag",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 13.0,
+          "status": null,
+          "lap": null,
+          "message": "CLEAR IN TRACK SECTOR 13"
+        },
+        {
+          "time": "2026-06-06T14:22:00.000000000",
+          "category": "Flag",
+          "flag": "GREEN",
+          "scope": "Track",
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "GREEN LIGHT - PIT EXIT OPEN"
+        },
+        {
+          "time": "2026-06-06T14:24:11.000000000",
+          "category": "Flag",
+          "flag": "CHEQUERED",
+          "scope": "Track",
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "CHEQUERED FLAG"
+        },
+        {
+          "time": "2026-06-06T14:24:18.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "FIRST CAR TO TAKE THE FLAG - CAR 43 (COL)"
+        },
+        {
+          "time": "2026-06-06T14:27:13.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "Q2 WILL START AT 16:32"
+        },
+        {
+          "time": "2026-06-06T14:31:47.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "INCIDENT INVOLVING CAR 55 (SAI) NOTED - UNSAFE RELEASE (16:29:47)"
+        },
+        {
+          "time": "2026-06-06T14:32:00.000000000",
+          "category": "Flag",
+          "flag": "GREEN",
+          "scope": "Track",
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "GREEN LIGHT - PIT EXIT OPEN"
+        },
+        {
+          "time": "2026-06-06T14:35:17.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "FIA STEWARDS: INCIDENT INVOLVING CAR 55 (SAI) REVIEWED NO FURTHER INVESTIGATION - UNSAFE RELEASE (16:29:47)"
+        },
+        {
+          "time": "2026-06-06T14:35:45.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "CAR 27 (HUL) TIME 1:34.493 DELETED - TRACK LIMITS AT TURN 10 LAP 13 16:33:50"
+        },
+        {
+          "time": "2026-06-06T14:40:23.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "TURN 9 INCIDENT INVOLVING CAR 27 (HUL) NOTED - FAILING TO FOLLOW RACE DIRECTORS INSTRUCTIONS (16:37:53)"
+        },
+        {
+          "time": "2026-06-06T14:41:05.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "FIA STEWARDS: TURN 9 INCIDENT INVOLVING CAR 27 (HUL) WILL BE INVESTIGATED AFTER THE SESSION - FAILING TO FOLLOW RACE DIRECTORS INSTRUCTIONS (16:37:53)"
+        },
+        {
+          "time": "2026-06-06T14:42:38.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "PIT LANE INCIDENT INVOLVING CARS 23 (ALB) AND 41 (LIN) NOTED (16:41:02)"
+        },
+        {
+          "time": "2026-06-06T14:45:19.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "CAR 63 (RUS) TIME 1:21.611 DELETED - TRACK LIMITS AT TURN 10 LAP 19 16:44:31"
+        },
+        {
+          "time": "2026-06-06T14:46:56.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "CAR 30 (LAW) LAP DELETED - TRACK LIMITS AT TURN 10 LAP 22 16:46:12 (PIT)"
+        },
+        {
+          "time": "2026-06-06T14:47:00.000000000",
+          "category": "Flag",
+          "flag": "CHEQUERED",
+          "scope": "Track",
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "CHEQUERED FLAG"
+        },
+        {
+          "time": "2026-06-06T14:47:08.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "FIRST CAR TO TAKE THE FLAG - CAR 6 (HAD)"
+        },
+        {
+          "time": "2026-06-06T14:47:50.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "CAR 1 (NOR) LAP DELETED - TRACK LIMITS AT TURN 10 LAP 22 16:46:47 (PIT)"
+        },
+        {
+          "time": "2026-06-06T14:48:37.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "FIA STEWARDS: PIT LANE INCIDENT INVOLVING CARS 23 (ALB) AND 41 (LIN) WILL BE INVESTIGATED AFTER THE SESSION (16:41:02)"
+        },
+        {
+          "time": "2026-06-06T14:48:51.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "CAR 27 (HUL) LAP DELETED - TRACK LIMITS AT TURN 1 LAP 22 16:46:19 (PIT)"
+        },
+        {
+          "time": "2026-06-06T14:48:52.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "CAR 43 (COL) LAP DELETED - TRACK LIMITS AT TURN 10 LAP 25 16:48:17 (PIT)"
+        },
+        {
+          "time": "2026-06-06T14:50:02.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "Q3 WILL START AT 16:54"
+        },
+        {
+          "time": "2026-06-06T14:51:40.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "TURN 18 INCIDENT INVOLVING CAR 41 (LIN) NOTED - IMPEDING (16:46:05)"
+        },
+        {
+          "time": "2026-06-06T14:54:00.000000000",
+          "category": "Flag",
+          "flag": "GREEN",
+          "scope": "Track",
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "GREEN LIGHT - PIT EXIT OPEN"
+        },
+        {
+          "time": "2026-06-06T14:59:04.000000000",
+          "category": "Flag",
+          "flag": "BLACK AND WHITE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "BLACK AND WHITE FLAG FOR CAR 44 (HAM) - FAILING TO FOLLOW RACE DIRECTORS INSTRUCTIONS"
+        },
+        {
+          "time": "2026-06-06T14:59:51.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "CAR 1 (NOR) LAP DELETED - TRACK LIMITS AT TURN 10 LAP 26 16:59:00 (PIT)"
+        },
+        {
+          "time": "2026-06-06T15:00:38.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "FIA STEWARDS: TURN 18 INCIDENT INVOLVING CAR 41 (LIN) REVIEWED NO FURTHER INVESTIGATION - IMPEDING (16:46:05)"
+        },
+        {
+          "time": "2026-06-06T15:06:51.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "CAR 1 (NOR) LAP DELETED - TRACK LIMITS AT TURN 10 LAP 29 17:06:17 (PIT)"
+        },
+        {
+          "time": "2026-06-06T15:06:52.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "CAR 1 (NOR) LAP DELETED - TRACK LIMITS AT TURN 16 LAP 29 17:06:33 (PIT)"
+        },
+        {
+          "time": "2026-06-06T15:07:00.000000000",
+          "category": "Flag",
+          "flag": "CHEQUERED",
+          "scope": "Track",
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "CHEQUERED FLAG"
+        },
+        {
+          "time": "2026-06-06T15:07:06.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": null,
+          "message": "FIRST CAR TO TAKE THE FLAG - CAR 3 (VER)"
+        },
+        {
+          "time": "2026-06-06T15:07:37.000000000",
+          "category": "Flag",
+          "flag": "YELLOW",
+          "scope": "Sector",
+          "sector": 14.0,
+          "status": null,
+          "lap": null,
+          "message": "YELLOW IN TRACK SECTOR 14"
+        },
+        {
+          "time": "2026-06-06T15:07:41.000000000",
+          "category": "Flag",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 14.0,
+          "status": null,
+          "lap": null,
+          "message": "CLEAR IN TRACK SECTOR 14"
+        },
+        {
+          "time": "2026-06-06T15:12:44.000000000",
+          "category": "Flag",
+          "flag": "DOUBLE YELLOW",
+          "scope": "Sector",
+          "sector": 17.0,
+          "status": null,
+          "lap": null,
+          "message": "DOUBLE YELLOW IN TRACK SECTOR 17"
+        },
+        {
+          "time": "2026-06-06T15:14:06.000000000",
+          "category": "Flag",
+          "flag": "DOUBLE YELLOW",
+          "scope": "Sector",
+          "sector": 13.0,
+          "status": null,
+          "lap": null,
+          "message": "DOUBLE YELLOW IN TRACK SECTOR 13"
+        },
+        {
+          "time": "2026-06-06T15:20:20.000000000",
+          "category": "Flag",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 13.0,
+          "status": null,
+          "lap": null,
+          "message": "CLEAR IN TRACK SECTOR 13"
+        }
+      ]
+    },
+    "Race": {
+      "messages_total": 265,
+      "counts": {
+        "flag_black_and_white": 1,
+        "flag_blue": 126,
+        "flag_chequered": 1,
+        "flag_clear": 11,
+        "flag_double_yellow": 6,
+        "flag_green": 2,
+        "flag_yellow": 6,
+        "overtake_disabled": 2,
+        "overtake_enabled": 2,
+        "sc_deployed": 2,
+        "sc_ending": 1
+      },
+      "overtake_windows": [
+        {
+          "start": "2026-06-07T13:04:20.000000000",
+          "start_message": "OVERTAKE ENABLED",
+          "end": "2026-06-07T14:20:02.000000000",
+          "end_message": "OVERTAKE DISABLED"
+        },
+        {
+          "start": "2026-06-07T15:17:59.000000000",
+          "start_message": "OVERTAKE ENABLED",
+          "end": null,
+          "end_message": null,
+          "note": "still open at the end of the message feed"
+        }
+      ],
+      "safety_car": [
+        {
+          "start": "2026-06-07T14:20:02.000000000",
+          "start_message": "SAFETY CAR DEPLOYED",
+          "end": "2026-06-07T14:29:41.000000000",
+          "end_message": "SAFETY CAR IN THIS LAP"
+        },
+        {
+          "start": "2026-06-07T14:31:18.000000000",
+          "start_message": "SAFETY CAR DEPLOYED",
+          "end": null,
+          "end_message": null,
+          "note": "still open at the end of the message feed"
+        }
+      ],
+      "virtual_safety_car": [],
+      "flags": [
+        {
+          "time": "2026-06-07T12:20:01.000000000",
+          "flag": "GREEN",
+          "scope": "Track",
+          "sector": null,
+          "message": "GREEN LIGHT - PIT EXIT OPEN"
+        },
+        {
+          "time": "2026-06-07T12:25:25.000000000",
+          "flag": "YELLOW",
+          "scope": "Sector",
+          "sector": 18.0,
+          "message": "YELLOW IN TRACK SECTOR 18"
+        },
+        {
+          "time": "2026-06-07T12:26:04.000000000",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 18.0,
+          "message": "CLEAR IN TRACK SECTOR 18"
+        },
+        {
+          "time": "2026-06-07T13:03:12.000000000",
+          "flag": "GREEN",
+          "scope": "Track",
+          "sector": null,
+          "message": "GREEN LIGHT - PIT EXIT OPEN"
+        },
+        {
+          "time": "2026-06-07T13:03:17.000000000",
+          "flag": "DOUBLE YELLOW",
+          "scope": "Sector",
+          "sector": 19.0,
+          "message": "DOUBLE YELLOW IN TRACK SECTOR 19"
+        },
+        {
+          "time": "2026-06-07T13:03:32.000000000",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 19.0,
+          "message": "CLEAR IN TRACK SECTOR 19"
+        },
+        {
+          "time": "2026-06-07T13:16:02.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 87 (BEA) TIMED AT 15:16:01"
+        },
+        {
+          "time": "2026-06-07T13:16:11.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 5 (BOR) TIMED AT 15:16:10"
+        },
+        {
+          "time": "2026-06-07T13:16:20.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 5 (BOR) TIMED AT 15:16:19"
+        },
+        {
+          "time": "2026-06-07T13:16:32.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 77 (BOT) TIMED AT 15:16:32"
+        },
+        {
+          "time": "2026-06-07T13:17:10.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 87 (BEA) TIMED AT 15:17:09"
+        },
+        {
+          "time": "2026-06-07T13:17:20.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 5 (BOR) TIMED AT 15:17:19"
+        },
+        {
+          "time": "2026-06-07T13:17:33.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 77 (BOT) TIMED AT 15:17:33"
+        },
+        {
+          "time": "2026-06-07T13:18:08.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 87 (BEA) TIMED AT 15:18:08"
+        },
+        {
+          "time": "2026-06-07T13:18:28.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 11 (PER) TIMED AT 15:18:27"
+        },
+        {
+          "time": "2026-06-07T13:18:28.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 5 (BOR) TIMED AT 15:18:28"
+        },
+        {
+          "time": "2026-06-07T13:18:41.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 77 (BOT) TIMED AT 15:18:41"
+        },
+        {
+          "time": "2026-06-07T13:19:30.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 87 (BEA) TIMED AT 15:19:30"
+        },
+        {
+          "time": "2026-06-07T13:19:45.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 87 (BEA) TIMED AT 15:19:45"
+        },
+        {
+          "time": "2026-06-07T13:19:49.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 11 (PER) TIMED AT 15:19:48"
+        },
+        {
+          "time": "2026-06-07T13:19:59.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 5 (BOR) TIMED AT 15:19:58"
+        },
+        {
+          "time": "2026-06-07T13:20:12.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 5 (BOR) TIMED AT 15:20:12"
+        },
+        {
+          "time": "2026-06-07T13:20:32.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 77 (BOT) TIMED AT 15:20:32"
+        },
+        {
+          "time": "2026-06-07T13:20:55.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 77 (BOT) TIMED AT 15:20:55"
+        },
+        {
+          "time": "2026-06-07T13:22:06.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 18 (STR) TIMED AT 15:22:06"
+        },
+        {
+          "time": "2026-06-07T13:22:28.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 11 (PER) TIMED AT 15:22:27"
+        },
+        {
+          "time": "2026-06-07T13:23:02.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 18 (STR) TIMED AT 15:23:01"
+        },
+        {
+          "time": "2026-06-07T13:23:58.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 87 (BEA) TIMED AT 15:23:58"
+        },
+        {
+          "time": "2026-06-07T13:24:04.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 14 (ALO) TIMED AT 15:24:03"
+        },
+        {
+          "time": "2026-06-07T13:24:16.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 14 (ALO) TIMED AT 15:24:15"
+        },
+        {
+          "time": "2026-06-07T13:24:16.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 5 (BOR) TIMED AT 15:24:16"
+        },
+        {
+          "time": "2026-06-07T13:24:31.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 77 (BOT) TIMED AT 15:24:31"
+        },
+        {
+          "time": "2026-06-07T13:24:45.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 18 (STR) TIMED AT 15:24:45"
+        },
+        {
+          "time": "2026-06-07T13:25:02.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 14 (ALO) TIMED AT 15:25:01"
+        },
+        {
+          "time": "2026-06-07T13:25:50.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 87 (BEA) TIMED AT 15:25:49"
+        },
+        {
+          "time": "2026-06-07T13:25:56.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 87 (BEA) TIMED AT 15:25:55"
+        },
+        {
+          "time": "2026-06-07T13:27:21.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 14 (ALO) TIMED AT 15:27:20"
+        },
+        {
+          "time": "2026-06-07T13:27:27.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 14 (ALO) TIMED AT 15:27:26"
+        },
+        {
+          "time": "2026-06-07T13:36:42.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 31 (OCO) TIMED AT 15:36:41"
+        },
+        {
+          "time": "2026-06-07T13:36:50.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 31 (OCO) TIMED AT 15:36:50"
+        },
+        {
+          "time": "2026-06-07T13:40:14.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 27 (HUL) TIMED AT 15:40:14"
+        },
+        {
+          "time": "2026-06-07T13:40:32.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 41 (LIN) TIMED AT 15:40:32"
+        },
+        {
+          "time": "2026-06-07T13:41:15.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 43 (COL) TIMED AT 15:41:14"
+        },
+        {
+          "time": "2026-06-07T13:41:23.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 43 (COL) TIMED AT 15:41:23"
+        },
+        {
+          "time": "2026-06-07T13:42:09.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 55 (SAI) TIMED AT 15:42:09"
+        },
+        {
+          "time": "2026-06-07T13:42:27.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 55 (SAI) TIMED AT 15:42:27"
+        },
+        {
+          "time": "2026-06-07T13:43:56.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 23 (ALB) TIMED AT 15:43:56"
+        },
+        {
+          "time": "2026-06-07T13:46:00.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 30 (LAW) TIMED AT 15:45:59"
+        },
+        {
+          "time": "2026-06-07T13:46:11.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 30 (LAW) TIMED AT 15:46:10"
+        },
+        {
+          "time": "2026-06-07T13:46:28.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 6 (HAD) TIMED AT 15:46:27"
+        },
+        {
+          "time": "2026-06-07T13:48:54.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 11 (PER) TIMED AT 15:48:53"
+        },
+        {
+          "time": "2026-06-07T13:52:59.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 31 (OCO) TIMED AT 15:52:58"
+        },
+        {
+          "time": "2026-06-07T13:53:27.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 27 (HUL) TIMED AT 15:53:26"
+        },
+        {
+          "time": "2026-06-07T13:53:29.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 23 (ALB) TIMED AT 15:53:28"
+        },
+        {
+          "time": "2026-06-07T13:53:37.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 41 (LIN) TIMED AT 15:53:37"
+        },
+        {
+          "time": "2026-06-07T13:53:56.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 55 (SAI) TIMED AT 15:53:56"
+        },
+        {
+          "time": "2026-06-07T13:54:07.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 5 (BOR) TIMED AT 15:54:07"
+        },
+        {
+          "time": "2026-06-07T13:54:15.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 5 (BOR) TIMED AT 15:54:15"
+        },
+        {
+          "time": "2026-06-07T13:54:25.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 5 (BOR) TIMED AT 15:54:25"
+        },
+        {
+          "time": "2026-06-07T13:54:27.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 43 (COL) TIMED AT 15:54:27"
+        },
+        {
+          "time": "2026-06-07T13:54:29.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 5 (BOR) TIMED AT 15:54:29"
+        },
+        {
+          "time": "2026-06-07T13:55:24.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 11 (PER) TIMED AT 15:55:23"
+        },
+        {
+          "time": "2026-06-07T13:55:30.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 11 (PER) TIMED AT 15:55:29"
+        },
+        {
+          "time": "2026-06-07T13:55:31.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 18 (STR) TIMED AT 15:55:30"
+        },
+        {
+          "time": "2026-06-07T13:55:48.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 18 (STR) TIMED AT 15:55:47"
+        },
+        {
+          "time": "2026-06-07T13:56:00.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 31 (OCO) TIMED AT 15:55:59"
+        },
+        {
+          "time": "2026-06-07T13:56:06.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 31 (OCO) TIMED AT 15:56:05"
+        },
+        {
+          "time": "2026-06-07T13:56:23.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 27 (HUL) TIMED AT 15:56:22"
+        },
+        {
+          "time": "2026-06-07T13:56:36.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 41 (LIN) TIMED AT 15:56:35"
+        },
+        {
+          "time": "2026-06-07T13:56:50.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 55 (SAI) TIMED AT 15:56:50"
+        },
+        {
+          "time": "2026-06-07T13:58:02.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 30 (LAW) TIMED AT 15:58:02"
+        },
+        {
+          "time": "2026-06-07T13:58:29.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 5 (BOR) TIMED AT 15:58:29"
+        },
+        {
+          "time": "2026-06-07T13:58:53.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 11 (PER) TIMED AT 15:58:53"
+        },
+        {
+          "time": "2026-06-07T13:59:42.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 23 (ALB) TIMED AT 15:59:41"
+        },
+        {
+          "time": "2026-06-07T14:01:02.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 5 (BOR) TIMED AT 16:01:02"
+        },
+        {
+          "time": "2026-06-07T14:01:12.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 11 (PER) TIMED AT 16:01:12"
+        },
+        {
+          "time": "2026-06-07T14:01:21.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 11 (PER) TIMED AT 16:01:20"
+        },
+        {
+          "time": "2026-06-07T14:03:44.000000000",
+          "flag": "BLACK AND WHITE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "BLACK AND WHITE FLAG FOR CAR 18 (STR) - TRACK LIMITS"
+        },
+        {
+          "time": "2026-06-07T14:05:24.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 18 (STR) TIMED AT 16:05:24"
+        },
+        {
+          "time": "2026-06-07T14:05:30.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 6 (HAD) TIMED AT 16:05:30"
+        },
+        {
+          "time": "2026-06-07T14:05:37.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 6 (HAD) TIMED AT 16:05:37"
+        },
+        {
+          "time": "2026-06-07T14:05:48.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 6 (HAD) TIMED AT 16:05:47"
+        },
+        {
+          "time": "2026-06-07T14:06:34.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 10 (GAS) TIMED AT 16:06:33"
+        },
+        {
+          "time": "2026-06-07T14:06:46.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 18 (STR) TIMED AT 16:06:46"
+        },
+        {
+          "time": "2026-06-07T14:07:14.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 18 (STR) TIMED AT 16:07:13"
+        },
+        {
+          "time": "2026-06-07T14:07:44.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 14 (ALO) TIMED AT 16:07:44"
+        },
+        {
+          "time": "2026-06-07T14:08:30.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 5 (BOR) TIMED AT 16:08:29"
+        },
+        {
+          "time": "2026-06-07T14:08:33.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 14 (ALO) TIMED AT 16:08:32"
+        },
+        {
+          "time": "2026-06-07T14:08:37.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 43 (COL) TIMED AT 16:08:37"
+        },
+        {
+          "time": "2026-06-07T14:09:08.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 10 (GAS) TIMED AT 16:09:07"
+        },
+        {
+          "time": "2026-06-07T14:09:08.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 11 (PER) TIMED AT 16:09:07"
+        },
+        {
+          "time": "2026-06-07T14:09:19.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 43 (COL) TIMED AT 16:09:18"
+        },
+        {
+          "time": "2026-06-07T14:09:32.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 31 (OCO) TIMED AT 16:09:32"
+        },
+        {
+          "time": "2026-06-07T14:09:52.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 31 (OCO) TIMED AT 16:09:51"
+        },
+        {
+          "time": "2026-06-07T14:09:55.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 27 (HUL) TIMED AT 16:09:54"
+        },
+        {
+          "time": "2026-06-07T14:10:07.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 23 (ALB) TIMED AT 16:10:07"
+        },
+        {
+          "time": "2026-06-07T14:10:18.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 27 (HUL) TIMED AT 16:10:17"
+        },
+        {
+          "time": "2026-06-07T14:10:21.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 14 (ALO) TIMED AT 16:10:20"
+        },
+        {
+          "time": "2026-06-07T14:10:24.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 11 (PER) TIMED AT 16:10:24"
+        },
+        {
+          "time": "2026-06-07T14:10:36.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 23 (ALB) TIMED AT 16:10:35"
+        },
+        {
+          "time": "2026-06-07T14:11:06.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 11 (PER) TIMED AT 16:11:06"
+        },
+        {
+          "time": "2026-06-07T14:11:58.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 41 (LIN) TIMED AT 16:11:57"
+        },
+        {
+          "time": "2026-06-07T14:12:04.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 43 (COL) TIMED AT 16:12:04"
+        },
+        {
+          "time": "2026-06-07T14:12:19.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 41 (LIN) TIMED AT 16:12:18"
+        },
+        {
+          "time": "2026-06-07T14:12:47.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 31 (OCO) TIMED AT 16:12:47"
+        },
+        {
+          "time": "2026-06-07T14:12:57.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 31 (OCO) TIMED AT 16:12:56"
+        },
+        {
+          "time": "2026-06-07T14:13:08.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 63 (RUS) TIMED AT 16:13:07"
+        },
+        {
+          "time": "2026-06-07T14:13:12.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 27 (HUL) TIMED AT 16:13:11"
+        },
+        {
+          "time": "2026-06-07T14:13:18.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 63 (RUS) TIMED AT 16:13:17"
+        },
+        {
+          "time": "2026-06-07T14:13:34.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 23 (ALB) TIMED AT 16:13:33"
+        },
+        {
+          "time": "2026-06-07T14:13:36.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 18 (STR) TIMED AT 16:13:35"
+        },
+        {
+          "time": "2026-06-07T14:14:14.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 18 (STR) TIMED AT 16:14:14"
+        },
+        {
+          "time": "2026-06-07T14:14:44.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 18 (STR) TIMED AT 16:14:43"
+        },
+        {
+          "time": "2026-06-07T14:15:10.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 55 (SAI) TIMED AT 16:15:09"
+        },
+        {
+          "time": "2026-06-07T14:16:10.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 14 (ALO) TIMED AT 16:16:09"
+        },
+        {
+          "time": "2026-06-07T14:16:31.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 5 (BOR) TIMED AT 16:16:30"
+        },
+        {
+          "time": "2026-06-07T14:16:38.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 14 (ALO) TIMED AT 16:16:38"
+        },
+        {
+          "time": "2026-06-07T14:16:49.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 11 (PER) TIMED AT 16:16:48"
+        },
+        {
+          "time": "2026-06-07T14:17:07.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 43 (COL) TIMED AT 16:17:07"
+        },
+        {
+          "time": "2026-06-07T14:17:25.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 14 (ALO) TIMED AT 16:17:24"
+        },
+        {
+          "time": "2026-06-07T14:17:27.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 31 (OCO) TIMED AT 16:17:26"
+        },
+        {
+          "time": "2026-06-07T14:17:28.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 43 (COL) TIMED AT 16:17:28"
+        },
+        {
+          "time": "2026-06-07T14:17:45.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 31 (OCO) TIMED AT 16:17:44"
+        },
+        {
+          "time": "2026-06-07T14:17:52.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 31 (OCO) TIMED AT 16:17:51"
+        },
+        {
+          "time": "2026-06-07T14:17:59.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 41 (LIN) TIMED AT 16:17:58"
+        },
+        {
+          "time": "2026-06-07T14:18:07.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 43 (COL) TIMED AT 16:18:07"
+        },
+        {
+          "time": "2026-06-07T14:18:08.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 41 (LIN) TIMED AT 16:18:08"
+        },
+        {
+          "time": "2026-06-07T14:18:16.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 18 (STR) TIMED AT 16:18:16"
+        },
+        {
+          "time": "2026-06-07T14:18:30.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 18 (STR) TIMED AT 16:18:30"
+        },
+        {
+          "time": "2026-06-07T14:18:35.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 31 (OCO) TIMED AT 16:18:35"
+        },
+        {
+          "time": "2026-06-07T14:19:19.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 27 (HUL) TIMED AT 16:19:18"
+        },
+        {
+          "time": "2026-06-07T14:19:45.000000000",
+          "flag": "YELLOW",
+          "scope": "Sector",
+          "sector": 18.0,
+          "message": "YELLOW IN TRACK SECTOR 18"
+        },
+        {
+          "time": "2026-06-07T14:19:53.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 55 (SAI) TIMED AT 16:19:52"
+        },
+        {
+          "time": "2026-06-07T14:20:06.000000000",
+          "flag": "DOUBLE YELLOW",
+          "scope": "Sector",
+          "sector": 17.0,
+          "message": "DOUBLE YELLOW IN TRACK SECTOR 17"
+        },
+        {
+          "time": "2026-06-07T14:20:12.000000000",
+          "flag": "DOUBLE YELLOW",
+          "scope": "Sector",
+          "sector": 18.0,
+          "message": "DOUBLE YELLOW IN TRACK SECTOR 18"
+        },
+        {
+          "time": "2026-06-07T14:24:03.000000000",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 17.0,
+          "message": "CLEAR IN TRACK SECTOR 17"
+        },
+        {
+          "time": "2026-06-07T14:24:05.000000000",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 18.0,
+          "message": "CLEAR IN TRACK SECTOR 18"
+        },
+        {
+          "time": "2026-06-07T14:30:34.000000000",
+          "flag": "CLEAR",
+          "scope": "Track",
+          "sector": null,
+          "message": "TRACK CLEAR"
+        },
+        {
+          "time": "2026-06-07T14:30:49.000000000",
+          "flag": "YELLOW",
+          "scope": "Sector",
+          "sector": 18.0,
+          "message": "YELLOW IN TRACK SECTOR 18"
+        },
+        {
+          "time": "2026-06-07T14:30:57.000000000",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "message": "WAVED BLUE FLAG FOR CAR 43 (COL) TIMED AT 16:30:56"
+        },
+        {
+          "time": "2026-06-07T14:31:37.000000000",
+          "flag": "DOUBLE YELLOW",
+          "scope": "Sector",
+          "sector": 18.0,
+          "message": "DOUBLE YELLOW IN TRACK SECTOR 18"
+        },
+        {
+          "time": "2026-06-07T14:34:38.000000000",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 18.0,
+          "message": "CLEAR IN TRACK SECTOR 18"
+        },
+        {
+          "time": "2026-06-07T15:00:48.000000000",
+          "flag": "CLEAR",
+          "scope": "Track",
+          "sector": null,
+          "message": "TRACK CLEAR"
+        },
+        {
+          "time": "2026-06-07T15:17:34.000000000",
+          "flag": "YELLOW",
+          "scope": "Sector",
+          "sector": 10.0,
+          "message": "YELLOW IN TRACK SECTOR 10"
+        },
+        {
+          "time": "2026-06-07T15:17:36.000000000",
+          "flag": "DOUBLE YELLOW",
+          "scope": "Sector",
+          "sector": 10.0,
+          "message": "DOUBLE YELLOW IN TRACK SECTOR 10"
+        },
+        {
+          "time": "2026-06-07T15:17:41.000000000",
+          "flag": "YELLOW",
+          "scope": "Sector",
+          "sector": 9.0,
+          "message": "YELLOW IN TRACK SECTOR 9"
+        },
+        {
+          "time": "2026-06-07T15:17:47.000000000",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 10.0,
+          "message": "CLEAR IN TRACK SECTOR 10"
+        },
+        {
+          "time": "2026-06-07T15:17:52.000000000",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 9.0,
+          "message": "CLEAR IN TRACK SECTOR 9"
+        },
+        {
+          "time": "2026-06-07T15:26:43.000000000",
+          "flag": "CHEQUERED",
+          "scope": "Track",
+          "sector": null,
+          "message": "CHEQUERED FLAG"
+        },
+        {
+          "time": "2026-06-07T15:29:56.000000000",
+          "flag": "DOUBLE YELLOW",
+          "scope": "Sector",
+          "sector": 10.0,
+          "message": "DOUBLE YELLOW IN TRACK SECTOR 10"
+        },
+        {
+          "time": "2026-06-07T15:30:22.000000000",
+          "flag": "YELLOW",
+          "scope": "Sector",
+          "sector": 9.0,
+          "message": "YELLOW IN TRACK SECTOR 9"
+        },
+        {
+          "time": "2026-06-07T15:33:10.000000000",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 9.0,
+          "message": "CLEAR IN TRACK SECTOR 9"
+        },
+        {
+          "time": "2026-06-07T15:35:58.000000000",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 10.0,
+          "message": "CLEAR IN TRACK SECTOR 10"
+        }
+      ],
+      "messages": [
+        {
+          "time": "2026-06-07T12:20:01.000000000",
+          "category": "Flag",
+          "flag": "GREEN",
+          "scope": "Track",
+          "sector": null,
+          "status": null,
+          "lap": 1,
+          "message": "GREEN LIGHT - PIT EXIT OPEN"
+        },
+        {
+          "time": "2026-06-07T12:22:10.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 1,
+          "message": "INCIDENT INVOLVING CAR 11 (PER) NOTED - FAILING TO FOLLOW RACE DIRECTORS INSTRUCTIONS \u2013 PRACTICE START INFRINGEMENT (14:20:23)"
+        },
+        {
+          "time": "2026-06-07T12:25:25.000000000",
+          "category": "Flag",
+          "flag": "YELLOW",
+          "scope": "Sector",
+          "sector": 18.0,
+          "status": null,
+          "lap": 1,
+          "message": "YELLOW IN TRACK SECTOR 18"
+        },
+        {
+          "time": "2026-06-07T12:26:04.000000000",
+          "category": "Flag",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 18.0,
+          "status": null,
+          "lap": 1,
+          "message": "CLEAR IN TRACK SECTOR 18"
+        },
+        {
+          "time": "2026-06-07T12:30:01.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 1,
+          "message": "PIT EXIT CLOSED"
+        },
+        {
+          "time": "2026-06-07T12:33:08.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 1,
+          "message": "FIA STEWARDS: INCIDENT INVOLVING CAR 11 (PER) WILL BE INVESTIGATED AFTER THE RACE - FAILING TO FOLLOW RACE DIRECTORS INSTRUCTIONS \u2013 PRACTICE START INFRINGEMENT (14:20:23)"
+        },
+        {
+          "time": "2026-06-07T12:45:25.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 1,
+          "message": "RISK OF RAIN FOR THE F1 RACE IS 0%"
+        },
+        {
+          "time": "2026-06-07T12:57:03.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 1,
+          "message": "OVERTAKE DISABLED"
+        },
+        {
+          "time": "2026-06-07T13:03:12.000000000",
+          "category": "Flag",
+          "flag": "GREEN",
+          "scope": "Track",
+          "sector": null,
+          "status": null,
+          "lap": 1,
+          "message": "GREEN LIGHT - PIT EXIT OPEN"
+        },
+        {
+          "time": "2026-06-07T13:03:17.000000000",
+          "category": "Flag",
+          "flag": "DOUBLE YELLOW",
+          "scope": "Sector",
+          "sector": 19.0,
+          "status": null,
+          "lap": 1,
+          "message": "DOUBLE YELLOW IN TRACK SECTOR 19"
+        },
+        {
+          "time": "2026-06-07T13:03:32.000000000",
+          "category": "Flag",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 19.0,
+          "status": null,
+          "lap": 1,
+          "message": "CLEAR IN TRACK SECTOR 19"
+        },
+        {
+          "time": "2026-06-07T13:04:20.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 1,
+          "message": "OVERTAKE ENABLED"
+        },
+        {
+          "time": "2026-06-07T13:06:24.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 3,
+          "message": "INCIDENT INVOLVING CAR 63 (RUS) NOTED - FALSE START - OUT OF POSITION (15:03:11)"
+        },
+        {
+          "time": "2026-06-07T13:09:34.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 5,
+          "message": "FIA STEWARDS: INCIDENT INVOLVING CAR 63 (RUS) REVIEWED NO FURTHER INVESTIGATION - FALSE START - OUT OF POSITION (15:03:11)"
+        },
+        {
+          "time": "2026-06-07T13:10:09.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 6,
+          "message": "INCIDENT INVOLVING CAR 11 (PER) NOTED - FALSE START - OUT OF POSITION (15:03:08)"
+        },
+        {
+          "time": "2026-06-07T13:10:20.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 6,
+          "message": "FIA STEWARDS: INCIDENT INVOLVING CAR 11 (PER) UNDER INVESTIGATION - FALSE START - OUT OF POSITION (15:03:08)"
+        },
+        {
+          "time": "2026-06-07T13:14:10.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 9,
+          "message": "FIA STEWARDS: DRIVE THROUGH PENALTY FOR CAR 11 (PER) - FALSE START - OUT OF POSITION (15:03:08)"
+        },
+        {
+          "time": "2026-06-07T13:16:02.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 10,
+          "message": "WAVED BLUE FLAG FOR CAR 87 (BEA) TIMED AT 15:16:01"
+        },
+        {
+          "time": "2026-06-07T13:16:11.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 11,
+          "message": "WAVED BLUE FLAG FOR CAR 5 (BOR) TIMED AT 15:16:10"
+        },
+        {
+          "time": "2026-06-07T13:16:20.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 11,
+          "message": "WAVED BLUE FLAG FOR CAR 5 (BOR) TIMED AT 15:16:19"
+        },
+        {
+          "time": "2026-06-07T13:16:32.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 11,
+          "message": "WAVED BLUE FLAG FOR CAR 77 (BOT) TIMED AT 15:16:32"
+        },
+        {
+          "time": "2026-06-07T13:16:34.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 11,
+          "message": "FIA STEWARDS: PENALTY SERVED - DRIVE THROUGH PENALTY FOR CAR 11 (PER) - FALSE START - OUT OF POSITION (15:03:08)"
+        },
+        {
+          "time": "2026-06-07T13:17:10.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 11,
+          "message": "WAVED BLUE FLAG FOR CAR 87 (BEA) TIMED AT 15:17:09"
+        },
+        {
+          "time": "2026-06-07T13:17:20.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 11,
+          "message": "WAVED BLUE FLAG FOR CAR 5 (BOR) TIMED AT 15:17:19"
+        },
+        {
+          "time": "2026-06-07T13:17:33.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 12,
+          "message": "WAVED BLUE FLAG FOR CAR 77 (BOT) TIMED AT 15:17:33"
+        },
+        {
+          "time": "2026-06-07T13:18:08.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 12,
+          "message": "WAVED BLUE FLAG FOR CAR 87 (BEA) TIMED AT 15:18:08"
+        },
+        {
+          "time": "2026-06-07T13:18:28.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 12,
+          "message": "WAVED BLUE FLAG FOR CAR 11 (PER) TIMED AT 15:18:27"
+        },
+        {
+          "time": "2026-06-07T13:18:28.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 12,
+          "message": "WAVED BLUE FLAG FOR CAR 5 (BOR) TIMED AT 15:18:28"
+        },
+        {
+          "time": "2026-06-07T13:18:41.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 13,
+          "message": "WAVED BLUE FLAG FOR CAR 77 (BOT) TIMED AT 15:18:41"
+        },
+        {
+          "time": "2026-06-07T13:19:30.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 13,
+          "message": "WAVED BLUE FLAG FOR CAR 87 (BEA) TIMED AT 15:19:30"
+        },
+        {
+          "time": "2026-06-07T13:19:45.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 13,
+          "message": "WAVED BLUE FLAG FOR CAR 87 (BEA) TIMED AT 15:19:45"
+        },
+        {
+          "time": "2026-06-07T13:19:49.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 13,
+          "message": "WAVED BLUE FLAG FOR CAR 11 (PER) TIMED AT 15:19:48"
+        },
+        {
+          "time": "2026-06-07T13:19:59.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 14,
+          "message": "WAVED BLUE FLAG FOR CAR 5 (BOR) TIMED AT 15:19:58"
+        },
+        {
+          "time": "2026-06-07T13:20:04.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 14,
+          "message": "CAR 55 (SAI) TIME 1:18.858 DELETED - TRACK LIMITS AT TURN 16 LAP 12 15:19:04"
+        },
+        {
+          "time": "2026-06-07T13:20:12.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 14,
+          "message": "WAVED BLUE FLAG FOR CAR 5 (BOR) TIMED AT 15:20:12"
+        },
+        {
+          "time": "2026-06-07T13:20:32.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 14,
+          "message": "WAVED BLUE FLAG FOR CAR 77 (BOT) TIMED AT 15:20:32"
+        },
+        {
+          "time": "2026-06-07T13:20:55.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 14,
+          "message": "WAVED BLUE FLAG FOR CAR 77 (BOT) TIMED AT 15:20:55"
+        },
+        {
+          "time": "2026-06-07T13:22:06.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 15,
+          "message": "WAVED BLUE FLAG FOR CAR 18 (STR) TIMED AT 15:22:06"
+        },
+        {
+          "time": "2026-06-07T13:22:09.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 15,
+          "message": "CAR 23 (ALB) TIME 1:18.836 DELETED - TRACK LIMITS AT TURN 10 LAP 14 15:21:23"
+        },
+        {
+          "time": "2026-06-07T13:22:28.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 15,
+          "message": "WAVED BLUE FLAG FOR CAR 11 (PER) TIMED AT 15:22:27"
+        },
+        {
+          "time": "2026-06-07T13:23:02.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 16,
+          "message": "WAVED BLUE FLAG FOR CAR 18 (STR) TIMED AT 15:23:01"
+        },
+        {
+          "time": "2026-06-07T13:23:58.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 17,
+          "message": "WAVED BLUE FLAG FOR CAR 87 (BEA) TIMED AT 15:23:58"
+        },
+        {
+          "time": "2026-06-07T13:24:04.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 17,
+          "message": "WAVED BLUE FLAG FOR CAR 14 (ALO) TIMED AT 15:24:03"
+        },
+        {
+          "time": "2026-06-07T13:24:16.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 17,
+          "message": "WAVED BLUE FLAG FOR CAR 14 (ALO) TIMED AT 15:24:15"
+        },
+        {
+          "time": "2026-06-07T13:24:16.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 17,
+          "message": "WAVED BLUE FLAG FOR CAR 5 (BOR) TIMED AT 15:24:16"
+        },
+        {
+          "time": "2026-06-07T13:24:31.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 17,
+          "message": "WAVED BLUE FLAG FOR CAR 77 (BOT) TIMED AT 15:24:31"
+        },
+        {
+          "time": "2026-06-07T13:24:45.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 17,
+          "message": "WAVED BLUE FLAG FOR CAR 18 (STR) TIMED AT 15:24:45"
+        },
+        {
+          "time": "2026-06-07T13:25:02.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 17,
+          "message": "WAVED BLUE FLAG FOR CAR 14 (ALO) TIMED AT 15:25:01"
+        },
+        {
+          "time": "2026-06-07T13:25:50.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 18,
+          "message": "WAVED BLUE FLAG FOR CAR 87 (BEA) TIMED AT 15:25:49"
+        },
+        {
+          "time": "2026-06-07T13:25:56.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 18,
+          "message": "WAVED BLUE FLAG FOR CAR 87 (BEA) TIMED AT 15:25:55"
+        },
+        {
+          "time": "2026-06-07T13:27:21.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 19,
+          "message": "WAVED BLUE FLAG FOR CAR 14 (ALO) TIMED AT 15:27:20"
+        },
+        {
+          "time": "2026-06-07T13:27:27.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 19,
+          "message": "WAVED BLUE FLAG FOR CAR 14 (ALO) TIMED AT 15:27:26"
+        },
+        {
+          "time": "2026-06-07T13:28:19.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 20,
+          "message": "CAR 43 (COL) TIME 1:18.809 DELETED - TRACK LIMITS AT TURN 10 LAP 15 15:22:49"
+        },
+        {
+          "time": "2026-06-07T13:28:24.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 20,
+          "message": "CAR 41 (LIN) TIME 1:19.406 DELETED - TRACK LIMITS AT TURN 10 LAP 17 15:25:29"
+        },
+        {
+          "time": "2026-06-07T13:28:29.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 20,
+          "message": "CAR 18 (STR) TIME 1:19.611 DELETED - TRACK LIMITS AT TURN 10 LAP 17 15:26:06"
+        },
+        {
+          "time": "2026-06-07T13:28:36.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 20,
+          "message": "CAR 5 (BOR) TIME 1:18.330 DELETED - TRACK LIMITS AT TURN 10 LAP 17 15:26:29"
+        },
+        {
+          "time": "2026-06-07T13:33:23.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 24,
+          "message": "CAR 16 (LEC) TIME 1:17.884 DELETED - TRACK LIMITS AT TURN 10 LAP 23 15:32:30"
+        },
+        {
+          "time": "2026-06-07T13:36:28.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 26,
+          "message": "CAR 87 (BEA) TIME 1:19.137 DELETED - TRACK LIMITS AT TURN 10 LAP 24 15:35:43"
+        },
+        {
+          "time": "2026-06-07T13:36:42.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 27,
+          "message": "WAVED BLUE FLAG FOR CAR 31 (OCO) TIMED AT 15:36:41"
+        },
+        {
+          "time": "2026-06-07T13:36:50.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 27,
+          "message": "WAVED BLUE FLAG FOR CAR 31 (OCO) TIMED AT 15:36:50"
+        },
+        {
+          "time": "2026-06-07T13:37:48.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 27,
+          "message": "CAR 87 (BEA) TIME 1:18.683 DELETED - TRACK LIMITS AT TURN 10 LAP 25 15:37:02"
+        },
+        {
+          "time": "2026-06-07T13:40:14.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 29,
+          "message": "WAVED BLUE FLAG FOR CAR 27 (HUL) TIMED AT 15:40:14"
+        },
+        {
+          "time": "2026-06-07T13:40:32.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 30,
+          "message": "WAVED BLUE FLAG FOR CAR 41 (LIN) TIMED AT 15:40:32"
+        },
+        {
+          "time": "2026-06-07T13:41:15.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 30,
+          "message": "WAVED BLUE FLAG FOR CAR 43 (COL) TIMED AT 15:41:14"
+        },
+        {
+          "time": "2026-06-07T13:41:23.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 30,
+          "message": "WAVED BLUE FLAG FOR CAR 43 (COL) TIMED AT 15:41:23"
+        },
+        {
+          "time": "2026-06-07T13:41:45.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 31,
+          "message": "CAR 87 (BEA) LAP DELETED - TRACK LIMITS AT TURN 16 LAP 28 15:41:14 (PIT)"
+        },
+        {
+          "time": "2026-06-07T13:42:09.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 31,
+          "message": "WAVED BLUE FLAG FOR CAR 55 (SAI) TIMED AT 15:42:09"
+        },
+        {
+          "time": "2026-06-07T13:42:27.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 31,
+          "message": "WAVED BLUE FLAG FOR CAR 55 (SAI) TIMED AT 15:42:27"
+        },
+        {
+          "time": "2026-06-07T13:42:45.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 31,
+          "message": "CAR 6 (HAD) TIME 1:19.074 DELETED - TRACK LIMITS AT TURN 10 LAP 27 15:38:06"
+        },
+        {
+          "time": "2026-06-07T13:42:48.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 31,
+          "message": "CAR 27 (HUL) TIME 1:19.870 DELETED - TRACK LIMITS AT TURN 10 LAP 29 15:41:18"
+        },
+        {
+          "time": "2026-06-07T13:43:56.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 32,
+          "message": "WAVED BLUE FLAG FOR CAR 23 (ALB) TIMED AT 15:43:56"
+        },
+        {
+          "time": "2026-06-07T13:45:03.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 33,
+          "message": "INCIDENT INVOLVING CAR 44 (HAM) NOTED - SPEEDING IN THE PIT LANE (15:39:17)"
+        },
+        {
+          "time": "2026-06-07T13:45:06.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 33,
+          "message": "CAR 5 (BOR) TIME 1:18.765 DELETED - TRACK LIMITS AT TURN 10 LAP 30 15:43:26"
+        },
+        {
+          "time": "2026-06-07T13:45:33.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 33,
+          "message": "FIA STEWARDS: INCIDENT INVOLVING CAR 44 (HAM) UNDER INVESTIGATION - SPEEDING IN THE PIT LANE (15:39:17)"
+        },
+        {
+          "time": "2026-06-07T13:45:53.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 34,
+          "message": "FIA STEWARDS: 5 SECOND TIME PENALTY FOR CAR 44 (HAM) - SPEEDING IN THE PIT LANE (15:39:17)"
+        },
+        {
+          "time": "2026-06-07T13:45:55.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 34,
+          "message": "CAR 12 (ANT) TIME 1:16.862 DELETED - TRACK LIMITS AT TURN 10 LAP 33 15:45:05"
+        },
+        {
+          "time": "2026-06-07T13:46:00.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 34,
+          "message": "WAVED BLUE FLAG FOR CAR 30 (LAW) TIMED AT 15:45:59"
+        },
+        {
+          "time": "2026-06-07T13:46:11.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 34,
+          "message": "WAVED BLUE FLAG FOR CAR 30 (LAW) TIMED AT 15:46:10"
+        },
+        {
+          "time": "2026-06-07T13:46:28.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 34,
+          "message": "WAVED BLUE FLAG FOR CAR 6 (HAD) TIMED AT 15:46:27"
+        },
+        {
+          "time": "2026-06-07T13:48:15.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 36,
+          "message": "CAR 1 (NOR) TIME 1:20.230 DELETED - TRACK LIMITS AT TURN 10 LAP 33 15:46:09"
+        },
+        {
+          "time": "2026-06-07T13:48:16.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 36,
+          "message": "CAR 1 (NOR) TIME 1:20.230 DELETED - TRACK LIMITS AT TURN 16 LAP 33 15:46:22"
+        },
+        {
+          "time": "2026-06-07T13:48:43.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 36,
+          "message": "CAR 41 (LIN) TIME 1:20.074 DELETED - TRACK LIMITS AT TURN 10 LAP 33 15:46:33"
+        },
+        {
+          "time": "2026-06-07T13:48:54.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 36,
+          "message": "WAVED BLUE FLAG FOR CAR 11 (PER) TIMED AT 15:48:53"
+        },
+        {
+          "time": "2026-06-07T13:49:37.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 37,
+          "message": "INCIDENT INVOLVING CAR 63 (RUS) NOTED - SPEEDING IN THE PIT LANE (15:43:46)"
+        },
+        {
+          "time": "2026-06-07T13:49:49.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 37,
+          "message": "FIA STEWARDS: INCIDENT INVOLVING CAR 63 (RUS) UNDER INVESTIGATION - SPEEDING IN THE PIT LANE (15:43:46)"
+        },
+        {
+          "time": "2026-06-07T13:51:38.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 38,
+          "message": "FIA STEWARDS: 5 SECOND TIME PENALTY FOR CAR 63 (RUS) - SPEEDING IN THE PIT LANE (15:43:46)"
+        },
+        {
+          "time": "2026-06-07T13:52:59.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 39,
+          "message": "WAVED BLUE FLAG FOR CAR 31 (OCO) TIMED AT 15:52:58"
+        },
+        {
+          "time": "2026-06-07T13:53:03.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 39,
+          "message": "TURN 10 INCIDENT INVOLVING CAR 11 (PER) NOTED - LEAVING THE TRACK AND GAINING AN ADVANTAGE (15:49:57)"
+        },
+        {
+          "time": "2026-06-07T13:53:09.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 39,
+          "message": "CAR 11 (PER) TIME 1:21.476 DELETED - TRACK LIMITS AT TURN 10 LAP 35 15:49:58"
+        },
+        {
+          "time": "2026-06-07T13:53:27.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 39,
+          "message": "WAVED BLUE FLAG FOR CAR 27 (HUL) TIMED AT 15:53:26"
+        },
+        {
+          "time": "2026-06-07T13:53:29.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 39,
+          "message": "WAVED BLUE FLAG FOR CAR 23 (ALB) TIMED AT 15:53:28"
+        },
+        {
+          "time": "2026-06-07T13:53:37.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 40,
+          "message": "WAVED BLUE FLAG FOR CAR 41 (LIN) TIMED AT 15:53:37"
+        },
+        {
+          "time": "2026-06-07T13:53:56.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 40,
+          "message": "WAVED BLUE FLAG FOR CAR 55 (SAI) TIMED AT 15:53:56"
+        },
+        {
+          "time": "2026-06-07T13:54:07.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 40,
+          "message": "WAVED BLUE FLAG FOR CAR 5 (BOR) TIMED AT 15:54:07"
+        },
+        {
+          "time": "2026-06-07T13:54:15.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 40,
+          "message": "WAVED BLUE FLAG FOR CAR 5 (BOR) TIMED AT 15:54:15"
+        },
+        {
+          "time": "2026-06-07T13:54:25.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 40,
+          "message": "WAVED BLUE FLAG FOR CAR 5 (BOR) TIMED AT 15:54:25"
+        },
+        {
+          "time": "2026-06-07T13:54:27.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 40,
+          "message": "WAVED BLUE FLAG FOR CAR 43 (COL) TIMED AT 15:54:27"
+        },
+        {
+          "time": "2026-06-07T13:54:29.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 40,
+          "message": "WAVED BLUE FLAG FOR CAR 5 (BOR) TIMED AT 15:54:29"
+        },
+        {
+          "time": "2026-06-07T13:55:24.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 41,
+          "message": "WAVED BLUE FLAG FOR CAR 11 (PER) TIMED AT 15:55:23"
+        },
+        {
+          "time": "2026-06-07T13:55:30.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 41,
+          "message": "WAVED BLUE FLAG FOR CAR 11 (PER) TIMED AT 15:55:29"
+        },
+        {
+          "time": "2026-06-07T13:55:31.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 41,
+          "message": "WAVED BLUE FLAG FOR CAR 18 (STR) TIMED AT 15:55:30"
+        },
+        {
+          "time": "2026-06-07T13:55:40.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 41,
+          "message": "INCIDENT INVOLVING CAR 43 (COL) NOTED - SPEEDING IN THE PIT LANE (15:49:40)"
+        },
+        {
+          "time": "2026-06-07T13:55:48.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 41,
+          "message": "WAVED BLUE FLAG FOR CAR 18 (STR) TIMED AT 15:55:47"
+        },
+        {
+          "time": "2026-06-07T13:56:00.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 41,
+          "message": "WAVED BLUE FLAG FOR CAR 31 (OCO) TIMED AT 15:55:59"
+        },
+        {
+          "time": "2026-06-07T13:56:06.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 41,
+          "message": "WAVED BLUE FLAG FOR CAR 31 (OCO) TIMED AT 15:56:05"
+        },
+        {
+          "time": "2026-06-07T13:56:06.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 41,
+          "message": "FIA STEWARDS: TURN 10 INCIDENT INVOLVING CAR 11 (PER) REVIEWED NO FURTHER INVESTIGATION - LEAVING THE TRACK AND GAINING AN ADVANTAGE (15:49:57)"
+        },
+        {
+          "time": "2026-06-07T13:56:23.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 42,
+          "message": "WAVED BLUE FLAG FOR CAR 27 (HUL) TIMED AT 15:56:22"
+        },
+        {
+          "time": "2026-06-07T13:56:23.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 42,
+          "message": "TURN 10 INCIDENT INVOLVING CAR 18 (STR) NOTED - LEAVING THE TRACK AND GAINING AN ADVANTAGE (15:52:29)"
+        },
+        {
+          "time": "2026-06-07T13:56:29.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 42,
+          "message": "FIA STEWARDS: INCIDENT INVOLVING CAR 43 (COL) UNDER INVESTIGATION - SPEEDING IN THE PIT LANE (15:49:40)"
+        },
+        {
+          "time": "2026-06-07T13:56:33.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 42,
+          "message": "CAR 18 (STR) TIME 1:19.008 DELETED - TRACK LIMITS AT TURN 10 LAP 37 15:52:29"
+        },
+        {
+          "time": "2026-06-07T13:56:36.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 42,
+          "message": "WAVED BLUE FLAG FOR CAR 41 (LIN) TIMED AT 15:56:35"
+        },
+        {
+          "time": "2026-06-07T13:56:50.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 42,
+          "message": "WAVED BLUE FLAG FOR CAR 55 (SAI) TIMED AT 15:56:50"
+        },
+        {
+          "time": "2026-06-07T13:57:12.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 42,
+          "message": "CAR 18 (STR) TIME 1:19.192 DELETED - TRACK LIMITS AT TURN 10 LAP 38 15:53:49"
+        },
+        {
+          "time": "2026-06-07T13:57:47.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 43,
+          "message": "FIA STEWARDS: 5 SECOND TIME PENALTY FOR CAR 43 (COL) - SPEEDING IN THE PIT LANE (15:49:40)"
+        },
+        {
+          "time": "2026-06-07T13:58:02.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 43,
+          "message": "WAVED BLUE FLAG FOR CAR 30 (LAW) TIMED AT 15:58:02"
+        },
+        {
+          "time": "2026-06-07T13:58:29.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 43,
+          "message": "WAVED BLUE FLAG FOR CAR 5 (BOR) TIMED AT 15:58:29"
+        },
+        {
+          "time": "2026-06-07T13:58:53.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 44,
+          "message": "WAVED BLUE FLAG FOR CAR 11 (PER) TIMED AT 15:58:53"
+        },
+        {
+          "time": "2026-06-07T13:59:33.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 44,
+          "message": "INCIDENT INVOLVING CAR 63 (RUS) NOTED - CROSSING THE LINE AT PIT EXIT (15:44:14)"
+        },
+        {
+          "time": "2026-06-07T13:59:42.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 44,
+          "message": "WAVED BLUE FLAG FOR CAR 23 (ALB) TIMED AT 15:59:41"
+        },
+        {
+          "time": "2026-06-07T14:00:16.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 45,
+          "message": "CAR 18 (STR) TIME 1:18.995 DELETED - TRACK LIMITS AT TURN 10 LAP 42 15:59:09"
+        },
+        {
+          "time": "2026-06-07T14:01:02.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 45,
+          "message": "WAVED BLUE FLAG FOR CAR 5 (BOR) TIMED AT 16:01:02"
+        },
+        {
+          "time": "2026-06-07T14:01:12.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 45,
+          "message": "WAVED BLUE FLAG FOR CAR 11 (PER) TIMED AT 16:01:12"
+        },
+        {
+          "time": "2026-06-07T14:01:21.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 46,
+          "message": "WAVED BLUE FLAG FOR CAR 11 (PER) TIMED AT 16:01:20"
+        },
+        {
+          "time": "2026-06-07T14:01:33.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 46,
+          "message": "CAR 1 (NOR) LAP DELETED - TRACK LIMITS AT TURN 16 LAP 44 16:00:56 (PIT)"
+        },
+        {
+          "time": "2026-06-07T14:03:44.000000000",
+          "category": "Flag",
+          "flag": "BLACK AND WHITE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 47,
+          "message": "BLACK AND WHITE FLAG FOR CAR 18 (STR) - TRACK LIMITS"
+        },
+        {
+          "time": "2026-06-07T14:05:24.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 49,
+          "message": "WAVED BLUE FLAG FOR CAR 18 (STR) TIMED AT 16:05:24"
+        },
+        {
+          "time": "2026-06-07T14:05:30.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 49,
+          "message": "WAVED BLUE FLAG FOR CAR 6 (HAD) TIMED AT 16:05:30"
+        },
+        {
+          "time": "2026-06-07T14:05:37.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 49,
+          "message": "WAVED BLUE FLAG FOR CAR 6 (HAD) TIMED AT 16:05:37"
+        },
+        {
+          "time": "2026-06-07T14:05:48.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 49,
+          "message": "WAVED BLUE FLAG FOR CAR 6 (HAD) TIMED AT 16:05:47"
+        },
+        {
+          "time": "2026-06-07T14:06:09.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 49,
+          "message": "CAR 23 (ALB) TIME 1:22.221 DELETED - TRACK LIMITS AT TURN 10 LAP 46 16:04:13"
+        },
+        {
+          "time": "2026-06-07T14:06:34.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 50,
+          "message": "WAVED BLUE FLAG FOR CAR 10 (GAS) TIMED AT 16:06:33"
+        },
+        {
+          "time": "2026-06-07T14:06:46.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 50,
+          "message": "WAVED BLUE FLAG FOR CAR 18 (STR) TIMED AT 16:06:46"
+        },
+        {
+          "time": "2026-06-07T14:06:56.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 50,
+          "message": "TURN 10 INCIDENT INVOLVING CAR 23 (ALB) NOTED - LEAVING THE TRACK AND GAINING AN ADVANTAGE (16:04:12)"
+        },
+        {
+          "time": "2026-06-07T14:07:14.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 50,
+          "message": "WAVED BLUE FLAG FOR CAR 18 (STR) TIMED AT 16:07:13"
+        },
+        {
+          "time": "2026-06-07T14:07:44.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 51,
+          "message": "WAVED BLUE FLAG FOR CAR 14 (ALO) TIMED AT 16:07:44"
+        },
+        {
+          "time": "2026-06-07T14:08:30.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 51,
+          "message": "WAVED BLUE FLAG FOR CAR 5 (BOR) TIMED AT 16:08:29"
+        },
+        {
+          "time": "2026-06-07T14:08:33.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 51,
+          "message": "WAVED BLUE FLAG FOR CAR 14 (ALO) TIMED AT 16:08:32"
+        },
+        {
+          "time": "2026-06-07T14:08:37.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 51,
+          "message": "WAVED BLUE FLAG FOR CAR 43 (COL) TIMED AT 16:08:37"
+        },
+        {
+          "time": "2026-06-07T14:08:47.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 51,
+          "message": "INCIDENT INVOLVING CAR 10 (GAS) NOTED - SPEEDING IN THE PIT LANE (16:02:16)"
+        },
+        {
+          "time": "2026-06-07T14:08:52.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 51,
+          "message": "FIA STEWARDS: INCIDENT INVOLVING CAR 10 (GAS) UNDER INVESTIGATION - SPEEDING IN THE PIT LANE (16:02:16)"
+        },
+        {
+          "time": "2026-06-07T14:09:08.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 52,
+          "message": "WAVED BLUE FLAG FOR CAR 10 (GAS) TIMED AT 16:09:07"
+        },
+        {
+          "time": "2026-06-07T14:09:08.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 52,
+          "message": "WAVED BLUE FLAG FOR CAR 11 (PER) TIMED AT 16:09:07"
+        },
+        {
+          "time": "2026-06-07T14:09:19.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 52,
+          "message": "WAVED BLUE FLAG FOR CAR 43 (COL) TIMED AT 16:09:18"
+        },
+        {
+          "time": "2026-06-07T14:09:32.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 52,
+          "message": "WAVED BLUE FLAG FOR CAR 31 (OCO) TIMED AT 16:09:32"
+        },
+        {
+          "time": "2026-06-07T14:09:52.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 52,
+          "message": "WAVED BLUE FLAG FOR CAR 31 (OCO) TIMED AT 16:09:51"
+        },
+        {
+          "time": "2026-06-07T14:09:55.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 52,
+          "message": "WAVED BLUE FLAG FOR CAR 27 (HUL) TIMED AT 16:09:54"
+        },
+        {
+          "time": "2026-06-07T14:10:06.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 52,
+          "message": "FIA STEWARDS: 5 SECOND TIME PENALTY FOR CAR 10 (GAS) - SPEEDING IN THE PIT LANE (16:02:16)"
+        },
+        {
+          "time": "2026-06-07T14:10:07.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 52,
+          "message": "WAVED BLUE FLAG FOR CAR 23 (ALB) TIMED AT 16:10:07"
+        },
+        {
+          "time": "2026-06-07T14:10:18.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 53,
+          "message": "WAVED BLUE FLAG FOR CAR 27 (HUL) TIMED AT 16:10:17"
+        },
+        {
+          "time": "2026-06-07T14:10:21.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 53,
+          "message": "WAVED BLUE FLAG FOR CAR 14 (ALO) TIMED AT 16:10:20"
+        },
+        {
+          "time": "2026-06-07T14:10:24.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 53,
+          "message": "WAVED BLUE FLAG FOR CAR 11 (PER) TIMED AT 16:10:24"
+        },
+        {
+          "time": "2026-06-07T14:10:36.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 53,
+          "message": "WAVED BLUE FLAG FOR CAR 23 (ALB) TIMED AT 16:10:35"
+        },
+        {
+          "time": "2026-06-07T14:11:06.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 53,
+          "message": "WAVED BLUE FLAG FOR CAR 11 (PER) TIMED AT 16:11:06"
+        },
+        {
+          "time": "2026-06-07T14:11:21.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 53,
+          "message": "FIA STEWARDS: TURN 10 INCIDENT INVOLVING CAR 18 (STR) REVIEWED NO FURTHER INVESTIGATION - LEAVING THE TRACK AND GAINING AN ADVANTAGE (15:52:29)"
+        },
+        {
+          "time": "2026-06-07T14:11:30.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 54,
+          "message": "INCIDENT INVOLVING CAR 18 (STR) NOTED - TRACK LIMITS"
+        },
+        {
+          "time": "2026-06-07T14:11:45.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 54,
+          "message": "FIA STEWARDS: INCIDENT INVOLVING CAR 18 (STR) UNDER INVESTIGATION - TRACK LIMITS"
+        },
+        {
+          "time": "2026-06-07T14:11:58.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 54,
+          "message": "WAVED BLUE FLAG FOR CAR 41 (LIN) TIMED AT 16:11:57"
+        },
+        {
+          "time": "2026-06-07T14:12:04.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 54,
+          "message": "WAVED BLUE FLAG FOR CAR 43 (COL) TIMED AT 16:12:04"
+        },
+        {
+          "time": "2026-06-07T14:12:19.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 54,
+          "message": "WAVED BLUE FLAG FOR CAR 41 (LIN) TIMED AT 16:12:18"
+        },
+        {
+          "time": "2026-06-07T14:12:21.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 54,
+          "message": "FIA STEWARDS: 5 SECOND TIME PENALTY FOR CAR 18 (STR) - TRACK LIMITS"
+        },
+        {
+          "time": "2026-06-07T14:12:47.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 55,
+          "message": "WAVED BLUE FLAG FOR CAR 31 (OCO) TIMED AT 16:12:47"
+        },
+        {
+          "time": "2026-06-07T14:12:57.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 55,
+          "message": "WAVED BLUE FLAG FOR CAR 31 (OCO) TIMED AT 16:12:56"
+        },
+        {
+          "time": "2026-06-07T14:13:06.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 55,
+          "message": "INCIDENT INVOLVING CAR 81 (PIA) NOTED - SPEEDING IN THE PIT LANE (16:06:07)"
+        },
+        {
+          "time": "2026-06-07T14:13:08.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 55,
+          "message": "WAVED BLUE FLAG FOR CAR 63 (RUS) TIMED AT 16:13:07"
+        },
+        {
+          "time": "2026-06-07T14:13:12.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 55,
+          "message": "WAVED BLUE FLAG FOR CAR 27 (HUL) TIMED AT 16:13:11"
+        },
+        {
+          "time": "2026-06-07T14:13:16.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 55,
+          "message": "FIA STEWARDS: INCIDENT INVOLVING CAR 81 (PIA) UNDER INVESTIGATION - SPEEDING IN THE PIT LANE (16:06:07)"
+        },
+        {
+          "time": "2026-06-07T14:13:18.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 55,
+          "message": "WAVED BLUE FLAG FOR CAR 63 (RUS) TIMED AT 16:13:17"
+        },
+        {
+          "time": "2026-06-07T14:13:34.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 55,
+          "message": "WAVED BLUE FLAG FOR CAR 23 (ALB) TIMED AT 16:13:33"
+        },
+        {
+          "time": "2026-06-07T14:13:36.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 55,
+          "message": "WAVED BLUE FLAG FOR CAR 18 (STR) TIMED AT 16:13:35"
+        },
+        {
+          "time": "2026-06-07T14:13:51.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 55,
+          "message": "FIA STEWARDS: 5 SECOND TIME PENALTY FOR CAR 81 (PIA) - SPEEDING IN THE PIT LANE (16:06:07)"
+        },
+        {
+          "time": "2026-06-07T14:14:11.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 56,
+          "message": "CAR 11 (PER) TIME 1:22.941 DELETED - TRACK LIMITS AT TURN 10 LAP 51 16:11:28"
+        },
+        {
+          "time": "2026-06-07T14:14:14.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 56,
+          "message": "WAVED BLUE FLAG FOR CAR 18 (STR) TIMED AT 16:14:14"
+        },
+        {
+          "time": "2026-06-07T14:14:44.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 56,
+          "message": "WAVED BLUE FLAG FOR CAR 18 (STR) TIMED AT 16:14:43"
+        },
+        {
+          "time": "2026-06-07T14:15:10.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 56,
+          "message": "WAVED BLUE FLAG FOR CAR 55 (SAI) TIMED AT 16:15:09"
+        },
+        {
+          "time": "2026-06-07T14:15:36.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 57,
+          "message": "FIA STEWARDS: INCIDENT INVOLVING CAR 63 (RUS) REVIEWED NO FURTHER INVESTIGATION - CROSSING THE LINE AT PIT EXIT (15:44:14)"
+        },
+        {
+          "time": "2026-06-07T14:16:10.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 57,
+          "message": "WAVED BLUE FLAG FOR CAR 14 (ALO) TIMED AT 16:16:09"
+        },
+        {
+          "time": "2026-06-07T14:16:19.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 57,
+          "message": "FIA STEWARDS: TURN 10 INCIDENT INVOLVING CAR 23 (ALB) REVIEWED NO FURTHER INVESTIGATION - LEAVING THE TRACK AND GAINING AN ADVANTAGE (16:04:12)"
+        },
+        {
+          "time": "2026-06-07T14:16:31.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 58,
+          "message": "WAVED BLUE FLAG FOR CAR 5 (BOR) TIMED AT 16:16:30"
+        },
+        {
+          "time": "2026-06-07T14:16:34.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 58,
+          "message": "CAR 55 (SAI) TIME 1:19.446 DELETED - TRACK LIMITS AT TURN 10 LAP 54 16:14:56"
+        },
+        {
+          "time": "2026-06-07T14:16:38.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 58,
+          "message": "WAVED BLUE FLAG FOR CAR 14 (ALO) TIMED AT 16:16:38"
+        },
+        {
+          "time": "2026-06-07T14:16:49.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 58,
+          "message": "WAVED BLUE FLAG FOR CAR 11 (PER) TIMED AT 16:16:48"
+        },
+        {
+          "time": "2026-06-07T14:17:00.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 58,
+          "message": "CAR 14 (ALO) TIME 1:20.968 DELETED - TRACK LIMITS AT TURN 10 LAP 55 16:16:24"
+        },
+        {
+          "time": "2026-06-07T14:17:07.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 58,
+          "message": "WAVED BLUE FLAG FOR CAR 43 (COL) TIMED AT 16:17:07"
+        },
+        {
+          "time": "2026-06-07T14:17:25.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 58,
+          "message": "WAVED BLUE FLAG FOR CAR 14 (ALO) TIMED AT 16:17:24"
+        },
+        {
+          "time": "2026-06-07T14:17:27.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 58,
+          "message": "WAVED BLUE FLAG FOR CAR 31 (OCO) TIMED AT 16:17:26"
+        },
+        {
+          "time": "2026-06-07T14:17:28.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 58,
+          "message": "WAVED BLUE FLAG FOR CAR 43 (COL) TIMED AT 16:17:28"
+        },
+        {
+          "time": "2026-06-07T14:17:45.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 59,
+          "message": "WAVED BLUE FLAG FOR CAR 31 (OCO) TIMED AT 16:17:44"
+        },
+        {
+          "time": "2026-06-07T14:17:52.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 59,
+          "message": "WAVED BLUE FLAG FOR CAR 31 (OCO) TIMED AT 16:17:51"
+        },
+        {
+          "time": "2026-06-07T14:17:59.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 59,
+          "message": "WAVED BLUE FLAG FOR CAR 41 (LIN) TIMED AT 16:17:58"
+        },
+        {
+          "time": "2026-06-07T14:18:07.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 59,
+          "message": "WAVED BLUE FLAG FOR CAR 43 (COL) TIMED AT 16:18:07"
+        },
+        {
+          "time": "2026-06-07T14:18:08.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 59,
+          "message": "WAVED BLUE FLAG FOR CAR 41 (LIN) TIMED AT 16:18:08"
+        },
+        {
+          "time": "2026-06-07T14:18:16.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 59,
+          "message": "WAVED BLUE FLAG FOR CAR 18 (STR) TIMED AT 16:18:16"
+        },
+        {
+          "time": "2026-06-07T14:18:30.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 59,
+          "message": "WAVED BLUE FLAG FOR CAR 18 (STR) TIMED AT 16:18:30"
+        },
+        {
+          "time": "2026-06-07T14:18:35.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 59,
+          "message": "WAVED BLUE FLAG FOR CAR 31 (OCO) TIMED AT 16:18:35"
+        },
+        {
+          "time": "2026-06-07T14:19:19.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 60,
+          "message": "WAVED BLUE FLAG FOR CAR 27 (HUL) TIMED AT 16:19:18"
+        },
+        {
+          "time": "2026-06-07T14:19:45.000000000",
+          "category": "Flag",
+          "flag": "YELLOW",
+          "scope": "Sector",
+          "sector": 18.0,
+          "status": null,
+          "lap": 60,
+          "message": "YELLOW IN TRACK SECTOR 18"
+        },
+        {
+          "time": "2026-06-07T14:19:53.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 60,
+          "message": "WAVED BLUE FLAG FOR CAR 55 (SAI) TIMED AT 16:19:52"
+        },
+        {
+          "time": "2026-06-07T14:20:02.000000000",
+          "category": "SafetyCar",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": "DEPLOYED",
+          "lap": 60,
+          "message": "SAFETY CAR DEPLOYED"
+        },
+        {
+          "time": "2026-06-07T14:20:02.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 60,
+          "message": "OVERTAKE DISABLED"
+        },
+        {
+          "time": "2026-06-07T14:20:06.000000000",
+          "category": "Flag",
+          "flag": "DOUBLE YELLOW",
+          "scope": "Sector",
+          "sector": 17.0,
+          "status": null,
+          "lap": 60,
+          "message": "DOUBLE YELLOW IN TRACK SECTOR 17"
+        },
+        {
+          "time": "2026-06-07T14:20:12.000000000",
+          "category": "Flag",
+          "flag": "DOUBLE YELLOW",
+          "scope": "Sector",
+          "sector": 18.0,
+          "status": null,
+          "lap": 60,
+          "message": "DOUBLE YELLOW IN TRACK SECTOR 18"
+        },
+        {
+          "time": "2026-06-07T14:21:52.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 61,
+          "message": "ALL CARS THROUGH THE PIT LANE"
+        },
+        {
+          "time": "2026-06-07T14:23:59.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 62,
+          "message": "SAFETY CAR WILL USE START/FINISH STRAIGHT"
+        },
+        {
+          "time": "2026-06-07T14:24:03.000000000",
+          "category": "Flag",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 17.0,
+          "status": null,
+          "lap": 62,
+          "message": "CLEAR IN TRACK SECTOR 17"
+        },
+        {
+          "time": "2026-06-07T14:24:05.000000000",
+          "category": "Flag",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 18.0,
+          "status": null,
+          "lap": 62,
+          "message": "CLEAR IN TRACK SECTOR 18"
+        },
+        {
+          "time": "2026-06-07T14:26:32.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 63,
+          "message": "LAPPED CARS MAY NOW OVERTAKE THE SAFETY CAR: 6, 63, 41, 23, 55, 31, 27, 43, 10, 81, 14, 30, 11, 5"
+        },
+        {
+          "time": "2026-06-07T14:26:44.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 64,
+          "message": "FIA STEWARDS: PENALTY SERVED - 5 SECOND TIME PENALTY FOR CAR 81 (PIA) - SPEEDING IN THE PIT LANE (16:06:07)"
+        },
+        {
+          "time": "2026-06-07T14:28:23.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 64,
+          "message": "FIA STEWARDS: PENALTY SERVED - 5 SECOND TIME PENALTY FOR CAR 44 (HAM) - SPEEDING IN THE PIT LANE (15:39:17)"
+        },
+        {
+          "time": "2026-06-07T14:29:41.000000000",
+          "category": "SafetyCar",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": "IN THIS LAP",
+          "lap": 65,
+          "message": "SAFETY CAR IN THIS LAP"
+        },
+        {
+          "time": "2026-06-07T14:30:34.000000000",
+          "category": "Flag",
+          "flag": "CLEAR",
+          "scope": "Track",
+          "sector": null,
+          "status": null,
+          "lap": 65,
+          "message": "TRACK CLEAR"
+        },
+        {
+          "time": "2026-06-07T14:30:49.000000000",
+          "category": "Flag",
+          "flag": "YELLOW",
+          "scope": "Sector",
+          "sector": 18.0,
+          "status": null,
+          "lap": 65,
+          "message": "YELLOW IN TRACK SECTOR 18"
+        },
+        {
+          "time": "2026-06-07T14:30:57.000000000",
+          "category": "Flag",
+          "flag": "BLUE",
+          "scope": "Driver",
+          "sector": null,
+          "status": null,
+          "lap": 66,
+          "message": "WAVED BLUE FLAG FOR CAR 43 (COL) TIMED AT 16:30:56"
+        },
+        {
+          "time": "2026-06-07T14:31:18.000000000",
+          "category": "SafetyCar",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": "DEPLOYED",
+          "lap": 66,
+          "message": "SAFETY CAR DEPLOYED"
+        },
+        {
+          "time": "2026-06-07T14:31:37.000000000",
+          "category": "Flag",
+          "flag": "DOUBLE YELLOW",
+          "scope": "Sector",
+          "sector": 18.0,
+          "status": null,
+          "lap": 66,
+          "message": "DOUBLE YELLOW IN TRACK SECTOR 18"
+        },
+        {
+          "time": "2026-06-07T14:31:38.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 66,
+          "message": "ALL CARS THROUGH THE PIT LANE"
+        },
+        {
+          "time": "2026-06-07T14:32:10.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 66,
+          "message": "INCIDENT INVOLVING CAR 10 (GAS) NOTED - SPEEDING IN THE PIT LANE (16:22:57)"
+        },
+        {
+          "time": "2026-06-07T14:33:17.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 67,
+          "message": "SAFETY CAR WILL USE START/FINISH STRAIGHT"
+        },
+        {
+          "time": "2026-06-07T14:34:02.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 67,
+          "message": "INCIDENT INVOLVING CAR 63 (RUS) NOTED - FAILING TO SERVE TIME PENALTY CORRECTLY"
+        },
+        {
+          "time": "2026-06-07T14:34:38.000000000",
+          "category": "Flag",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 18.0,
+          "status": null,
+          "lap": 68,
+          "message": "CLEAR IN TRACK SECTOR 18"
+        },
+        {
+          "time": "2026-06-07T14:35:07.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 68,
+          "message": "RED FLAG - RACE SUSPENDED"
+        },
+        {
+          "time": "2026-06-07T14:36:12.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 68,
+          "message": "FIA STEWARDS: INCIDENT INVOLVING CAR 10 (GAS) UNDER INVESTIGATION - SPEEDING IN THE PIT LANE (16:22:57)"
+        },
+        {
+          "time": "2026-06-07T14:36:27.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 68,
+          "message": "FIA STEWARDS: 5 SECOND TIME PENALTY FOR CAR 10 (GAS) - SPEEDING IN THE PIT LANE (16:22:57)"
+        },
+        {
+          "time": "2026-06-07T14:37:57.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 68,
+          "message": "FIA STEWARDS: INCIDENT INVOLVING CAR 63 (RUS) UNDER INVESTIGATION - FAILING TO SERVE TIME PENALTY CORRECTLY"
+        },
+        {
+          "time": "2026-06-07T14:46:56.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 68,
+          "message": "INCIDENT INVOLVING CAR 6 (HAD) NOTED - SAFETY CAR INFRINGEMENT"
+        },
+        {
+          "time": "2026-06-07T14:47:03.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 68,
+          "message": "FIA STEWARDS: INCIDENT INVOLVING CAR 6 (HAD) UNDER INVESTIGATION - SAFETY CAR INFRINGEMENT"
+        },
+        {
+          "time": "2026-06-07T14:47:57.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 68,
+          "message": "CAR 5 (BOR) LAP DELETED - TRACK LIMITS AT TURN 16 LAP 59 16:23:31 (PIT)"
+        },
+        {
+          "time": "2026-06-07T14:48:28.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 68,
+          "message": "RESUMPTION ORDER: 12, 44, 6, 63, 10, 81, 30, 41, 23, 55, 31, 27, 43, 14, 11, 5"
+        },
+        {
+          "time": "2026-06-07T14:49:15.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 68,
+          "message": "PUSH CARS TO FRONT IN ORDER: 41, 23, 55, 31, 27, 43, 14, 11, 5"
+        },
+        {
+          "time": "2026-06-07T14:51:29.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 68,
+          "message": "FIA STEWARDS: DRIVE THROUGH PENALTY FOR CAR 63 (RUS) - FAILING TO SERVE TIME PENALTY CORRECTLY"
+        },
+        {
+          "time": "2026-06-07T14:54:39.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 68,
+          "message": "FIA STEWARDS: UPDATE: INCIDENT INVOLVING CAR 6 (HAD) UNDER INVESTIGATION - SAFETY CAR INFRINGEMENT (16:33:48)"
+        },
+        {
+          "time": "2026-06-07T14:58:50.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 68,
+          "message": "INCIDENT INVOLVING CAR 44 (HAM) NOTED - SAFETY CAR INFRINGEMENT (16:34:03)"
+        },
+        {
+          "time": "2026-06-07T14:59:03.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 68,
+          "message": "FIA STEWARDS: INCIDENT INVOLVING CAR 44 (HAM) UNDER INVESTIGATION - SAFETY CAR INFRINGEMENT (16:34:03)"
+        },
+        {
+          "time": "2026-06-07T15:00:42.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 68,
+          "message": "RACE WILL RESUME AT 17:12"
+        },
+        {
+          "time": "2026-06-07T15:00:48.000000000",
+          "category": "Flag",
+          "flag": "CLEAR",
+          "scope": "Track",
+          "sector": null,
+          "status": null,
+          "lap": 68,
+          "message": "TRACK CLEAR"
+        },
+        {
+          "time": "2026-06-07T15:06:29.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 68,
+          "message": "SAFETY CAR LIGHTS ON"
+        },
+        {
+          "time": "2026-06-07T15:13:47.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 69,
+          "message": "FIA STEWARDS: INCIDENT INVOLVING CAR 44 (HAM) NO FURTHER ACTION - SAFETY CAR INFRINGEMENT (16:34:03)"
+        },
+        {
+          "time": "2026-06-07T15:14:26.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 70,
+          "message": "STANDING START"
+        },
+        {
+          "time": "2026-06-07T15:17:34.000000000",
+          "category": "Flag",
+          "flag": "YELLOW",
+          "scope": "Sector",
+          "sector": 10.0,
+          "status": null,
+          "lap": 71,
+          "message": "YELLOW IN TRACK SECTOR 10"
+        },
+        {
+          "time": "2026-06-07T15:17:36.000000000",
+          "category": "Flag",
+          "flag": "DOUBLE YELLOW",
+          "scope": "Sector",
+          "sector": 10.0,
+          "status": null,
+          "lap": 71,
+          "message": "DOUBLE YELLOW IN TRACK SECTOR 10"
+        },
+        {
+          "time": "2026-06-07T15:17:41.000000000",
+          "category": "Flag",
+          "flag": "YELLOW",
+          "scope": "Sector",
+          "sector": 9.0,
+          "status": null,
+          "lap": 71,
+          "message": "YELLOW IN TRACK SECTOR 9"
+        },
+        {
+          "time": "2026-06-07T15:17:47.000000000",
+          "category": "Flag",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 10.0,
+          "status": null,
+          "lap": 71,
+          "message": "CLEAR IN TRACK SECTOR 10"
+        },
+        {
+          "time": "2026-06-07T15:17:52.000000000",
+          "category": "Flag",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 9.0,
+          "status": null,
+          "lap": 71,
+          "message": "CLEAR IN TRACK SECTOR 9"
+        },
+        {
+          "time": "2026-06-07T15:17:59.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 71,
+          "message": "OVERTAKE ENABLED"
+        },
+        {
+          "time": "2026-06-07T15:18:09.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 72,
+          "message": "CAR 43 (COL) LAP DELETED - TRACK LIMITS AT TURN 1 LAP 65 16:31:10 (PIT)"
+        },
+        {
+          "time": "2026-06-07T15:19:35.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 73,
+          "message": "INCIDENT INVOLVING CAR 6 (HAD) NOTED - RED FLAG INFRINGEMENT"
+        },
+        {
+          "time": "2026-06-07T15:19:53.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 73,
+          "message": "FIA STEWARDS: INCIDENT INVOLVING CAR 6 (HAD) NO FURTHER ACTION - SAFETY CAR INFRINGEMENT (16:33:48)"
+        },
+        {
+          "time": "2026-06-07T15:20:04.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 73,
+          "message": "FIA STEWARDS: PENALTY SERVED - DRIVE THROUGH PENALTY FOR CAR 63 (RUS) - FAILING TO SERVE TIME PENALTY CORRECTLY"
+        },
+        {
+          "time": "2026-06-07T15:20:11.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 73,
+          "message": "FIA STEWARDS: INCIDENT INVOLVING CAR 6 (HAD) WILL BE INVESTIGATED AFTER THE RACE - RED FLAG INFRINGEMENT"
+        },
+        {
+          "time": "2026-06-07T15:21:30.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 74,
+          "message": "TURN 8 INCIDENT INVOLVING CARS 43 (COL) AND 55 (SAI) NOTED - CAUSING A COLLISION (17:17:33)"
+        },
+        {
+          "time": "2026-06-07T15:22:02.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 75,
+          "message": "FIA STEWARDS: TURN 8 INCIDENT INVOLVING CARS 43 (COL) AND 55 (SAI) UNDER INVESTIGATION - CAUSING A COLLISION (17:17:33)"
+        },
+        {
+          "time": "2026-06-07T15:22:47.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 75,
+          "message": "INCIDENT INVOLVING CAR 11 (PER) NOTED - FALSE START - OUT OF POSITION (17:21:35)"
+        },
+        {
+          "time": "2026-06-07T15:23:38.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 76,
+          "message": "FIA STEWARDS: INCIDENT INVOLVING CAR 11 (PER) UNDER INVESTIGATION - FALSE START - OUT OF POSITION (17:21:35)"
+        },
+        {
+          "time": "2026-06-07T15:23:56.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 76,
+          "message": "CAR 27 (HUL) TIME 1:19.754 DELETED - TRACK LIMITS AT TURN 10 LAP 72 17:19:04"
+        },
+        {
+          "time": "2026-06-07T15:23:57.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 76,
+          "message": "CAR 41 (LIN) TIME 1:18.393 DELETED - TRACK LIMITS AT TURN 10 LAP 73 17:20:22"
+        },
+        {
+          "time": "2026-06-07T15:26:43.000000000",
+          "category": "Flag",
+          "flag": "CHEQUERED",
+          "scope": "Track",
+          "sector": null,
+          "status": null,
+          "lap": 78,
+          "message": "CHEQUERED FLAG"
+        },
+        {
+          "time": "2026-06-07T15:27:25.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 78,
+          "message": "TURN 8 INCIDENT INVOLVING CARS 27 (HUL) AND 55 (SAI) NOTED - CAUSING A COLLISION"
+        },
+        {
+          "time": "2026-06-07T15:27:34.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 78,
+          "message": "FIA STEWARDS: INCIDENT INVOLVING CAR 11 (PER) WILL BE INVESTIGATED AFTER THE RACE - FALSE START - OUT OF POSITION (17:21:35)"
+        },
+        {
+          "time": "2026-06-07T15:28:00.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 78,
+          "message": "FIA STEWARDS: TURN 8 INCIDENT INVOLVING CARS 27 (HUL) AND 55 (SAI) UNDER INVESTIGATION - CAUSING A COLLISION"
+        },
+        {
+          "time": "2026-06-07T15:28:20.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 78,
+          "message": "FIA STEWARDS: 10 SECOND TIME PENALTY FOR CAR 27 (HUL) - CAUSING A COLLISION"
+        },
+        {
+          "time": "2026-06-07T15:28:29.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 78,
+          "message": "FIA STEWARDS: TURN 8 INCIDENT INVOLVING CARS 43 (COL) AND 55 (SAI) NO FURTHER ACTION - CAUSING A COLLISION (17:17:33)"
+        },
+        {
+          "time": "2026-06-07T15:28:38.000000000",
+          "category": "Other",
+          "flag": null,
+          "scope": null,
+          "sector": null,
+          "status": null,
+          "lap": 78,
+          "message": "ALL PASS HOLDERS MAY ACCESS THE PIT LANE"
+        },
+        {
+          "time": "2026-06-07T15:29:56.000000000",
+          "category": "Flag",
+          "flag": "DOUBLE YELLOW",
+          "scope": "Sector",
+          "sector": 10.0,
+          "status": null,
+          "lap": 78,
+          "message": "DOUBLE YELLOW IN TRACK SECTOR 10"
+        },
+        {
+          "time": "2026-06-07T15:30:22.000000000",
+          "category": "Flag",
+          "flag": "YELLOW",
+          "scope": "Sector",
+          "sector": 9.0,
+          "status": null,
+          "lap": 78,
+          "message": "YELLOW IN TRACK SECTOR 9"
+        },
+        {
+          "time": "2026-06-07T15:33:10.000000000",
+          "category": "Flag",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 9.0,
+          "status": null,
+          "lap": 78,
+          "message": "CLEAR IN TRACK SECTOR 9"
+        },
+        {
+          "time": "2026-06-07T15:35:58.000000000",
+          "category": "Flag",
+          "flag": "CLEAR",
+          "scope": "Sector",
+          "sector": 10.0,
+          "status": null,
+          "lap": 78,
+          "message": "CLEAR IN TRACK SECTOR 10"
+        }
+      ]
+    }
+  }
+}

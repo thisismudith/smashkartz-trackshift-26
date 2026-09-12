@@ -13,3 +13,8 @@ artifacts/download_manifests/
 # Python virtual environment (CP-00); rebuilt from requirements.txt
 .venv/
 venv/
+
+# Tier C DRS proxy zones are regenerable from the raw mirror and are development
+# aids only (never claimable). Currently partial; regenerate with:
+#   python scripts/data/derive_drs_zones.py --all
+artifacts/drs_zones/
