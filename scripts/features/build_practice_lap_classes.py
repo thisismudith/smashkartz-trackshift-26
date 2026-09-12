@@ -93,30 +93,33 @@ def main() -> int:
     result = pd.concat(overlays, ignore_index=True)
     overall = _session_summary(result)
     shares = overall["label_shares"]
-    # CP-07 gate revision, documented in CHECKPOINTS_TANVEER.md.
+    # The gate is the one written in CP-07: standalone LONG_RUN at 20-50%.
     #
-    # The original gate asked for LONG_RUN at 20-50%, aiming at "how much of the
-    # session is sustained non-qualifying running". Two measured facts make that
-    # unreachable as a standalone LONG_RUN share:
+    # An earlier revision applied that band to LONG_RUN plus RACE_PACE, arguing
+    # that causal labelling cannot reach the first three laps of a run so the
+    # sustained-running population is split across the two labels. The audit
+    # measured that argument and it does not hold:
     #
-    #   1. Causal labelling excludes the first (min_len - 1) laps of every run by
-    #      construction, because a lap cannot be known to be "part of a run of
-    #      four" until the fourth arrives. Across 690 qualifying runs that is
-    #      roughly 2,000 laps which are genuinely in runs and cannot be labelled
-    #      without using future laps, which section 12 forbids.
-    #   2. 2026 Practice 1 is dominated by alternating push/cooldown running
-    #      rather than race simulations, so the qualifying-run population is
-    #      smaller than the gate assumed.
+    #   2,074 RACE_PACE laps
+    #     722  inside a run that reached four laps  <- the argument covers these
+    #     454  inside a run of two or three laps
+    #     898  isolated single laps, in no run at all
     #
-    # The sustained-running population is now split across LONG_RUN and
-    # RACE_PACE, so the 20-50% band applies to their union -- which is the
-    # quantity the original gate was actually about. Standalone LONG_RUN is
-    # reported beside it and is capped near 10% by (1).
-    sustained = shares["LONG_RUN"] + shares["RACE_PACE"]
+    # Only 34.8% of RACE_PACE sits where the justification claimed, and 43.3% of
+    # it is isolated laps. The union reads 31.13% and passes; the population the
+    # gate is actually about -- LONG_RUN plus RACE_PACE laps inside a completed
+    # run -- reads 16.88% and does not. Reporting the first as if it were the
+    # second is moving the goalposts, so the union is demoted to a diagnostic
+    # and the written gate is restored.
+    #
+    # RACE_PACE itself stays. It is causal and source-supported, and the laps it
+    # claims really are ordinary race-pace running; it lowers UNKNOWN from
+    # 34.53% to 12.67% honestly. Only its use in this numerator was wrong.
+    sustained_union = shares["LONG_RUN"] + shares["RACE_PACE"]
     gates = {
         "unknown_lt_15pct": shares["UNKNOWN"] < 0.15,
         "push_between_5pct_and_20pct": 0.05 <= shares["PUSH"] <= 0.20,
-        "sustained_running_between_20pct_and_50pct": 0.20 <= sustained <= 0.50,
+        "long_run_between_20pct_and_50pct": 0.20 <= shares["LONG_RUN"] <= 0.50,
     }
     manifest = {
         "schema_version": LAP_CLASSIFIER_SCHEMA_VERSION,
@@ -136,15 +139,17 @@ def main() -> int:
         "by_session": session_summaries,
         "acceptance_gates": gates,
         "gate_detail": {
-            "sustained_running_share": sustained,
             "long_run_share": shares["LONG_RUN"],
             "race_pace_share": shares["RACE_PACE"],
-            "long_run_causal_ceiling_note": (
-                "Standalone LONG_RUN cannot reach 20% under causal labelling: the "
-                "first three laps of every qualifying run are unlabellable without "
-                "future laps. The 20-50% band therefore applies to LONG_RUN plus "
-                "RACE_PACE, the population the original gate was about."
+            "long_run_plus_race_pace_share": sustained_union,
+            "union_is_a_diagnostic_not_a_gate": (
+                "LONG_RUN plus RACE_PACE reads above 20%, but 43.3% of RACE_PACE is "
+                "isolated single laps in no run at all. Measured by "
+                "scripts/features/audit_practice_lap_classes.py, the sustained "
+                "population is 16.88%, below the gate. The union is reported as a "
+                "diagnostic and is not the acceptance criterion."
             ),
+            "audit": "scripts/features/audit_practice_lap_classes.py",
         },
         "all_acceptance_gates_pass": all(gates.values()),
         "cpu_inference_verified": True,

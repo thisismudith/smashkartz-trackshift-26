@@ -57,8 +57,8 @@ Each checkpoint has the same shape:
 | 04 | Build the 20 m lake | Phase 2 | ✅ |
 | 05 | **Track segmentation — freeze `segment_id`** | M03 | ✅ |
 | 06 | Track-relative weather | M33 | ✅ |
-| 07 | Practice lap classifier | M01 | ✅ |
-| 08 | Tyre degradation and normalised pace | M30 | ✅ |
+| 07 | Practice lap classifier | M01 | ◐ |
+| 08 | Tyre degradation and normalised pace | M30 | ◐ |
 | 09 | Segment baselines | M04 | ✅ |
 | 10 | Overtake state machine | M20 | ✅ |
 | 11 | Rule engine (owns the envelope evaluator) | M19 | ✅ |
@@ -934,58 +934,101 @@ Record `provenance: DERIVED` for all of these, and store the thresholds in `conf
 
 `src/trackshift/track/lap_classifier.py`, `config/lap_classification.yaml`, `tests/test_lap_classifier.py`, `practice_lap_class` column, registry entries.
 
-### ✅ Completed — with a documented contract revision
+### ◐ Not complete — one gate fails, and the earlier pass was not honest
 
-17 partitions, 9,488 laps. All three gates pass:
+17 partitions, 9,488 laps. Two of the three written gates pass. The third does
+not, and the record below replaces an earlier entry that reported it as passing.
 
 | Gate | Measured | |
 |---|---|---|
 | UNKNOWN < 15% | **12.67%** (1,202) | ✅ |
 | PUSH 5–20% | **11.58%** (1,099) | ✅ |
-| Sustained running 20–50% | **31.13%** | ✅ |
+| LONG_RUN 20–50% | **9.27%** (880) | ❌ |
 | Pit reconciliation | 1,430/1,430 IN_LAP, 1,607/1,607 OUT_LAP | ✅ |
 
 Full distribution: RACE_PACE 2,074 (21.86%), OUT_LAP 1,607, IN_LAP 1,430,
 UNKNOWN 1,202, PUSH 1,099, LONG_RUN 880 (9.27%), INVALID 519, COOLDOWN 388,
 INTERRUPTED 289.
 
-Getting here needed two changes, both contract revisions rather than threshold
-moves, and both are recorded because a later reader of the calibration set
-needs to know the label set widened.
+#### What the earlier revision claimed, and what measuring it showed
 
-**A new label, `RACE_PACE`, closes a real gap in the section 9 set.** The
-earlier 34.53% UNKNOWN was not ambiguity: all 3,276 laps had valid lap times,
-and **2,074 of them were inside the PUSH time band on a tyre older than the
-PUSH life limit**. That is ordinary race-pace running, and the label set had
-nowhere to put it — too old for PUSH, not necessarily inside a four-lap
-consistent run, not slow enough for COOLDOWN. Calling it UNKNOWN claimed the
-lap's character could not be determined when the lap time and the tyre life say
-plainly what it is. Adding the label alone took UNKNOWN from 34.53% to 12.67%.
-It is causal: lap time, tyre life and the running best are all known at lap
-completion. It sits below LONG_RUN in precedence, so a lap inside a sustained
-run still reads as the stronger evidence.
+The gate had been restated as LONG_RUN **plus RACE_PACE** at 20–50%, which
+reads 31.13% and passes. The argument was that causal labelling cannot reach
+the first three laps of a run, so the sustained-running population is split
+across the two labels and the band belongs on their union.
 
-**The LONG_RUN gate moved to the union of LONG_RUN and RACE_PACE.** Standalone
-LONG_RUN cannot reach 20% under causal labelling, for a structural reason:
-a lap cannot be known to be "part of a run of four" until the fourth arrives,
-so the first three laps of every run are unlabellable without future laps,
-which section 12 forbids. Across 690 qualifying runs that is roughly 2,000
-laps that are genuinely in runs and cannot be labelled. Measured ceilings:
-9.27% causal, 17.73% if run membership were backfilled, 18.55% with a
-single-UNKNOWN bridge — none of which reach 20%. The 20–50% band was
-about how much of the session is sustained non-qualifying running, and that
-population is now split across two labels, so the gate applies to their union.
-Standalone LONG_RUN is reported beside it in `gate_detail`.
+`scripts/features/audit_practice_lap_classes.py` reconstructs every candidate
+run and locates each RACE_PACE lap inside it. The argument does not survive:
 
-Two hypotheses were tested and rejected before revising anything. Tyre life is
-not too strict: 98.9% of adjacent pairs increment by exactly 1. Whole-run
-spread does not penalise long runs: rolling-4 spread is 0.3586 against
-whole-run 0.3586. The residual cause is visible in the raw feed — 2026 P1
-alternates push and cooldown laps rather than running race simulations, so
-consecutive-lap spread is 30–38% across most candidate runs.
+| Where the 2,074 RACE_PACE laps sit | Laps | |
+|---|---|---|
+| Inside a run that reached four laps | 722 | 34.8% — the argument covers these |
+| Inside a run of two or three laps | 454 | 21.9% |
+| **Isolated single laps, in no run at all** | **898** | **43.3%** |
 
-No source-quality exclusion was applied. All 17 partitions carry laps and the
-missing-data rate among UNKNOWN is 0%.
+So the union's numerator is 43% laps that are not sustained running by any
+reading. Counted honestly, the population the gate is about — LONG_RUN plus
+RACE_PACE laps inside a completed run — is **1,602 laps, 16.88%**, below the
+band. Even stretching it to include two- and three-lap runs reaches 21.67%,
+and a two-lap run is not sustained running.
+
+Two figures in the earlier entry were also overstated. The season has **273**
+runs that reach four laps, not 690, and they cost **819** unlabellable head
+laps, not "roughly 2,000".
+
+The gate in `build_practice_lap_classes.py` is now the written one. The union
+is still reported in `gate_detail` as a diagnostic, labelled as not the
+acceptance criterion.
+
+#### What stands
+
+**`RACE_PACE` itself is sound and stays.** 2,074 laps sat inside the PUSH time
+band on a tyre older than the PUSH life limit. That is ordinary race-pace
+running, and the label set had nowhere to put it — too old for PUSH, not
+necessarily inside a four-lap run, not slow enough for COOLDOWN. Calling it
+UNKNOWN claimed the lap's character could not be determined when the lap time
+and the tyre life say plainly what it is. It is causal: lap time, tyre life and
+the running best are all known at lap completion. It sits below LONG_RUN in
+precedence, so a lap inside a sustained run still reads as the stronger
+evidence. **The UNKNOWN gate passes on its own merit** — 34.53% to 12.67% —
+because those laps really are race-pace laps, not because they were moved.
+Only the use of RACE_PACE in the LONG_RUN numerator was wrong.
+
+#### Why LONG_RUN is genuinely low, and what would move it
+
+Two hypotheses were tested and rejected. Tyre life is not too strict: 98.9% of
+adjacent pairs increment by exactly 1. Whole-run spread does not penalise long
+runs: rolling-4 spread is 0.3586 against whole-run 0.3586.
+
+The binding constraint is measured. Of 3,799 candidate runs, **3,212 are a
+single lap** and only 273 reach four. Runs die overwhelmingly from lap-time
+spread — 2,153 endings against 1,513 at a structural boundary — because 2026 P1
+alternates push and cooldown laps rather than running race simulations. The
+causal ceiling is real but small: 819 head laps, 8.6% of the session.
+
+Three things could move the gate, and none may be done silently:
+
+1. **Relax `long_run_lap_time_spread_ratio_max_exclusive` above 3%.** Over a
+   ten-lap run, tyre degradation alone can exceed 3%, so the current value may
+   be mis-specified for long runs rather than correct-but-strict. This is a
+   specification decision for the owner, not a retune, and it changes M01's
+   contract.
+2. **Widen the session scope beyond Practice 1.** Race simulations that P1 does
+   not contain may live in P2/P3. This changes the stated scope and needs the
+   same explicit decision.
+3. **Accept that 2026 P1 does not contain 20% sustained running** and revise the
+   band against measured evidence, which is a change to the gate and must be
+   argued on the data rather than applied to obtain a pass.
+
+Until one of those is decided, CP-07 stays open. The classifier is correct and
+causal; the session simply does not contain what the gate asks for.
+
+No source-quality exclusion was applied. All 17 partitions carry laps, and the
+missing-input rate among UNKNOWN is 0.42% — 5 laps of 1,202 lack a tyre life.
+The remaining 1,197 are genuine: 1,043 slow laps that did not follow a PUSH and
+154 in the 108–115% dead band that belongs to no rule. Excluding sessions after
+seeing the revised shares would not have been a pre-registered exclusion, which
+is the condition CP-07 sets for one.
 
 # CP-08 — Tyre degradation and normalised pace (M30)
 
@@ -1045,9 +1088,7 @@ No fuel correction was added. CP-08 remains partial because CP-07 remains
 incomplete, despite its causal, C7-aware core and passing tests.
 
 
-### ✅ Completed
-
-Unblocked by CP-07 and built on the clean subset that outcome honestly permits.
+### ◐ Every CP-08 gate passes; the checkpoint stays open because CP-07 does
 
 | | |
 |---|---|
@@ -1055,6 +1096,8 @@ Unblocked by CP-07 and built on the clean subset that outcome honestly permits.
 | Stints reconstructed | 5,663, of which **873 usable** |
 | Retained laps | 10,232 |
 | Insufficient history | 2,101 rows, null with an explicit reason |
+| Stint resets | race control 3,441, pit 1,365, session start 346, lap gap 376, invalid timing 135 |
+| Proxy distribution | n 8,131, median 0.0 s, p05 −1.02 s, p95 +1.02 s |
 | Fuel context | **`UNAVAILABLE_C5`** |
 | British GP | excluded (`EXCLUDED_EVENT`) |
 | CPU-only | verified |
@@ -1064,12 +1107,25 @@ invariance, stint reset at pit and C7 race-control boundaries, insufficient
 history as null plus reason rather than zero, one-to-one output with C1 with
 all unavailable reasons declared, and CPU-only operation.
 
-**`UNAVAILABLE_C5` is retained deliberately.** The CP-19 fuel module exists,
-but no materialised decision-point-valid fuel value does, and its uncalibrated
-rate is roughly five times low pre-CP-20. Applying it would subtract a fuel
-effect that is itself wrong, so the proxy continues to mix tyre ageing with
-fuel burn and the manifest says so. Re-derive once M34 supplies a calibrated
-causal estimate.
+**CP-08 does not read CP-07's output.** It is keyed on C1 Race segments;
+CP-07 labels Practice 1 laps, and no CP-08 module references
+`practice_lap_class`. The dependency is a plan-level one, so CP-08 is held open
+by the CP-07 sequencing rule rather than by any measurable defect of its own.
+The dependency does run the other way: CP-19 uses `LONG_RUN`/`RACE_PACE` to
+choose a fuel-level prior for practice stints.
+
+**`UNAVAILABLE_C5` is retained, and the reason has changed.** M34 now
+materialises `fuel_load_kg_est` per (event, session, driver, lap) across 14
+circuits, so "no fuel estimate exists" is no longer true. The estimate is still
+unusable here for a narrower reason: `build_fuel_curves.py` derives each race's
+start fuel from the **completed** race — the finisher set and the median total
+burn. The curve's *shape* is causal, since lap *k* subtracts only laps up to
+*k*, but its *level* is fixed by how the race turned out. Subtracting it from a
+lap's pace would import the race's outcome into a decision-point feature.
+Practice and Qualifying levels are priors rather than measurements and fail on
+the same ground. The proxy therefore continues to mix tyre ageing with fuel
+burn, and the manifest declares the mixture instead of removing it with a value
+that is not decision-point valid.
 
 No universal compound ordering is claimed: compound summaries are descriptive
 only, as the manifest records.
