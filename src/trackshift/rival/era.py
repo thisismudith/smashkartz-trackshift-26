@@ -104,6 +104,51 @@ def posterior_stability(evidence: Iterable[Mapping[str, Any]]) -> dict[str, floa
     return {"n": len(deltas), "mean_max_abs_delta": sum(deltas) / len(deltas) if deltas else None,
             "max_abs_delta": max(deltas) if deltas else None}
 
+
+def _metrics(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    """Compatibility metric envelope for callers without C10 evidence."""
+    events, years = _coverage(rows)
+    return {
+        "status": "BLOCKED",
+        "reason": "C10 predictive probabilities and causal perturbation posteriors are unavailable",
+        "n": len(rows),
+        "mean_log_likelihood": None,
+        "mean_nll": None,
+        "stability": None,
+        "event_coverage": events,
+        "year_coverage": years,
+        "calibration": "UNAVAILABLE: no real tactical-state labels",
+        "rule_configuration_versions": _versions(rows, "rule_configuration_version"),
+    }
+
+
+def c10_prediction_evidence(model: Any, sequences: Sequence[Mapping[str, Any]], *, perturbation_delta: float = 0.05) -> list[dict[str, Any]]:
+    """Build deterministic next-segment evidence from a loaded C10 model."""
+    result: list[dict[str, Any]] = []
+    for sequence in sequences:
+        rows = list(sequence.get("rows", ()))
+        if len(rows) < 2:
+            continue
+        if _is_british(sequence) or any(_is_british(row) for row in rows):
+            raise ValueError("British Grand Prix cannot enter CP-08 evaluation evidence")
+        if int(sequence.get("year", rows[0].get("year", 0))) != 2026:
+            continue
+        index = min(5, len(rows) - 1)
+        prefix = rows[:index]
+        posterior_values = model.predict_distribution(prefix)
+        posterior = dict(zip(model.states, posterior_values))
+        perturbed = [dict(row) for row in prefix]
+        if perturbed:
+            name = next((key for key in ("pace_residual_delta_s", "relative_speed_to_ahead_mps", "gap_rate_ahead_s_per_s", "braking_intensity_delta") if key in perturbed[-1]), None)
+            if name:
+                perturbed[-1][name] = float(perturbed[-1][name]) + perturbation_delta
+        perturbed_values = model.predict_distribution(perturbed)
+        result.append({"event": sequence.get("event"), "year": 2026, "fold_id": sequence.get("fold_id"),
+                       "model_version": getattr(model, "model_version", None), "provenance": "INFERRED",
+                       "posterior": posterior, "perturbed_posterior": dict(zip(model.states, perturbed_values)),
+                       "observation_log_likelihood": model.observation_log_likelihood(rows[index], posterior_values)})
+    return result
+
 def _missing_predictive_evidence(metrics: Mapping[str, Mapping[str, Any]]) -> bool:
     """Return true until every strategy has real held-out evidence.
 

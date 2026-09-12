@@ -223,7 +223,7 @@ datasets:
       One row per opportunity per decision checkpoint (DETECTION, ACTIVATION,
       BRAKING), the pass model's training unit (section 19).
     source: pairwise_segment_features, event_rules
-    schema_version: null
+    schema_version: m07_overtake_opportunities_v2
     partitioning: year / event
     primary_key: [opportunity_id, decision_checkpoint]
     producer: scripts/features/build_opportunities.py
@@ -231,8 +231,9 @@ datasets:
     live_status: MIXED
     status: planned
     notes: >-
-      A row carries only features whose checkpoint has already occurred: a
-      DETECTION row never holds gap_at_activation. The label
+      Model-eligible causal features are separated from rule/display/audit
+      metadata and explicit unavailable Quantities. A row carries only features
+      whose checkpoint has already occurred: a DETECTION row never holds gap_at_activation. The label
       passed_by_outcome_horizon is ACAUSAL and OFFLINE_ONLY; pass_attempted and
       the outcome distance are audit fields and never features.
 

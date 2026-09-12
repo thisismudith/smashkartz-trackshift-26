@@ -32,6 +32,9 @@ __all__ = [
     "LABEL_DEFINITION",
     "AUDIT_ONLY_COLUMNS",
     "OPPORTUNITY_SCHEMA_VERSION",
+    "MODEL_ELIGIBLE_FEATURES",
+    "RULE_DISPLAY_METADATA",
+    "UNAVAILABLE_QUANTITY_FIELDS",
     "LeakageError",
     "OpportunityError",
     "allowed_at_checkpoint",
@@ -41,7 +44,22 @@ __all__ = [
     "opportunity_id",
 ]
 
-OPPORTUNITY_SCHEMA_VERSION = "m07_overtake_opportunities_v1"
+OPPORTUNITY_SCHEMA_VERSION = "m07_overtake_opportunities_v2"
+
+# M07's public row is intentionally partitioned into three semantic surfaces.
+# These sets are contract metadata; CP-14 still derives its actual matrix from
+# the feature registry and runs the data audit before fitting.
+MODEL_ELIGIBLE_FEATURES: frozenset[str] = frozenset({
+    "gap_at_checkpoint", "closing_rate_s_per_s", "p_eligible",
+    "gap_at_activation_s", "speed_at_activation_kmh", "speed_at_braking_kmh",
+})
+RULE_DISPLAY_METADATA: frozenset[str] = frozenset({
+    "zone", "distance_detection_to_activation", "distance_activation_to_brake",
+    "distance_remaining_in_zone", "projected_gap_at_detection_s", "eligibility_margin",
+    "overtake_eligible", "overtake_state", "overtake_unavailable_reason",
+    "historical_drs_eligible", "historical_drs_open",
+})
+UNAVAILABLE_QUANTITY_FIELDS: frozenset[str] = frozenset({"projected_gap_sigma_s"})
 
 #: Section 19 decision checkpoints, in causal order.
 CHECKPOINTS: tuple[str, ...] = ("DETECTION", "ACTIVATION", "BRAKING")

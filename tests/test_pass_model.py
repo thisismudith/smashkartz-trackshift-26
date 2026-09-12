@@ -48,6 +48,7 @@ from trackshift.pass_model.api import (  # noqa: E402
     assert_disjoint,
     available_families,
     build_matrix,
+    audit_feature_matrix,
     check_gates,
     configure_threads,
     evaluate,
@@ -152,14 +153,19 @@ def test_detection_matrix_excludes_every_activation_and_braking_feature(frame):
         assert column not in selection.columns, (
             f"{column} reached the DETECTION feature matrix; it is not knowable there"
         )
-        assert "not knowable at DETECTION" in selection.excluded[column]
+        assert ("not knowable at DETECTION" in selection.excluded[column]
+                or "metadata" in selection.excluded[column])
 
 
 def test_activation_sees_activation_columns_but_not_braking(frame):
     rows = frame[frame["decision_checkpoint"] == "ACTIVATION"]
     selection = select_features("ACTIVATION", rows.columns, dtypes=rows.dtypes)
-    for column in ACTIVATION_SCOPED:
+    for column in ("speed_at_activation_kmh",):
         assert column in selection.columns
+    assert "gap_at_activation_s" not in selection.columns
+    assert "metadata" in selection.excluded["gap_at_activation_s"]
+    assert "distance_activation_to_brake" not in selection.columns
+    assert "metadata" in selection.excluded["distance_activation_to_brake"]
     for column in BRAKING_SCOPED:
         assert column not in selection.columns
 
@@ -183,6 +189,32 @@ def test_audit_columns_and_label_are_never_features(frame):
         assert "passed_by_outcome_horizon" not in selection.columns
 
 
+def test_m07_contract_removes_degenerate_and_circuit_geometry_features(frame):
+    rows = frame[frame["decision_checkpoint"] == "DETECTION"]
+    selection = select_features("DETECTION", rows.columns, dtypes=rows.dtypes)
+    for column in ("projected_gap_sigma_s", "projected_gap_at_detection_s", "eligibility_margin",
+                   "zone", "distance_detection_to_activation", "distance_remaining_in_zone"):
+        assert column not in selection.columns
+        assert "metadata" in selection.excluded[column] or "never" in selection.excluded[column]
+    assert "gap_at_checkpoint" in selection.columns
+
+
+def test_pretraining_feature_audit_rejects_constants_duplicates_transforms_and_event_geometry():
+    from trackshift.pass_model.features import FeatureSelection
+
+    def selection(*names):
+        return FeatureSelection("DETECTION", tuple(names), (), (), False)
+
+    with pytest.raises(FeatureSelectionError, match="constant"):
+        audit_feature_matrix(pd.DataFrame({"constant": [1.0, 1.0]}), selection("constant"))
+    with pytest.raises(FeatureSelectionError, match="duplicate"):
+        audit_feature_matrix(pd.DataFrame({"a": [1.0, 2.0], "b": [1.0, 2.0]}), selection("a", "b"))
+    with pytest.raises(FeatureSelectionError, match="deterministic"):
+        audit_feature_matrix(pd.DataFrame({"a": [1.0, 2.0], "b": [3.0, 5.0]}), selection("a", "b"))
+    with pytest.raises(FeatureSelectionError, match="event-unique"):
+        audit_feature_matrix(pd.DataFrame({"event": ["a", "a", "b", "b"], "geometry_value": [1.0, 2.0, 10.0, 11.0]}), selection("geometry_value"))
+    with pytest.raises(FeatureSelectionError, match="forbidden"):
+        audit_feature_matrix(pd.DataFrame({"future_outcome": [1.0, 2.0]}), selection("future_outcome"))
 def test_identifier_columns_are_refused(frame):
     """A model that trains on event or lap memorises races, it does not learn racecraft."""
     rows = frame[frame["decision_checkpoint"] == "DETECTION"]

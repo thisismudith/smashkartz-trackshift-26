@@ -60,11 +60,12 @@ __all__ = [
     "STRUCTURAL_COLUMNS",
     "FeatureSelection",
     "FeatureSelectionError",
+    "audit_feature_matrix",
     "select_features",
     "build_matrix",
 ]
 
-FEATURE_SCHEMA_VERSION = "m10_pass_features_v1"
+FEATURE_SCHEMA_VERSION = "m10_pass_features_v2"
 LABEL_COLUMN = "passed_by_outcome_horizon"
 
 #: ``interaction_group`` members that are not modelling signal.
@@ -98,6 +99,12 @@ STRUCTURAL_COLUMNS: frozenset[str] = frozenset({
 #: state ("no team recorded"), and the four libraries disagree on how to hold
 #: one -- CatBoost refuses a float NaN in a ``cat_features`` column outright.
 MISSING_CATEGORY = "__missing__"
+
+METADATA_ONLY_GROUP = "metadata_only"
+FORBIDDEN_MODEL_TOKENS = (
+    "future", "outcome", "pass_attempted", "outcome_distance", "position_swap",
+    "zone", "event_id", "circuit_id",
+)
 
 
 class FeatureSelectionError(ValueError):
@@ -208,6 +215,10 @@ def select_features(
         if entry is None:
             excluded[name] = "not in config/feature_registry.yaml (CP-02 owns the namespace)"
             continue
+        groups = _groups(name, entry)
+        if METADATA_ONLY_GROUP in groups:
+            excluded[name] = "rule/display/audit metadata; never a trainable feature"
+            continue
         if name not in allowed:
             excluded[name] = (
                 f"decision_checkpoint={entry.get('decision_checkpoint')}; "
@@ -221,7 +232,6 @@ def select_features(
             excluded[name] = f"live_safe={entry.get('live_safe')}"
             continue
 
-        groups = _groups(name, entry)
         if KEY_GROUP in groups:
             excluded[name] = "interaction_group contains 'key'; an identifier, not signal"
             continue
@@ -249,6 +259,76 @@ def select_features(
         include_identity=include_identity,
         excluded=excluded,
     )
+
+
+def audit_feature_matrix(frame, selection: FeatureSelection) -> dict[str, Any]:
+    """Fail closed on degenerate or identity-encoding trainable features.
+
+    This is deliberately a data audit, not a model-specific heuristic.  It
+    catches constants, exact duplicates, affine/deterministic transforms and
+    event/circuit identifiers before any candidate sees a matrix.
+    """
+    import numpy as np
+
+    columns = list(selection.numeric)
+    forbidden = [name for name in selection.columns
+                 if any(token in str(name).lower() for token in FORBIDDEN_MODEL_TOKENS)]
+    if forbidden:
+        raise FeatureSelectionError(
+            "pre-training feature audit rejected forbidden future/outcome or "
+            f"event/zone identifiers: {sorted(forbidden)}"
+        )
+    if not columns:
+        return {"status": "PASS", "numeric_features": [], "constant": [], "duplicates": [], "deterministic_transforms": [], "event_geometry_identifiers": []}
+
+    constants: list[str] = []
+    values: dict[str, Any] = {}
+    for name in columns:
+        series = frame[name]
+        numeric = np.asarray(series.dropna(), dtype=float)
+        if numeric.size and np.any(~np.isfinite(numeric)):
+            raise FeatureSelectionError(f"pre-training feature audit rejected non-finite values in {name}")
+        values[name] = numeric
+        if numeric.size > 1 and np.all(numeric == numeric[0]):
+            constants.append(name)
+    if constants:
+        raise FeatureSelectionError(f"pre-training feature audit rejected constant numeric feature(s): {sorted(constants)}")
+
+    duplicates: list[tuple[str, str]] = []
+    transforms: list[tuple[str, str]] = []
+    for index, left in enumerate(columns):
+        for right in columns[index + 1:]:
+            a, b = values[left], values[right]
+            if len(a) != len(b) or not len(a):
+                continue
+            if np.array_equal(a, b):
+                duplicates.append((left, right))
+                continue
+            if len(a) > 1 and np.ptp(b) > 0:
+                slope = (a[-1] - a[0]) / (b[-1] - b[0])
+                intercept = a[0] - slope * b[0]
+                if np.array_equal(a, slope * b + intercept):
+                    transforms.append((left, right))
+    if duplicates:
+        raise FeatureSelectionError(f"pre-training feature audit rejected exact duplicate feature(s): {duplicates}")
+    if transforms:
+        raise FeatureSelectionError(f"pre-training feature audit rejected deterministic transform(s): {transforms}")
+
+    event_geometry: list[str] = []
+    if "event" in frame.columns and frame["event"].nunique(dropna=True) > 1:
+        for name in columns:
+            ranges = sorted((float(values.min()), float(values.max())) for values in
+                            [group for group in [frame.loc[group.index, name].dropna().to_numpy(dtype=float)
+                                                  for _, group in frame.groupby("event", sort=False)] if len(group)])
+            if len(ranges) > 1 and all(ranges[i][1] < ranges[i + 1][0] for i in range(len(ranges) - 1)):
+                event_geometry.append(name)
+    if event_geometry:
+        raise FeatureSelectionError(
+            "pre-training feature audit rejected event-unique numeric geometry "
+            f"identifier(s): {sorted(event_geometry)}"
+        )
+    return {"status": "PASS", "numeric_features": columns, "constant": [], "duplicates": [],
+            "deterministic_transforms": [], "event_geometry_identifiers": []}
 
 
 def build_matrix(frame, selection: FeatureSelection, *, require_label: bool = True):

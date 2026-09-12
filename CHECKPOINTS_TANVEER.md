@@ -63,7 +63,7 @@ Each checkpoint has the same shape:
 | 10 | Overtake state machine | M20 | ✅ |
 | 11 | Rule engine (owns the envelope evaluator) | M19 | ✅ |
 | 12 | Eligibility probability | M21 | ✅ |
-| 13 | Overtake-opportunity dataset | M07 | ✅ |
+| 13 | Overtake-opportunity dataset | M07 | ◐ |
 | 14 | Pass-model benchmark | M10 | ☐ |
 | 15 | Probability calibration | M11 | ☐ |
 | 16 | Ensemble spread | M12 | ☐ |
@@ -1611,6 +1611,16 @@ produced data rather than on fixtures:
 | Checkpoints strictly ordered | **PASS** on distance since detection |
 | **Leakage** | **PASS** -- no activation or braking column populated in any DETECTION row |
 | Label base rate 10-35% | **15.4%** |
+
+### Contract repair status
+
+CP-13 is partial pending the M07 v2 contract repair. The initial generated
+opportunities exposed a constant projected_gap_sigma_s, duplicate gap
+representations, deterministic eligibility margin, and circuit-identifying
+geometry in the CP-14 matrix. Those fields are now metadata or unavailable
+Quantities and the pre-training audit rejects recurrence. CP-13 and CP-14
+remain unchecked for completion until the rebuilt non-British dataset passes
+the repaired contract.
 
 The base rate is the gate that carries information. A definition that counted
 hopeless approaches would sit near 2%, and one that only counted completed
