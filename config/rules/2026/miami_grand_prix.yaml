@@ -51,6 +51,13 @@ overtake:
   # Race control states WHETHER Overtake is available, never WHERE. Line
   # positions are not derivable from rcm.json and stay UNVERIFIED until an
   # FIA event note is found, or PROXY_HISTORICAL_DRS from derive_drs_zones.py.
+  # One Detection Line per lap, at Safety Car Line 1 (the pit-entry bollard).
+  # Shared by every zone below; a zone-level detection_line_m would override it.
+  detection_line_m:
+    value: 5200.0
+    value_source: DERIVED_TELEMETRY
+    source: "FIA 2026 Race Director's Competition Notes: \"The detection line referred to in Article B 7.2.1 of the FIA F1 Regulations, is at the same location of the Safety Car Line 1.\" Stated verbatim in the Belgian, Chinese and Hungarian notes. Item 14.3 of the same notes places Safety Car Line 1 at the pit-entry bollard: \"any driver passing to the right-hand side of the bollard at safety car line 1 will be considered as entering the pit lane.\" Pit entry measured in telemetry distance as the row where lap_start_session_s + lap_elapsed_s is closest to pit_in_session_s, over 24 Race and Sprint in-lap(s) of the 2026 lake; median 5200 m, interquartile range 5180-5200 m (20 m, one 20 m resample bin). Evidence and method in artifacts/detection_lines/harvest_2026.json."
+    note: "One Detection Line per lap, shared by every zone: the 2026 notes describe it in the singular at a single location, unlike DRS per-zone detection. The rule is Tier A; this value is the measured position of that rule's location, so it is DERIVED_TELEMETRY rather than RULE_FIA. This event's own notes are silent on the detection line; the wording is identical across the three events that do state it, which is why it is applied here, but it is not separately confirmed for this circuit."
   zones:
     - zone: 1
       name: "Historical DRS active-zone proxy 1"

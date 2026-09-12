@@ -138,7 +138,16 @@ def load_event_rules(event: str, season: str = "2026", rules_dir: Path | None = 
     merged["_event"] = event
     merged["_season"] = str(season)
     for key, value in specific.items():
-        merged[key] = value
+        # Merge one level into a season-default block instead of replacing it.
+        # A shallow replace silently dropped every common.yaml key the event file
+        # did not restate: every event defines its own `overtake` block for zones,
+        # which removed `overtake.detection_gap_s` and left the state machine with
+        # no arming threshold at all. Nothing armed, anywhere, and the config still
+        # validated because the key existed in common.yaml.
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key] = {**merged[key], **value}
+        else:
+            merged[key] = value
     # Event-level overrides sit in their own block so the merge stays obvious.
     for key, value in (specific.get("overrides") or {}).items():
         merged[key] = value

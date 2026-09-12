@@ -60,7 +60,7 @@ Each checkpoint has the same shape:
 | 07 | Practice lap classifier | M01 | ☐ |
 | 08 | Tyre degradation and normalised pace | M30 | ◐ |
 | 09 | Segment baselines | M04 | ✅ |
-| 10 | Overtake state machine | M20 | ◐ |
+| 10 | Overtake state machine | M20 | ✅ |
 | 11 | Rule engine (owns the envelope evaluator) | M19 | ✅ |
 | 12 | Eligibility probability | M21 | ☐ |
 | 13 | Overtake-opportunity dataset | M07 | ☐ |
@@ -1068,6 +1068,55 @@ DISABLED ──(race control OVERTAKE ENABLED)───────────�
 ### Deliverables
 
 `src/trackshift/rules/state_machine.py`, `tests/test_rules.py` (threshold triples), `overtake_state`/`overtake_eligible`/`historical_drs_*` columns.
+
+### ✅ Completed
+
+Verified on Monaco, where the state distribution matches the zone geometry
+rather than merely being non-empty:
+
+| State | Rows | Share | Geometry predicts |
+|---|---|---|---|
+| `ARMED` | 4,599 | **2.0%** | detection 2920 to activation 3000 = 80 m of 3,284 = 2.4% |
+| `ACTIVE` | 16,817 | **7.2%** | activation to lap end = 284 m of 3,284 = 8.6% |
+| `DISABLED` | 34,771 | 14.8% | race-control windows |
+| `NOT_ARMED` | 178,576 | 76.1% | |
+
+Both sit just under their geometric ceiling, which is what you want -- not every
+lap arms. British GP is absent because it is held out as the frozen final test.
+
+Getting here needed four fixes, three of them bugs that each independently
+produced a plausible-looking empty result:
+
+**Detection Lines were unsourced.** The FIA Race Director's Competition Notes
+state that the Article B 7.2.1 detection line is at Safety Car Line 1, and that
+Safety Car Line 1 is the pit-entry bollard. Pit entry is measurable: the row
+where `lap_start_session_s + lap_elapsed_s` meets `pit_in_session_s`. Most
+circuits pin to a single 20 m bin over dozens of in-laps. Evidence in
+`artifacts/detection_lines/harvest_2026.json`; 11 circuits configured as
+`DERIVED_TELEMETRY`, Dutch and Hungarian left null because both measured past
+their own lap length.
+
+**One Detection Line per lap, not one per zone.** The notes say "the detection
+line" in the singular at one location. Our per-zone model was a DRS-shaped
+assumption of our own, marked UNVERIFIED, and was never evidence. Three
+independent circuit descriptions agree -- Silverstone's detection at Vale,
+Suzuka's before the final chicane, Monza's before Parabolica -- all pit-entry
+locations. `resolved_zones()` now shares the lap's line across every zone, and a
+zone-level value would still win if one is ever documented.
+
+**`detection_gap_s` was silently missing from every event.** `load_event_rules`
+merged event files over the season defaults with a shallow replace, so an event
+that defined its own `overtake` block for zones wiped out
+`overtake.detection_gap_s` from common.yaml. The state machine had no arming
+threshold and nothing armed anywhere -- and the config still validated, because
+the key existed in common.yaml. This was the real blocker; the missing Detection
+Lines had been masking it.
+
+**`ACTIVE` survived the lap boundary.** Two Tier-C proxy zones end beyond the
+telemetry lap length (Monaco 3300 m of 3284, Australian zone 4), so `ZONE_EXIT`
+could never fire and the car stayed ACTIVE for the rest of the session -- 70% of
+rows on the first corrected run. A zone lives inside a lap, so crossing the line
+now ends any armed or active state.
 
 ---
 

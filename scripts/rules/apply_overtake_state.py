@@ -27,10 +27,13 @@ sys.path.insert(0, str(ROOT / "src"))
 from trackshift.data.registry import assert_registered  # noqa: E402
 from trackshift.rules.config import load_event_rules  # noqa: E402
 from trackshift.rules.state_machine import (  # noqa: E402
+    ACTIVE,
+    ARMED,
     DISABLED,
     NOT_ARMED,
     configured_line_provenance,
     eligible,
+    resolved_zones,
     step,
 )
 
@@ -189,8 +192,14 @@ def _gap_s(row: Mapping[str, Any]) -> float | None:
 
 
 def _usable_lines(rules: Mapping[str, Any]) -> bool:
-    zones = ((rules.get("overtake") or {}).get("zones") or [])
-    permitted_tiers = {"RULE_FIA", "PROXY_HISTORICAL_DRS"}
+    # resolved_zones fills the lap's single Detection Line into each zone, which
+    # is how the 2026 notes describe it; reading raw zones here would report no
+    # usable line even once the event-level value is configured.
+    zones = resolved_zones(rules)
+    # DERIVED_TELEMETRY is permitted because a Detection Line measured from the
+    # pit-entry crossing is a measurement with an FIA-cited rule behind it, not
+    # a proxy standing in for one.
+    permitted_tiers = {"RULE_FIA", "DERIVED_TELEMETRY", "PROXY_HISTORICAL_DRS"}
     return bool(zones) and all(
         isinstance(zone, Mapping)
         and _number((zone.get("detection_line_m") or {}).get("value")) is not None
@@ -260,6 +269,15 @@ def apply_2026(frame, rules: Mapping[str, Any], control_messages: list[dict[str,
             if lap != prior_lap:
                 previous_position, previous_gap = 0.0, None
                 prior_lap = lap
+                # A zone lives inside a lap: crossing the line ends any armed or
+                # active state, exactly as SESSION_END does. Without this, a zone
+                # whose configured end sits beyond the telemetry lap length can
+                # never be exited and the car stays ACTIVE for the rest of the
+                # session. Two Tier-C proxy zones are in that position today
+                # (Monaco 3300 m of a 3284 m lap, Australian zone 4), but the
+                # rule is right regardless of how those are later corrected.
+                if state in {ARMED, ACTIVE}:
+                    state = NOT_ARMED
             current_position = _number(row.get("distance_m"))
             current_gap = _gap_s(row)
             control = {

@@ -66,12 +66,39 @@ def _value(block: Any) -> float | None:
     return _number(block)
 
 
-def _zones(event_rules: Mapping[str, Any]) -> list[dict[str, Any]]:
+def resolved_zones(event_rules: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """Zones with the lap's Detection Line filled in where a zone lacks its own.
+
+    The 2026 Race Director's Competition Notes describe **one** detection line
+    per circuit -- "the detection line referred to in Article B 7.2.1 is at the
+    same location of the Safety Car Line 1" -- not one per zone as DRS had. So
+    ``overtake.detection_line_m`` is an event-level value that every zone shares,
+    and a zone-level entry, if one is ever supplied, still wins over it.
+
+    Keeping the zone structure matters: activation lines remain genuinely
+    per-zone, and a future event note that does place a detection line per zone
+    needs no schema change to express it.
+    """
     overtake = event_rules.get("overtake")
     if not isinstance(overtake, Mapping) or overtake.get("enabled") is not True:
         return []
     zones = overtake.get("zones")
-    return [dict(zone) for zone in zones] if isinstance(zones, list) else []
+    if not isinstance(zones, list):
+        return []
+
+    lap_detection = overtake.get("detection_line_m")
+    resolved: list[dict[str, Any]] = []
+    for zone in zones:
+        entry = dict(zone)
+        own = entry.get("detection_line_m") or {}
+        if _value(own) is None and isinstance(lap_detection, Mapping):
+            entry["detection_line_m"] = dict(lap_detection)
+        resolved.append(entry)
+    return resolved
+
+
+def _zones(event_rules: Mapping[str, Any]) -> list[dict[str, Any]]:
+    return resolved_zones(event_rules)
 
 
 def configured_line_provenance(event_rules: Mapping[str, Any]) -> list[dict[str, Any]]:
