@@ -50,9 +50,18 @@ def main():
     ap=argparse.ArgumentParser()
     ap.add_argument("--raw-root",type=Path,default=Path("data/raw"))
     ap.add_argument("--output",type=Path,default=Path("artifacts/schema_audit"))
+    ap.add_argument("--years",default=None,
+                    help="CSV subset of years to audit, e.g. 2026 or 2025,2026. "
+                         "Default: all of %s. The full mirror is ~177k files and "
+                         "single-threaded, so scope this when you do not need every season."%",".join(YEARS))
     a=ap.parse_args(); a.output.mkdir(parents=True,exist_ok=True)
+    selected=YEARS
+    if a.years:
+        selected=tuple(y.strip() for y in a.years.split(",") if y.strip())
+        unknown=[y for y in selected if y not in YEARS]
+        if unknown: ap.error("unsupported year(s): %s; supported: %s"%(",".join(unknown),",".join(YEARS)))
     fields=defaultdict(set); events=[]; quality=[]; summary={}; errors=[]
-    for year in YEARS:
+    for year in selected:
         root=a.raw_root/year
         if not root.exists(): summary[year]={"status":"missing"}; continue
         summary[year]={"status":"present","top_level_files":sorted(p.name for p in root.iterdir() if p.is_file()),
@@ -79,14 +88,21 @@ def main():
                         obj=unwrap(load(p),key)
                         if isinstance(obj,dict):
                             for k in obj: fields[(fn,k)].add(year)
-    (a.output/"repository_summary.json").write_text(json.dumps({"raw_root":str(a.raw_root),"years":summary,"malformed":errors},indent=2),encoding="utf-8")
+    (a.output/"repository_summary.json").write_text(json.dumps({
+        "raw_root":str(a.raw_root),
+        "years_audited":list(selected),
+        "years_available":list(YEARS),
+        "partial_audit":list(selected)!=list(YEARS),
+        "lap_files_audited":len(quality),
+        "years":summary,
+        "malformed":errors},indent=2),encoding="utf-8")
     with (a.output/"events_sessions.csv").open("w",newline="",encoding="utf-8") as f:
         w=csv.DictWriter(f,fieldnames=["year","event","session","driver_directories","session_files"]); w.writeheader(); w.writerows(events)
     with (a.output/"field_availability.csv").open("w",newline="",encoding="utf-8") as f:
         w=csv.DictWriter(f,fieldnames=["file_kind","raw_field","years"]); w.writeheader()
         for (kind,name),ys in sorted(fields.items()): w.writerow({"file_kind":kind,"raw_field":name,"years":";".join(sorted(ys))})
-    rows=[{"file_kind":k,"field":n,"years":sorted(ys),"missing_years":[y for y in YEARS if y not in ys]} for (k,n),ys in sorted(fields.items())]
-    (a.output/"schema_differences.json").write_text(json.dumps({"by_file_and_field":rows},indent=2),encoding="utf-8")
+    rows=[{"file_kind":k,"field":n,"years":sorted(ys),"missing_years":[y for y in selected if y not in ys]} for (k,n),ys in sorted(fields.items())]
+    (a.output/"schema_differences.json").write_text(json.dumps({"years_audited":list(selected),"partial_audit":list(selected)!=list(YEARS),"by_file_and_field":rows},indent=2),encoding="utf-8")
     canonical={"phase":"2 proposal only","fields":[{"canonical_name":n,"raw_source_fields":[raw],"datatype":dtype,"unit":unit,"required":required,"supported_years":list(YEARS),"notes":"Retain raw values and expose absence/year-specific semantics."} for n,(raw,dtype,unit,required) in CANONICAL.items()]}
     (a.output/"canonical_schema.json").write_text(json.dumps(canonical,indent=2),encoding="utf-8")
     cols=["year","event","session","driver","lap_file","rows","distance_monotonic","time_step_s","speed","throttle","brake","drs","DriverAhead","DistanceToDriverAhead","x","y","z"]
