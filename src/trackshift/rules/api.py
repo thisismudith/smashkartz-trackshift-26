@@ -36,6 +36,16 @@ from .engine import (
     stub_action_set,
     verify_envelope_table,
 )
+from .eligibility import (
+    SIGMA_FLOOR_S,
+    TRAILING_WINDOW,
+    EligibilityError,
+    GapProjection,
+    derive_checkpoint_geometry,
+    eligibility_margin,
+    normal_cdf,
+    project_gap_at_line,
+)
 from .state_machine import Transition, configured_line_provenance, eligible, step
 
 __all__ = [
@@ -67,6 +77,15 @@ __all__ = [
     "separation_speed_kmh",
     "stub_action_set",
     "verify_envelope_table",
+    # eligibility probability (M21)
+    "SIGMA_FLOOR_S",
+    "TRAILING_WINDOW",
+    "EligibilityError",
+    "GapProjection",
+    "derive_checkpoint_geometry",
+    "eligibility_margin",
+    "normal_cdf",
+    "project_gap_at_line",
     # state machine (M20)
     "Transition",
     "configured_line_provenance",

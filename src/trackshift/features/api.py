@@ -21,8 +21,35 @@ from .tyre_pace import (
     build_tyre_pace_overlay,
     load_tyre_pace_config,
 )
+from .opportunities import (
+    AUDIT_ONLY_COLUMNS,
+    CHECKPOINTS,
+    LABEL_DEFINITION,
+    OPPORTUNITY_SCHEMA_VERSION,
+    LeakageError,
+    OpportunityContext,
+    OpportunityError,
+    allowed_at_checkpoint,
+    assert_checkpoint_scope,
+    build_opportunity_rows,
+    label_zone_exit_v1,
+    opportunity_id,
+)
 
 __all__ = [
+    # CP-13 overtake opportunities (M07)
+    "AUDIT_ONLY_COLUMNS",
+    "CHECKPOINTS",
+    "LABEL_DEFINITION",
+    "OPPORTUNITY_SCHEMA_VERSION",
+    "LeakageError",
+    "OpportunityContext",
+    "OpportunityError",
+    "allowed_at_checkpoint",
+    "assert_checkpoint_scope",
+    "build_opportunity_rows",
+    "label_zone_exit_v1",
+    "opportunity_id",
     "BattleBuildResult",
     "CLOSE_FOLLOWING_CRITERION",
     "CLOSE_FOLLOWING_MAX_DISTANCE_M",

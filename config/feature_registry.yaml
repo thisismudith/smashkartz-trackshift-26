@@ -2401,3 +2401,330 @@ features:
     source: M30 overlay builder
     derivation: Constant version tag.
     consuming_models: [M30]
+
+  # ----------------------------------------------------------------------
+  # CP-12 eligibility (M21) and CP-13 opportunity dataset (M07).
+  # decision_checkpoint lists the checkpoints at which a value is knowable.
+  # A null means checkpoint-independent. Anything scoped to ACTIVATION or
+  # BRAKING is what the section 19 leakage check refuses in a DETECTION row.
+  # ----------------------------------------------------------------------
+
+  - name: p_eligible
+    definition: "Probability the projected gap at the Detection Line is inside detection_gap_s."
+    unit: "probability"
+    source: "M21 projection over C1 gap and closing rate"
+    derivation: "Phi((detection_gap_s - mu) / sigma) from project_gap_at_line; trailing window only."
+    allowed_sessions: [Race, Sprint]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: DERIVED
+    availability_scope: partial
+    source_gated: true
+    decision_checkpoint: null
+    uncertainty_field: projected_gap_sigma_s
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: rules-2026-common-v1
+    regulation_source: "FIA 2026 Sporting Regulations Article B 7.2.1, Overtake detection. Line positions UNVERIFIED pending Race Director event notes."
+    interaction_group: [overtake_eligibility]
+    consuming_models: ["M21", "M07", "M10"]
+
+  - name: projected_gap_at_detection_s
+    definition: "Mean projected time gap at the Detection Line."
+    unit: "s"
+    source: "M21 projection"
+    derivation: "gap_now_s minus closing_rate_s_per_s times time_to_line_s."
+    allowed_sessions: [Race, Sprint]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: DERIVED
+    availability_scope: partial
+    source_gated: true
+    decision_checkpoint: null
+    uncertainty_field: projected_gap_sigma_s
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: rules-2026-common-v1
+    regulation_source: "FIA 2026 Sporting Regulations Article B 7.2.1, Overtake detection. Line positions UNVERIFIED pending Race Director event notes."
+    interaction_group: [overtake_eligibility]
+    consuming_models: ["M21", "M07"]
+
+  - name: projected_gap_sigma_s
+    definition: "Standard deviation of the projected gap, floored at 0.05 s."
+    unit: "s"
+    source: "M21 projection"
+    derivation: "Stdev of the trailing five closing rates, scaled by time to the line."
+    allowed_sessions: [Race, Sprint]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: DERIVED
+    availability_scope: partial
+    source_gated: true
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: rules-2026-common-v1
+    regulation_source: "FIA 2026 Sporting Regulations Article B 7.2.1, Overtake detection. Line positions UNVERIFIED pending Race Director event notes."
+    interaction_group: [overtake_eligibility]
+    consuming_models: ["M21", "M07"]
+
+  - name: eligibility_margin
+    definition: "detection_gap_s minus the projected gap. Positive means eligible."
+    unit: "s"
+    source: "M21"
+    derivation: "threshold_s minus projected_gap_at_detection_s."
+    allowed_sessions: [Race, Sprint]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: DERIVED
+    availability_scope: partial
+    source_gated: true
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: rules-2026-common-v1
+    regulation_source: "FIA 2026 Sporting Regulations Article B 7.2.1, Overtake detection. Line positions UNVERIFIED pending Race Director event notes."
+    interaction_group: [overtake_eligibility]
+    consuming_models: ["M21", "M07", "M10"]
+
+  - name: closing_rate_s_per_s
+    definition: "Rate at which the time gap to the car ahead is closing."
+    unit: "s/s"
+    source: "C1 gap_ahead_m and speed"
+    derivation: "Trailing first difference of the time gap; never centred."
+    allowed_sessions: [Race, Sprint]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: DERIVED
+    availability_scope: partial
+    source_gated: true
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: rules-2026-common-v1
+    regulation_source: "FIA 2026 Sporting Regulations Article B 7.2.1, Overtake detection. Line positions UNVERIFIED pending Race Director event notes."
+    interaction_group: [overtake_eligibility]
+    consuming_models: ["M21", "M07"]
+
+  - name: distance_detection_to_activation
+    definition: "Distance from the Detection Line to the Activation Line."
+    unit: "m"
+    source: "config/rules/2026 overtake zones"
+    derivation: "activation_line_m minus detection_line_m, wrapped by lap length."
+    allowed_sessions: [Race, Sprint]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: DERIVED
+    availability_scope: partial
+    source_gated: true
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: rules-2026-common-v1
+    regulation_source: "FIA 2026 Sporting Regulations Article B 7.2.1, Overtake detection. Line positions UNVERIFIED pending Race Director event notes."
+    interaction_group: [overtake_eligibility]
+    consuming_models: ["M21", "M07"]
+
+  - name: distance_remaining_in_zone
+    definition: "Distance from the checkpoint to the end of the activation zone."
+    unit: "m"
+    source: "config/rules/2026 overtake zones"
+    derivation: "zone_end_m minus feature_cutoff_distance_m."
+    allowed_sessions: [Race, Sprint]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: DERIVED
+    availability_scope: partial
+    source_gated: true
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: rules-2026-common-v1
+    regulation_source: "FIA 2026 Sporting Regulations Article B 7.2.1, Overtake detection. Line positions UNVERIFIED pending Race Director event notes."
+    interaction_group: [overtake_eligibility]
+    consuming_models: ["M07", "M10"]
+
+  - name: gap_at_activation_s
+    definition: "Time gap to the car ahead at the Activation Line."
+    unit: "s"
+    source: "C1 telemetry at the Activation Line"
+    derivation: "Gap sampled at the Activation Line crossing."
+    allowed_sessions: [Race, Sprint]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: DERIVED
+    availability_scope: partial
+    source_gated: true
+    decision_checkpoint: ["ACTIVATION", "BRAKING"]
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: rules-2026-common-v1
+    regulation_source: "FIA 2026 Sporting Regulations Article B 7.2.1, Overtake detection. Line positions UNVERIFIED pending Race Director event notes."
+    interaction_group: [overtake_eligibility]
+    consuming_models: ["M07", "M10"]
+
+  - name: speed_at_activation_kmh
+    definition: "Attacker speed at the Activation Line."
+    unit: "km/h"
+    source: "C1 speed_kmh at the Activation Line"
+    derivation: "Speed sampled at the Activation Line crossing."
+    allowed_sessions: [Race, Sprint]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: DERIVED
+    availability_scope: partial
+    source_gated: true
+    decision_checkpoint: ["ACTIVATION", "BRAKING"]
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: rules-2026-common-v1
+    regulation_source: "FIA 2026 Sporting Regulations Article B 7.2.1, Overtake detection. Line positions UNVERIFIED pending Race Director event notes."
+    interaction_group: [overtake_eligibility]
+    consuming_models: ["M07", "M10"]
+
+  - name: delta_v_at_activation
+    definition: "Attacker minus defender speed at the Activation Line."
+    unit: "km/h"
+    source: "C1 speed_kmh for both cars"
+    derivation: "Pairwise speed difference at the Activation Line."
+    allowed_sessions: [Race, Sprint]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: DERIVED
+    availability_scope: partial
+    source_gated: true
+    decision_checkpoint: ["ACTIVATION", "BRAKING"]
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: rules-2026-common-v1
+    regulation_source: "FIA 2026 Sporting Regulations Article B 7.2.1, Overtake detection. Line positions UNVERIFIED pending Race Director event notes."
+    interaction_group: [overtake_eligibility]
+    consuming_models: ["M07", "M10"]
+
+  - name: distance_activation_to_brake
+    definition: "Distance from the Activation Line to the braking point."
+    unit: "m"
+    source: "config/rules zones and CP-05 brake_onset_m"
+    derivation: "brake_onset_m minus activation_line_m, wrapped by lap length."
+    allowed_sessions: [Race, Sprint]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: DERIVED
+    availability_scope: partial
+    source_gated: true
+    decision_checkpoint: ["ACTIVATION", "BRAKING"]
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: rules-2026-common-v1
+    regulation_source: "FIA 2026 Sporting Regulations Article B 7.2.1, Overtake detection. Line positions UNVERIFIED pending Race Director event notes."
+    interaction_group: [overtake_eligibility]
+    consuming_models: ["M07", "M10"]
+
+  - name: speed_at_braking_kmh
+    definition: "Attacker speed at the braking point."
+    unit: "km/h"
+    source: "C1 speed_kmh at brake onset"
+    derivation: "Speed sampled at the brake-onset distance."
+    allowed_sessions: [Race, Sprint]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: DERIVED
+    availability_scope: partial
+    source_gated: true
+    decision_checkpoint: ["BRAKING"]
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: rules-2026-common-v1
+    regulation_source: "FIA 2026 Sporting Regulations Article B 7.2.1, Overtake detection. Line positions UNVERIFIED pending Race Director event notes."
+    interaction_group: [overtake_eligibility]
+    consuming_models: ["M07", "M10"]
+
+  - name: delta_v_at_braking
+    definition: "Attacker minus defender speed at the braking point."
+    unit: "km/h"
+    source: "C1 speed_kmh for both cars"
+    derivation: "Pairwise speed difference at brake onset."
+    allowed_sessions: [Race, Sprint]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: DERIVED
+    availability_scope: partial
+    source_gated: true
+    decision_checkpoint: ["BRAKING"]
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: rules-2026-common-v1
+    regulation_source: "FIA 2026 Sporting Regulations Article B 7.2.1, Overtake detection. Line positions UNVERIFIED pending Race Director event notes."
+    interaction_group: [overtake_eligibility]
+    consuming_models: ["M07", "M10"]
+
+  - name: passed_by_outcome_horizon
+    definition: "Label under zone_exit_v1. Attacker ahead of this defender at the activation-zone exit."
+    unit: null
+    source: "C1 race_position at the zone exit"
+    derivation: "zone_exit_v1: attacker race_position below defender at zone exit."
+    allowed_sessions: [Race, Sprint]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: false
+    provenance: OBSERVED
+    availability_scope: partial
+    source_gated: true
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: ACAUSAL
+    counterfactual_safe: false
+    regulation_version: rules-2026-common-v1
+    regulation_source: "Not a regulatory value. Outcome observed from C1."
+    interaction_group: [overtake_outcome]
+    consuming_models: ["M07", "M10", "M11", "M12"]
+
+  - name: pass_attempted
+    definition: "Audit only. Whether a pass was attempted. Never a feature, per section 19."
+    unit: null
+    source: "C1 pairwise position history"
+    derivation: "Audit field retained for review and excluded from every feature matrix."
+    allowed_sessions: [Race, Sprint]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: false
+    provenance: OBSERVED
+    availability_scope: partial
+    source_gated: true
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: ACAUSAL
+    counterfactual_safe: false
+    regulation_version: rules-2026-common-v1
+    regulation_source: "Not a regulatory value. Outcome observed from C1."
+    interaction_group: [overtake_outcome]
+    consuming_models: ["M07"]
+
+  - name: outcome_distance_m
+    definition: "Audit only. Lap distance at which the outcome resolved. Never a feature."
+    unit: null
+    source: "C1 distance_m at the outcome"
+    derivation: "Audit field retained for review and excluded from every feature matrix."
+    allowed_sessions: [Race, Sprint]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: false
+    provenance: OBSERVED
+    availability_scope: partial
+    source_gated: true
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: ACAUSAL
+    counterfactual_safe: false
+    regulation_version: rules-2026-common-v1
+    regulation_source: "Not a regulatory value. Outcome observed from C1."
+    interaction_group: [overtake_outcome]
+    consuming_models: ["M07"]
