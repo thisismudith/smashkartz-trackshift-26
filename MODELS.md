@@ -6,7 +6,7 @@ Training procedures are deliberately out of scope here. Each model gets its own 
 
 The UI-facing surface of every model listed here is specified in `API.md`. `MODELS.md` says who builds what; `API.md` says what the frontend can call. Per-owner build plans live in their own files: `CHECKPOINTS_TANVEER.md` covers Owner B's rules, pass, energy, and foundations; `CHECKPOINTS_RISHABH.md` covers Owner A's rival-state, value/decision, and foundation work; `CHECKPOINTS_INTEGRATION.md` defines the final unified API, artifact, replay, and release process.
 
-Written against `TrackShift AGENTS.md` as of commit `7d2f5fd`. If that file changes, re-run the coverage checkpoint in §9 before building against this plan.
+Written against `TrackShift AGENTS.md` including the strategic-state formalism (§1, §31) and the speed-dependent power envelope (§20.1, §20.2, §28.1). If that file changes, re-run the coverage checkpoint in §9 before building against this plan.
 
 ---
 
@@ -53,15 +53,15 @@ Everything in `TrackShift AGENTS.md` that is learned, fitted, benchmarked, or is
 | M11 | Probability calibration: uncalibrated vs Platt/sigmoid vs isotonic | §27 | 9 | post-hoc fit |
 | M12 | Pass-model uncertainty: ensemble spread | §42 | 9 | ensemble |
 | M13 | Regulation-era handling: regulation-era feature, historical pretraining/prior, 2026 recalibration, domain weighting, separate historical and 2026 models followed by comparison | §41 | 9, 10 | cross-cutting on M09 and M10 |
-| M14 | Energy twin (longitudinal power balance → P_K, tagged SIMULATED). Produces the lake's causal, uncertainty-tagged ERS estimates: `ers_energy_state_est_kj`, `ers_energy_state_uncertainty_kj`, `ers_deployment_est_kw`, `ers_harvest_est_kw` — `INFERRED` or `SIMULATED`, never stored or trained on as observed telemetry | §11, §12, §28 | 11 | physics model |
+| M14 | Energy twin (longitudinal power balance → P_K, tagged SIMULATED). Produces the lake's causal, uncertainty-tagged ERS estimates: `ers_deploy_power_est_kw`, `ers_harvest_power_est_kw`, `ers_energy_used_est_mj`, `ers_energy_harvested_est_mj`, `ers_soc_est_mj`, `ers_soc_uncertainty_mj`, `ers_deploy_budget_remaining_est_mj`, `ers_harvest_budget_remaining_est_mj` — `INFERRED` or `SIMULATED`, never stored or trained on as observed telemetry. Uses the §20.1 envelope as a **calibration diagnostic**, counting cap violations as a fit-quality metric, and never as a silent clamp (§28.1) | §11, §12, §28, §28.1 | 11 | physics model |
 | M15 | Physics calibration hierarchy: pure analytical physics → global calibrated physics → team-specific calibrated physics → event-specific calibrated physics → physics + ML residual correction. Calibration and residual models control at minimum for entry speed, segment geometry, aero/Overtake state, tyre compound and life, fuel-load estimate, wind head/cross components, track temperature, wetness, and normal-race eligibility | §29 | 11 | fitted physics + learned residual |
 | M16 | Segment-time / energy model (ΔE → Δt): analytical, linear/ridge, gradient boosting, physics + residual, small neural regressor | §30 | 11 | learned, benchmark track |
 | M17 | Physics uncertainty: parameter draws, confidence ranges | §42 | 11 | uncertainty propagation |
-| M18 | Event rule configuration (`config/rules/2026/*.yaml`, provenance RULE) | §21 | 12 | configuration *(not ML)* |
-| M19 | Deterministic rule engine (legal action set, envelopes, limits, race-control state) | §32 | 12 | deterministic *(not ML)* |
-| M20 | 2026 Overtake state machine (Detection Line → armed → Activation Line → envelope) | §20 | 12 | state machine *(not ML)* |
+| M18 | Event rule configuration (`config/rules/2026/*.yaml`, provenance RULE), covering **all 2026 events on disk**. Holds the speed-dependent electrical power envelope as piecewise-linear curves (`normal` and `override`: `breakpoints_kmh` + `max_power_kw`), the per-lap energy budget in MJ, and the Overtake line geometry. Every key carries `source` and `verified`; unverified values are usable but must surface as unverified everywhere they are displayed (§20.1) | §20, §20.1, §21 | 12 | configuration *(not ML)* |
+| M19 | Deterministic rule engine (legal action set, envelopes, limits, race-control state). **Sole owner** of `max_electrical_power_kw(speed_kmh, mode, event_rules)` — the one implementation of the §20.1 curve in the system. Every consumer (DP, simulator, twin diagnostics, override discriminator) calls it; no envelope constant may appear in any other module | §20.1, §32 | 12 | deterministic *(not ML)* |
+| M20 | 2026 Overtake state machine (Detection Line → armed → Activation Line → envelope). Resolves eligibility into **which envelope applies** (`normal` vs `override`), which is what the DP action set is built against | §20, §20.1 | 12 | state machine *(not ML)* |
 | M21 | Eligibility probability and Overtake-derived features (eligibility_margin, P(g_det < g_thr), energy_required_to_unlock, …) | §22 | 12–13 | probabilistic derived features |
-| M22 | Dynamic programming and energy shadow price λ_E(k, e, g, ε) | §1, §31 | 13 | optimisation *(not ML)* |
+| M22 | Dynamic programming and energy shadow price λ_E(k, e, g, ε). `deploy_level` is a fraction of the **speed-dependent cap**, not of a fixed power, so the same action differs physically by location; energy accounting uses delivered energy, never the request (§31). λ_E now has two structural sources of variation: the Detection-Line discontinuity and the track's speed profile against the taper | §1, §31, §20.1 | 13 | optimisation *(not ML)* |
 | M23 | Counterattack / repass valuation inside the two-lap value function | §23 | 13 | part of DP value |
 | M24 | Planner (beam search for near-term uncertainty + DP terminal value) | §33 | 14 | optimisation |
 | M25 | Planner baselines: greedy attack, longest-straight deployment, lap-time-only, DP, beam + DP, oracle rival-state policy | §33 | 15 | heuristic policies |
@@ -74,6 +74,7 @@ Everything in `TrackShift AGENTS.md` that is learned, fitted, benchmarked, or is
 | M32 | UI, integration, validation, demo | §59 Phase 16 | 16 | integration |
 | M33 | Track-relative weather derivation: `wind_head_component_mps`, `wind_cross_component_mps` (wind projected onto `track_heading_deg`), `air_density_proxy`, `wet_track_flag`; raw `humidity_pct`, `air_pressure_hpa`, `wind_speed_mps`, `wind_direction_deg` retained in the lake | §12, §39 | 4–5 | feature engineering |
 | M34 | Causal fuel-load estimator: `fuel_load_kg_est` + `fuel_load_uncertainty_kg`, tagged `INFERRED` or `SIMULATED`, uses no future information; the only permitted source of fuel context for live features | §11, §38 | 11 | estimator |
+| M35 | Override / ERS-mode discriminator: compares the twin's `ers_deploy_power_est_kw` against the normal-mode cap at the observed speed to produce `override_active_inferred` (probability) and `ers_mode_inferred`. Has power **only above the speed where the two envelopes separate**; returns UNKNOWN below it. Must be evaluated for false-positive rate against twin uncertainty before use, and is a feature/prior — never a tactical-state label (§20.2, §24) | §20.2, §11 | 11–12 | probabilistic discriminator |
 
 ---
 
@@ -87,7 +88,7 @@ Models are grouped into **chains**. A chain is a sequence where each item is a d
 |---|---|---|
 | **Chain R — Rules** | M18 → M20 → M19 → M21 | CPU. Pure config, state machine, and deterministic logic. |
 | **Chain P — Pass probability** | M07 → M10 → M11 → M12 → M13 (pass side) | CPU for LogReg / LightGBM / CatBoost / XGBoost / isotonic / Platt. Optional MLP: A6000 (persistent access), artifact verified on CPU before merge. |
-| **Chain E — Energy / physics** | M14 → M34 → M15 → M16 → M17 | CPU for analytical physics, least-squares calibration, ridge, gradient boosting, residual fits. A6000 for the small neural regressor candidate in M16 and for large parameter-draw ensembles; every artifact verified on CPU before merge. |
+| **Chain E — Energy / physics** | M14 → M34 → M15 → M35 → M16 → M17 | CPU for analytical physics, least-squares calibration, ridge, gradient boosting, residual fits. A6000 for the small neural regressor candidate in M16 and for large parameter-draw ensembles; every artifact verified on CPU before merge. |
 | **Foundations owned** | M01, M03, M04, M30, M33 | CPU. Segmentation, baselines, and weather projection are median/threshold/geometry work over Parquet. |
 
 Why this grouping:
@@ -96,6 +97,7 @@ Why this grouping:
 - Chain P is tree-model work. CPU is the natural home; §26 puts calibration quality above raw accuracy, and calibration is a CPU fit.
 - Chain E is physics first, ML second (§29). Fitting `mass`, `CdA`, rolling resistance, efficiency, and an ICE map is scipy work.
 - M01 (Practice lap classification) belongs with Chain E because Practice is the physics-calibration session (§9). M03 segmentation is physics-derived (braking onset, throttle return). M04 baselines are a per-segment follow-up of M03. M33 needs `track_heading_deg` from M03, so it follows it. M34 (fuel estimator) is a sibling of the energy twin and its output is a required control in M15.
+- M35 (override discriminator) sits **after** M15 deliberately. It compares an estimate against a regulatory cap, so it is only trustworthy once the twin is calibrated — an uncalibrated `CdA` or mass manufactures false override detections (§20.2). It spans Chain R and Chain E (it needs M19's envelope function and M14's power estimate), which is a further reason both chains sit with one owner.
 
 ### 3.2 Owner A — Rishabh (RTX 4080)
 
@@ -203,20 +205,38 @@ Keyed by `(track, segment_id, [driver|team])`; one column per baselined quantity
 **C3. Rule engine API** — `src/trackshift/rules/api.py`
 
 ```text
+max_electrical_power_kw(speed_kmh, mode, event_rules) -> float
+    mode:        NORMAL | OVERRIDE
+    returns:     the regulatory cap at that speed, by interpolation on the
+                 piecewise-linear curve in event_rules (§20.1)
+    guarantee:   clamped outside the breakpoint range; never negative
+    provenance:  RULE
+    note:        the ONLY implementation of the envelope in the system —
+                 this is P_ERS^max(v, mode, competition) in §28's notation.
+                 No other module may hold an envelope constant.
+
 legal_actions(state: StrategicState, event_rules) -> ActionSet
-    state:       segment_id; Energy Store state and uncertainty; deployed/harvested energy;
-                 remaining recharge budget; tyre state; time/distance gap; relative speed;
-                 gap rate; Overtake state; race-control state; applicable power-envelope regime
-    returns:     permitted (deploy_level, lift_amount) pairs plus exclusions with rule sources
+    state:       segment_id; speed_kmh (required to resolve the applicable
+                 power-envelope regime); Energy Store state (ers_soc_est_mj) and
+                 uncertainty; deploy and harvest budgets remaining; tyre state;
+                 time/distance gap; relative speed; gap rate; Overtake eligibility;
+                 race-control state
+    returns:     permitted (deploy_level, lift_amount) pairs plus exclusions with
+                 rule sources, where deploy_level is a fraction of
+                 max_electrical_power_kw at this state's speed and applicable
+                 mode — not of a fixed power (§31) — and each permitted action
+                 also carries applicable_mode, cap_kw, and delivered_power_kw so
+                 the DP accounts energy against what is deliverable, not the request
     guarantee:   illegal actions are absent from the set, never low-scored (§31)
 
 eligibility(state, event_rules) -> EligibilityResult
-    returns:     armed state, projected-gap distribution, p_eligible, eligibility margin,
+    returns:     armed: bool, projected-gap distribution, p_eligible: float in [0,1],
+                 eligibility_margin_s: float, applicable_mode: NORMAL | OVERRIDE,
                  and optional energy-to-unlock estimate with uncertainty
     provenance:  RULE for thresholds, INFERRED or SIMULATED for causal projections
 ```
 
-Failure: unknown event or missing rule key raises; it never defaults to "Overtake enabled".
+Failure: unknown event or missing rule key raises; it never defaults to "Overtake enabled" and never substitutes a default envelope. A config whose envelope keys carry `verified: false` is usable, and the flag propagates to every consumer so the UI can mark it (§20.1).
 
 **C4. Pass probability API** — `src/trackshift/pass_model/api.py`
 
@@ -246,17 +266,28 @@ segment_time(segment_id, action, strategic_context) -> SegmentTimeEstimate
     provenance:         SIMULATED
 
 energy_state(telemetry_window, event_rules) -> EnergyEstimate
-    ers_energy_state_est_kj, ers_energy_state_uncertainty_kj
-    ers_deployment_est_kw, ers_harvest_est_kw
-    energy_deployed_kj, energy_harvested_kj, energy_recharge_budget_remaining
-    ers_power_limit_kw, power_envelope_regime
-    fuel_load_kg_est, fuel_load_uncertainty_kg        (from M34)
-    provenance: SIMULATED (ERS), INFERRED (fuel), RULE (limits)
+    ers_deploy_power_est_kw, ers_harvest_power_est_kw
+    ers_energy_used_est_mj, ers_energy_harvested_est_mj
+    ers_soc_est_mj, ers_soc_uncertainty_mj
+    ers_deploy_budget_remaining_est_mj, ers_harvest_budget_remaining_est_mj
+    ers_store_capacity_mj                              (RULE, the physical bound on ers_soc_est_mj)
+    cap_kw, applicable_mode                             (RULE; the envelope regime at the current speed)
+    fuel_load_kg_est, fuel_load_uncertainty_kg          (from M34)
+    envelope_violation: bool, violation_margin_kw: float   (§28.1 diagnostic)
+    provenance: SIMULATED (ERS estimates), INFERRED (fuel), RULE (capacity and cap)
+
+override_state(telemetry_window, event_rules) -> OverrideInference   (M35)
+    override_active_inferred: float in [0,1]
+    ers_mode_inferred:        NORMAL | OVERRIDE | UNKNOWN
+    discriminable:            bool  (false below the envelope separation speed)
+    provenance: INFERRED
 ```
 
 Causal: uses only telemetry at or before the window end (§12). Never labelled OBSERVED (§11, §28, §58). These are the only permitted sources of ERS and fuel context for any live feature.
 
-**C6. Opportunity and rule-derived features** — appended to `overtake_opportunities` and available to Chain S, each tagged with the checkpoint at which it becomes available: time/distance gap, relative speed, relative acceleration, gap rate, `eligibility_margin`, causal `projected_gap_at_detection`, `probability_eligible`, `energy_required_to_unlock` with uncertainty, `eligibility_fragility_per_kj` where supported, `delta_speed_checkpoint`, `delta_acceleration_checkpoint`, `distance_detection_to_activation`, `distance_activation_to_brake`, `overtake_eligible`, `overtake_state` (2026, rule engine only), `historical_drs_eligible`, `historical_drs_open` (2022–2025 covariates only). The registry's `decision checkpoint`, causal status, and counterfactual-safe fields are authoritative for which rows may carry which feature.
+`envelope_violation` is a **calibration signal, not a clamp** (§28.1): an estimate above the override cap means the twin's parameters are wrong, and the raw estimate is preserved so that the calibration can be fixed rather than hidden. `discriminable` is false below the speed where the two envelopes separate, and the UI must show "unknown", never "normal" (§20.2).
+
+**C6. Opportunity and rule-derived features** — appended to `overtake_opportunities` and available to Chain S, each tagged with the checkpoint at which it becomes available: `gap_at_checkpoint`, time/distance gap, relative speed, relative acceleration, gap rate, `eligibility_margin`, causal `projected_gap_at_detection`, `probability_eligible`, `energy_required_to_unlock` with uncertainty, `eligibility_fragility_per_kj` where supported, `delta_speed_checkpoint`, `delta_acceleration_checkpoint`, `distance_detection_to_activation`, `distance_activation_to_brake`, `overtake_eligible`, `overtake_state` (2026, rule engine only), `historical_drs_eligible`, `historical_drs_open` (2022–2025 covariates only). The registry's `decision checkpoint`, causal status, and counterfactual-safe fields are authoritative for which rows may carry which feature.
 
 ### 5.2 Rishabh → Tanveer
 
@@ -526,6 +557,8 @@ Every section of `TrackShift AGENTS.md` that names a model, fitted component, or
 | §18 | Battle episodes | M05, M29 | R |
 | §19 | Overtake-opportunity dataset (DETECTION / ACTIVATION / BRAKING checkpoints, `passed_by_outcome_horizon`) | M07, M10 | T |
 | §20 | 2026 Overtake state machine | M20 | T |
+| §20.1 | Speed-dependent electrical power envelope (curve in config, single evaluator, deploy_level semantics, λ_E consequences) | M18, M19, M22 | T, T, R |
+| §20.2 | Override partially observable (envelope-separation discriminator) | M35 | T |
 | §21 | Event rule configuration | M18 | T |
 | §22 | Overtake-derived strategic features, eligibility probability | M21 | T |
 | §23 | Counterattack modelling | M23 | R |
@@ -534,10 +567,11 @@ Every section of `TrackShift AGENTS.md` that names a model, fitted component, or
 | §26 | Pass-probability benchmark (LogReg, CatBoost/LightGBM, XGBoost, MLP) | M10 | T |
 | §27 | Probability calibration (Platt, isotonic) | M11 | T |
 | §28 | Energy twin | M14 | T |
+| §28.1 | Envelope as twin calibration diagnostic, never a clamp | M14, M15 | T |
 | §29 | Physics calibration hierarchy (with required controls) | M15, M34 | T |
 | §30 | Segment-time / energy model | M16 | T |
-| §31 | Dynamic programming | M22 | R |
-| §32 | Rule engine | M19 | T |
+| §31 | Dynamic programming (deploy_level as fraction of the speed-dependent cap; accounting on delivered energy) | M22 | R |
+| §32 | Rule engine (owns `max_electrical_power_kw`) | M19 | T |
 | §33 | Planner and baselines | M24, M25 | R |
 | §35 | Feature-group ablation | M28 | T harness, both run |
 | §37 | Race-context labels | M02 | R |
@@ -571,7 +605,11 @@ Verification steps for whoever reviews this file:
 - [ ] Every contract in §5 declares provenance and failure behaviour.
 - [ ] Every module in §7.1 maps to an inventory ID.
 - [ ] All three §19 decision checkpoints (DETECTION, ACTIVATION, BRAKING) appear under M07 and M10, and C4 requires `decision_checkpoint`.
-- [ ] Every §11 fuel/ERS estimate field (`fuel_load_kg_est`, `fuel_load_uncertainty_kg`, `ers_energy_state_est_kj`, `ers_deployment_est_kw`, `ers_harvest_est_kw`) has a producer (M14 or M34) and is never OBSERVED.
+- [ ] Every §11 fuel/ERS estimate field (`fuel_load_kg_est`, `fuel_load_uncertainty_kg`, `ers_deploy_power_est_kw`, `ers_harvest_power_est_kw`, `ers_soc_est_mj`, `ers_deploy_budget_remaining_est_mj`, `ers_harvest_budget_remaining_est_mj`) has a producer (M14 or M34) and is never OBSERVED.
 - [ ] `normal_race_model_eligible` is produced once (M02 / C7) and named as a filter on M04, M05, M07, M08, M15.
 - [ ] Every §12 track-relative weather field has a producer (M33).
 - [ ] Every §46 registry field (availability scope, source-gated, decision checkpoint, uncertainty field) appears under M31.
+- [ ] The power envelope exists as a curve in M18 config and is evaluated in exactly one place (M19); no module holds an envelope constant.
+- [ ] Every §11 ERS field (`ers_deploy_power_est_kw`, `ers_harvest_power_est_kw`, `ers_energy_used_est_mj`, `ers_energy_harvested_est_mj`, `ers_soc_est_mj`, `ers_soc_uncertainty_mj`, `ers_deploy_budget_remaining_est_mj`, `ers_harvest_budget_remaining_est_mj`, `ers_mode_inferred`, `overtake_available`, `override_active_inferred`) has a producer and the correct provenance — `overtake_available` is RULE, the rest INFERRED/SIMULATED.
+- [ ] C3 exposes `max_electrical_power_kw` and `legal_actions` takes `speed_kmh`.
+- [ ] M22's energy accounting uses delivered power, not the requested deploy level.

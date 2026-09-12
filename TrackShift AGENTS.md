@@ -547,27 +547,64 @@ Fuel and ERS state are high-value context, but are not public observations in th
 ```text
 fuel_load_kg_est
 fuel_load_uncertainty_kg
-ers_energy_state_est_kj
-ers_deployment_est_kw
-ers_harvest_est_kw
+
+ers_deploy_power_est_kw
+ers_harvest_power_est_kw
+ers_energy_used_est_mj
+ers_energy_harvested_est_mj
+ers_soc_est_mj
+ers_soc_uncertainty_mj
+ers_store_capacity_mj
+ers_deploy_budget_remaining_est_mj
+ers_harvest_budget_remaining_est_mj
+
+ers_mode_inferred
+overtake_available
+override_active_inferred
 ```
 
-All five must carry `INFERRED` or `SIMULATED` provenance. Never name, store, or train on an estimate as if it were observed telemetry.
+Every one of these carries `INFERRED` or `SIMULATED` provenance. Never name, store, or train on an estimate as if it were observed telemetry.
+
+The `_est` and `_inferred` suffixes are mandatory and are not cosmetic. A column named `ers_soc_mj` would read as a measured battery state of charge, which is exactly the claim §58 forbids. The suffix is what keeps the schema honest when the column is read by someone who has not read this document.
+
+Units differ deliberately by quantity. Power is kW. Stored and accumulated energy is MJ, because regulatory per-lap electrical budgets are stated in MJ and mixing kJ and MJ in the same table is a reliable source of factor-of-1000 errors. Segment-level deltas may remain in kJ where that is the natural magnitude; the unit is always in the field name.
+
+Field meanings:
+
+```text
+ers_deploy_power_est_kw        estimated instantaneous electrical power to the wheels
+ers_harvest_power_est_kw       estimated instantaneous recovery power
+ers_energy_used_est_mj         cumulative deployed electrical energy within the current accounting window
+ers_energy_harvested_est_mj    cumulative recovered electrical energy within the same window
+ers_soc_est_mj                       estimated usable store level
+ers_soc_uncertainty_mj              uncertainty band on ers_soc_est_mj
+ers_store_capacity_mj               the physical bound on ers_soc_est_mj; RULE
+ers_deploy_budget_remaining_est_mj  regulatory deploy allowance still available in the accounting window
+ers_harvest_budget_remaining_est_mj regulatory harvest/recharge allowance still available in the same window
+ers_mode_inferred              latent deployment mode; see §20.1
+overtake_available             whether Overtake may legally be used in this state; RULE, from the rule engine
+override_active_inferred       whether the car appears to be using the override envelope; see §20.2
+```
+
+`overtake_available` is the one field in this group that is **not** an estimate. It is `RULE` provenance, produced by the rule engine from event configuration and the eligibility state machine (§20, §32). It must never be inferred from a raw telemetry channel.
+
+`ers_deploy_budget_remaining_est_mj` and `ers_harvest_budget_remaining_est_mj` are each a hybrid: the allowance is `RULE`, the consumption or recovery against it is `SIMULATED`, so the remaining figure is tagged `SIMULATED` and the allowance it was computed against is recorded alongside it. The deploy and harvest budgets are separate regulatory constraints (§28) and must not be collapsed into one number.
 
 The planner-facing strategic-state interface may additionally expose only modelled quantities such as:
 
 ```text
-ers_energy_state_uncertainty_kj
 tyre_state_est
 tyre_state_uncertainty
-ers_power_limit_kw
-power_envelope_regime
+cap_kw                    # max_electrical_power_kw at the current speed and mode; see §20.1
+applicable_mode            # NORMAL | OVERRIDE; which envelope curve is in force
 relative_speed_to_ahead_mps
 gap_rate_ahead_s_per_s
 projected_gap_at_detection_s
 overtake_activation_state
 state_confidence
 ```
+
+`cap_kw` and `applicable_mode` are not independent estimates: they are the output of `max_electrical_power_kw(speed_kmh, mode, event_rules)` (§20.1, §32), read into the planner-facing interface rather than recomputed. `ers_soc_uncertainty_mj` (§11) already covers ERS uncertainty; this interface does not duplicate it under a second name.
 
 These are not raw telemetry fields. Each must retain `DERIVED`, `INFERRED`, `SIMULATED`, or `RULE` provenance and its live-availability contract.
 
@@ -674,9 +711,9 @@ overtake_eligible
 overtake_state
 fuel_load_kg_est
 fuel_load_uncertainty_kg
-ers_energy_state_est_kj
-ers_deployment_est_kw
-ers_harvest_est_kw
+ers_soc_est_mj
+ers_deploy_power_est_kw
+ers_harvest_power_est_kw
 ```
 
 For 2022 to 2025, DRS values are historical covariates only. For 2026, derive `overtake_eligible` and `overtake_state` exclusively through the rule engine and FIA event configuration, never from a raw DRS channel. Fuel and ERS estimates must be causal, uncertainty-aware, and tagged `INFERRED` or `SIMULATED`.
@@ -939,9 +976,9 @@ defender_tyre_degradation_proxy
 attacker_fuel_load_kg_est
 defender_fuel_load_kg_est
 fuel_load_delta_kg_est
-attacker_ers_energy_state_est_kj
-defender_ers_energy_state_est_kj
-ers_energy_delta_kj_est
+attacker_ers_soc_est_mj
+defender_ers_soc_est_mj
+ers_soc_delta_mj_est
 
 recent_pace_delta
 wind_head_component_mps
@@ -1089,9 +1126,9 @@ defender_tyre_degradation_proxy
 attacker_fuel_load_kg_est
 defender_fuel_load_kg_est
 fuel_load_delta_kg_est
-attacker_ers_energy_state_est_kj
-defender_ers_energy_state_est_kj
-ers_energy_delta_kj_est
+attacker_ers_soc_est_mj
+defender_ers_soc_est_mj
+ers_soc_delta_mj_est
 
 air_temperature
 track_temperature
@@ -1157,6 +1194,8 @@ PU power-limited sectors
 race-control disable state
 ```
 
+A power envelope is **not a scalar**. See §20.1.
+
 The normal eligibility transition is conceptually:
 
 ```text
@@ -1202,6 +1241,108 @@ This discontinuity is one reason the shadow price of energy may spike before a D
 
 ---
 
+## 20.1 The electrical power envelope is speed-dependent
+
+The 2026 regulations do not give a single maximum electrical power. They define maximum deployment as a **function of car speed**, and the function differs between normal deployment and the Overtake override.
+
+Reported shape, pending document verification (see the warning below):
+
+```text
+normal deployment
+    full electrical power is available at lower speed
+    deployment begins to taper from approximately 290 km/h
+    deployment has fallen away by approximately 340 km/h
+
+override (Overtake)
+    approximately 350 kW remains available to approximately 337 km/h
+    override remains available to approximately 355 km/h
+```
+
+The system must therefore model:
+
+```text
+P_electrical_max = f(speed, mode)
+```
+
+and never:
+
+```text
+P_electrical_max = 350 kW
+```
+
+The envelope must live in event rule configuration as a curve, not a constant (§21), and must be evaluated by the rule engine (§32) rather than hardcoded anywhere.
+
+### Why this changes the problem
+
+This is not a detail of the power model. It changes the structure of the optimisation.
+
+**1. A deployment action no longer means a fixed amount of power.**
+
+`deploy_level = 1.0` at 200 km/h and `deploy_level = 1.0` at 330 km/h are different physical actions, because the cap differs. See §31.
+
+**2. The value of stored energy depends on where you are, not only on how much you have.**
+
+Energy that can only be spent above the taper is worth less than the same energy spent below it, because the car physically cannot convert it at the same rate. The shadow price \(\lambda_E\) therefore has a second structural source of variation beyond the Detection Line discontinuity: the speed profile of the track itself. On a circuit with long high-speed straights, a given megajoule may be worth materially less than on a circuit whose straights sit below the taper.
+
+**3. Deploy-early versus deploy-late is now a real trade-off with a physical basis.**
+
+Deploying at corner exit, at lower speed, converts electrical energy at a higher permitted rate than deploying at the end of the same straight. The optimiser should discover this; the rule engine must make it possible by exposing the true cap at each speed.
+
+**4. The override envelope is worth more than the difference in peak power suggests.**
+
+Override does not only raise the cap; it moves the taper. The strategic value of being eligible at the Detection Line is therefore larger at high-speed circuits than a comparison of peak kW would imply, and the planner should price it that way rather than as a flat power bonus.
+
+**5. Terminal speed is bounded by the envelope, not by energy alone.**
+
+A car with a full store cannot buy unlimited terminal speed on a straight. This bounds the realistic gap closure per zone and should keep the segment-time model (§30) physically plausible at the top of the speed range.
+
+### Envelope representation
+
+Represent each envelope as a piecewise-linear curve evaluated by interpolation, with explicit breakpoints, so that the shape can be corrected when better documentation is obtained without changing any code:
+
+```text
+breakpoints_kmh:  ascending list of speeds
+max_power_kw:     the cap at each breakpoint
+```
+
+The evaluator must clamp below the first breakpoint and above the last, must be monotonic in the sense that it never returns a negative cap, and must have tests immediately below, at, and above every breakpoint (§52).
+
+### ⚠ Values are unverified until sourced
+
+The figures above are **reported values, not verified regulation**. They must be treated as placeholders carrying `verified: false` until each is traced to a specific article of the FIA Technical or Sporting Regulations, or to an event-specific FIA document, and that citation is recorded in the configuration (§21).
+
+Until then:
+
+- the system may be described as *modelling* a speed-dependent envelope,
+- it may **not** be described as legal by construction under the 2026 regulations (§57),
+- no validation report may present envelope-derived quantities as regulatory fact.
+
+Encoding an unverified number is acceptable. Presenting it as verified is not.
+
+---
+
+## 20.2 Override is partially observable
+
+The two envelopes overlap at low speed and separate at high speed. That separation is useful.
+
+If the energy twin (§28) estimates an electrical contribution for a rival that exceeds the normal-mode cap at the observed speed, by a margin larger than the twin's own uncertainty, then that car cannot be in normal deployment. The excess is evidence of override.
+
+```text
+if  ers_deploy_power_est_kw(v)  >  envelope_normal(v) + k * sigma
+then the car is very likely in override
+```
+
+This converts part of a latent tactical state into a partially observed one, and it is one of the few places where public telemetry constrains a rival's energy decision rather than merely suggesting it.
+
+Constraints on using this:
+
+- The discriminator only has power **above the point where the envelopes separate**. Below that speed it carries no information and must return "unknown" rather than "normal".
+- It is evidence, not observation. `override_active_inferred` is `INFERRED`, carries a probability, and must never be stored as an observed mode.
+- It inherits every uncertainty in the twin. A miscalibrated `CdA` or mass will manufacture false override detections, so the margin must be scaled by the twin's own confidence, and the detector must be evaluated against its false-positive rate before use (§55).
+- It must not be used to label rival tactical states as ground truth (§24). It is a feature and a prior, never a label.
+
+---
+
 # 21. Event rule configuration
 
 Regulatory values must not be scattered as constants through Python modules.
@@ -1243,12 +1384,35 @@ overtake:
   race_control_conditions: ...
   source: ...
 
+power_envelope:
+  # Maximum electrical deployment as a function of speed (§20.1).
+  # Piecewise linear between breakpoints; clamped outside the range.
+  normal:
+    breakpoints_kmh: [...]
+    max_power_kw:    [...]
+    source: ...
+    verified: false
+  override:
+    breakpoints_kmh: [...]
+    max_power_kw:    [...]
+    source: ...
+    verified: false
+
+energy_budget:
+  deploy_limit_per_lap_mj: ...
+  harvest_limit_per_lap_mj: ...
+  accounting_window: ...        # lap, or as the regulations define it
+  source: ...
+  verified: false
+
 mgu_k:
   power_envelope: ...
   energy_store_limits: ...
   recharge_limits: ...
   source: ...
 ```
+
+Every value carries `source` and `verified`. A key whose `verified` is false may be used in modelling and must be surfaced as unverified wherever it is displayed (§20.1). The rule engine must refuse to run against a configuration with a missing key rather than substituting a default (§32).
 
 Before changing rule values, verify the latest FIA Sporting Regulations, Technical Regulations, and event-specific documents.
 
@@ -1357,8 +1521,8 @@ tyre_degradation_proxy
 
 fuel_load_kg_est
 fuel_load_uncertainty_kg
-ers_energy_state_est_kj
-ers_energy_state_uncertainty_kj
+ers_soc_est_mj
+ers_soc_uncertainty_mj
 
 wind_head_component_mps
 wind_cross_component_mps
@@ -1527,15 +1691,35 @@ SIMULATED
 
 unless measured values are explicitly supplied.
 
-The energy transition must distinguish Energy Store state, segment deployment, and permitted recharge budget:
+The energy transition must distinguish Energy Store state, segment deployment, and permitted recharge budget. These are three separate quantities and must not be collapsed into one:
 
 \[
 E_{k+1} = E_k + \eta_h P_{harvest,k}\Delta t - \frac{P_{deploy,k}\Delta t}{\eta_d}
 \]
 
-subject to the encoded Energy Store bounds and event/session-specific regulation configuration. A recharge-per-lap limit is not battery capacity, and a deployment action is not battery state. Track `energy_state_kj`, `energy_deployed_kj`, `energy_harvested_kj`, `energy_recharge_budget_remaining`, and state uncertainty separately.
+subject to the encoded Energy Store bounds and event/session-specific regulation configuration. A recharge-per-lap limit is not battery capacity, and a deployment action is not battery state. Track the following separately, each with its own uncertainty:
 
-Electrical deployment must also satisfy the speed-, mode-, and competition-dependent power envelope \(0 \leq P_{deploy,k} \leq P_{ERS}^{max}(v_k, mode, competition)\). Do not hard-code one universal 2026 deployment or recharge limit.
+```text
+ers_soc_est_mj                       current stored energy (bounded by ers_store_capacity_mj, RULE)
+ers_deploy_budget_remaining_est_mj   how much more may be deployed in the current accounting window
+ers_harvest_budget_remaining_est_mj  how much more may be recovered in the current accounting window
+```
+
+The deploy budget, the harvest budget, and the store capacity are three distinct regulatory constraints. A car can be short of deploy budget while its store is nearly full, or vice versa; conflating them produces a twin that is right about total energy and wrong about what the car may legally do with it next.
+
+Electrical deployment must also satisfy the speed-, mode-, and competition-dependent power envelope \(0 \leq P_{deploy,k} \leq P_{ERS}^{max}(v_k, mode, competition)\). Do not hard-code one universal 2026 deployment or recharge limit. This is the same requirement as §20.1's `max_electrical_power_kw(speed, mode, event_rules)`; \(P_{ERS}^{max}\) is that function's notation in the value-function formalism, and the two names must resolve to one implementation (§32).
+
+## 28.1 The envelope constrains the twin
+
+The estimated electrical contribution is not free to take any value. At every sample the regulatory cap for the applicable mode (§20.1) is an upper bound on legitimate deployment.
+
+Use this in two directions.
+
+**As a diagnostic.** An estimate that exceeds the override cap at the observed speed is not a discovery about the car; it is a defect in the twin. It means mass, `CdA`, rolling resistance, drivetrain efficiency, or the ICE map is mis-set, or the gradient is wrong. Count and report these violations as a calibration metric (§29, §55). A calibration that reduces error while increasing envelope violations has not improved.
+
+**As a soft prior, never as a clamp.** Do not silently truncate an estimate to the cap. Truncation hides the calibration error that produced it and manufactures a plausible-looking series. Record the raw estimate, record the violation, and let the calibration fix the cause.
+
+The one legitimate use of the cap as a bound is in the **forward** direction — the simulator and the planner, where the car's deployment is a decision being made rather than a quantity being estimated. There the cap is a hard constraint, applied by the rule engine before any action is scored (§31, §32).
 
 ---
 
@@ -1653,6 +1837,21 @@ Example deployment levels:
 1.00
 ```
 
+**A deploy level is a fraction of the currently permitted cap, not a fraction of a fixed power.**
+
+```text
+P_requested = deploy_level * envelope(speed, mode)
+```
+
+Because the cap varies with speed (§20.1), the same action produces different electrical power, different energy consumption, and different time gain depending on where in the segment it is applied. The DP must evaluate the action against the speed actually reached, not against a nominal maximum.
+
+Two consequences for the state:
+
+- **Mode belongs in the state or in the action set.** Normal and override have different envelopes, so the permitted action set depends on the Overtake eligibility state \(\epsilon\) that is already in the core state. The rule engine resolves eligibility into the applicable envelope.
+- **Energy accounting uses the delivered energy, not the requested level.** An action capped by the envelope consumes only what was delivered. Accounting against the request would leak energy that was never spendable.
+
+An action whose delivered power would exceed the applicable cap is not a low-value action. It is not an action at all, and must be absent from the candidate set rather than penalised.
+
 Illegal actions must be removed before scoring.
 
 Do not assign a low reward to illegal actions.
@@ -1679,7 +1878,7 @@ It should answer:
 
 It must enforce:
 
-- applicable power envelopes,
+- applicable power envelopes, evaluated as a function of speed and mode (§20.1),
 - electrical limits,
 - Overtake state,
 - event-specific limits,
@@ -1687,7 +1886,15 @@ It must enforce:
 - race-control state,
 - relevant energy accounting.
 
-Every boundary rule should have tests just below and above its threshold.
+Envelope evaluation is a first-class responsibility of the rule engine, not of the physics model and not of the planner. The engine owns one function:
+
+```text
+max_electrical_power_kw(speed_kmh, mode, event_rules) -> float
+```
+
+Everything that needs a cap — the DP, the simulator, the twin's diagnostics, the override discriminator — calls that one function. There must be no second implementation of the curve anywhere in the system, and no numeric envelope constant in any Python module (§21).
+
+Every boundary rule should have tests just below and above its threshold. For the envelope this means tests immediately below, exactly at, and immediately above **every breakpoint** of both curves, plus the clamped regions beyond the first and last breakpoint, plus the speed at which the two curves separate (§20.2).
 
 ---
 
@@ -2424,6 +2631,8 @@ The rival filter was evaluated using synthetic labelled trajectories and real pr
 
 The energy state is inferred/simulated from public telemetry rather than observed directly.
 
+The electrical power envelope is modelled as speed-dependent, using values recorded in event configuration with their sources and verification status.
+
 Counterfactual recommendations are simulator outputs under stated assumptions, not observed alternate race outcomes.
 ```
 
@@ -2441,6 +2650,12 @@ we know the rival's real deployment mode
 historical DRS is identical to 2026 Overtake
 
 public drs telemetry directly represents 2026 active aero or Overtake
+
+our encoded power envelope is verified regulation, while any envelope key still carries verified: false
+
+we observed a rival's deployment mode, when it was inferred from an envelope comparison
+
+electrical power is capped at a single constant value
 
 simulator performance proves real race performance
 

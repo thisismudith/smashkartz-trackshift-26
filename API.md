@@ -6,9 +6,9 @@ The contract between the models in `MODELS.md` and the frontend UI. This is the 
 - `MODELS.md` — who builds which model, on what compute
 - `API.md` — this file: what the UI can call, and what comes back
 
-Section references (§N) point to `TrackShift AGENTS.md`. Model IDs (M01–M34) and contract IDs (C1–C10) point to `MODELS.md`.
+Section references (§N) point to `TrackShift AGENTS.md`. Model IDs (M01–M35) and contract IDs (C1–C10) point to `MODELS.md`.
 
-Written against `TrackShift AGENTS.md` as of commit `7d2f5fd`; shapes here follow the strategic-state, causal-transition, and field definitions in that contract.
+Written against `TrackShift AGENTS.md` including the strategic-state and causal-transition formalism (§1, §31) and the speed-dependent power envelope (§11–§13, §17, §19, §20.1, §20.2, §28.1).
 
 ---
 
@@ -126,6 +126,7 @@ Codes:
 | `CHECKPOINT_VIOLATION` | 422 | a pass-prediction request for one decision checkpoint carried a feature that only exists at a later checkpoint (§19) |
 | `NOT_MODEL_ELIGIBLE` | 422 | the state is not `normal_race_model_eligible` (SC / VSC / pit / unknown control); models are not defined there and the UI must show the gate instead (§12) |
 | `ILLEGAL_STATE` | 422 | state is outside the energy/gap grid or violates accounting |
+| `ENVELOPE_UNVERIFIED` | 200 + header `X-TrackShift-Unverified: power_envelope` | the response used envelope values whose `verified` flag is false; the UI must badge every derived number (§20.1) |
 | `MODEL_NOT_LOADED` | 503 | artifact missing or failed CPU load |
 | `STUB_RESPONSE` | 200 + header `X-TrackShift-Stub: true` | route is served by a stub; values are placeholders with correct shape |
 
@@ -153,7 +154,56 @@ Every pass probability is attached to exactly one checkpoint (§19). A value pre
 
 `pit_state` ∈ `ON_TRACK | PIT_IN | PIT_LANE | PIT_OUT | UNKNOWN`. `race_control_state` ∈ `GREEN | YELLOW | DOUBLE_YELLOW | VSC | SC | RED | UNKNOWN`. When `normal_race_model_eligible` is false, every model field in that step is `null` with `reason: "not normal-race eligible"` — the models are not defined there, and the UI shows the gate rather than a number.
 
-### 3.10 `RegulationEra`
+### 3.10 `PowerEnvelope` — the speed-dependent cap
+
+```json
+{
+  "normal":   { "breakpoints_kmh": [0, 290, 340], "max_power_kw": [350, 350, 0] },
+  "override": { "breakpoints_kmh": [0, 337, 355], "max_power_kw": [350, 350, 0] },
+  "separation_speed_kmh": 290.0,
+  "provenance": "RULE",
+  "verified": false,
+  "source": "reported values, pending FIA document citation"
+}
+```
+
+Maximum electrical deployment is a **function of speed**, not a constant (§20.1). Evaluate by linear interpolation between breakpoints, clamped outside the range. The two curves coincide at low speed and separate above `separation_speed_kmh` — below that speed, override confers no power advantage and mode is not observable (§20.2).
+
+`verified: false` means the numbers are placeholders. Any UI element derived from them must carry an "unverified regulation" badge, and the page must not describe the system as legal by construction (§57).
+
+Values shown are illustrative of the shape; the real curve comes from `config/rules/2026/<event>.yaml`.
+
+### 3.11 `ErsState` — estimated electrical state
+
+```json
+{
+  "ers_soc_est_mj":            { "mean": 3.42, "low": 3.05, "high": 3.80, "provenance": "SIMULATED", "unit": "MJ" },
+  "ers_store_capacity_mj":     { "value": 4.00, "provenance": "RULE", "unit": "MJ" },
+  "ers_deploy_budget_remaining_est_mj":  { "mean": 1.18, "low": 0.90, "high": 1.46, "provenance": "SIMULATED", "unit": "MJ" },
+  "ers_harvest_budget_remaining_est_mj": { "mean": 0.55, "low": 0.30, "high": 0.80, "provenance": "SIMULATED", "unit": "MJ" },
+  "ers_energy_used_est_mj":    { "mean": 2.82, "provenance": "SIMULATED", "unit": "MJ" },
+  "ers_energy_harvested_est_mj": { "mean": 0.94, "provenance": "SIMULATED", "unit": "MJ" },
+  "ers_deploy_power_est_kw":   { "mean": 210.0, "low": 150.0, "high": 260.0, "provenance": "SIMULATED", "unit": "kW" },
+  "ers_harvest_power_est_kw":  { "mean": 0.0, "low": 0.0, "high": 20.0, "provenance": "SIMULATED", "unit": "kW" },
+  "cap_kw":                    { "value": 312.0, "provenance": "RULE", "unit": "kW" },
+  "applicable_mode":           "NORMAL",
+  "headroom_kw":               { "value": 102.0, "provenance": "DERIVED", "unit": "kW" },
+  "ers_mode_inferred":         "NORMAL",
+  "override_active_inferred":  { "value": 0.08, "provenance": "INFERRED" },
+  "discriminable":             true,
+  "envelope_violation":        false
+}
+```
+
+Every `ers_*_est_*` field is an estimate from the energy twin (M14), never a measurement. The `_est` suffix is part of the field name and must not be stripped for display. Label these "estimated", never "battery", "SOC", or "measured" (§58).
+
+`cap_kw` is the regulatory maximum at the car's **current speed** under `applicable_mode` — it moves continuously as the car accelerates. `headroom_kw` is `cap_kw − ers_deploy_power_est_kw`; a small or negative headroom is the interesting case and is what the UI should draw attention to.
+
+`discriminable` is false below `separation_speed_kmh`. When false, `ers_mode_inferred` is `UNKNOWN` and `override_active_inferred` is `null` — the UI must show "unknown", never "normal" (§20.2).
+
+`envelope_violation: true` means the estimate exceeded the override cap, which indicates a **twin calibration fault**, not a rule breach by the car (§28.1). Surface it as a data-quality warning, not as a car behaviour.
+
+### 3.12 `RegulationEra`
 
 ```json
 { "era": "2026", "historical_drs_eligible": null, "historical_drs_open": null, "overtake_eligible": true, "overtake_state": "ARMED" }
@@ -187,6 +237,10 @@ What the UI shows → which route → which model.
 | Rival policy picker | `GET /simulate/policies` | M27 |
 | Race-control / pit / eligibility-gate badge (greys every model panel when false) | inside timeline `race_control` | M02 (C7) |
 | Fuel-load estimate gauge, tagged INFERRED | inside timeline; `POST /twin/energy_state` | M34 (C5) |
+| Power-envelope curve overlaid on the speed trace (cap vs actual, both modes) | `GET /rules/{event}/power_envelope` | M18, M19 |
+| ERS store / remaining-allowance gauges in MJ, tagged SIMULATED | inside timeline `ers`; `POST /twin/energy_state` | M14 (C5) |
+| Live cap and headroom readout (cap moves with speed) | inside timeline `ers.cap_kw` | M19 (C3) |
+| Override-detected badge on the rival, with probability | inside timeline `ers.override_active_inferred` | M35 (C5) |
 | ERS deployment / harvest estimate strip, tagged SIMULATED | inside timeline; `POST /twin/energy_state` | M14 (C5) |
 | Decision-checkpoint chips on the pass panel (DETECTION / ACTIVATION / BRAKING) | inside timeline `pass` | M07, M10 (C4, C6) |
 | Wind head / cross arrows on the map, corner type overlay | `GET /track/{event}` + timeline `weather` | M33, M03 (C1) |
@@ -241,14 +295,56 @@ The rule configuration as loaded by M18, with sources, for the rule panel.
 {
   "event": "british_grand_prix", "year": 2026, "config_version": "rules-2026-bgp-r3",
   "regulation_snapshot": { "section_issues": ["..."], "effective_for_event": "...", "source_documents": ["..."], "retrieved_at": "..." },
-  "overtake": { "enabled": true, "detection_gap_s": { "value": 1.0, "provenance": "RULE", "unit": "s", "source": "..." }, "zones": [ { "zone": 1, "detection_line_m": 2890.0, "activation_line_m": 3020.0 } ] },
-  "power": { "envelopes": [{ "regime": "NORMAL", "speed_breakpoints": ["..."], "power_limit_kw": ["..."], "source": "..." }], "competition_adjustments": [] },
-  "energy": { "store_bounds_kj": "...", "recharge_budget": "...", "source": "..." },
-  "race_control": { "overtake_disabled": false }
+  "overtake": {
+    "enabled": true,
+    "detection_gap_s": { "value": 1.0, "provenance": "RULE", "unit": "s", "source": "FIA Sporting Regulations 2026 Art. 22.7" },
+    "zones": [ { "zone": 1, "detection_line_m": 2890.0, "activation_line_m": 3020.0 } ]
+  },
+  "power_envelope": {
+    "normal":   { "breakpoints_kmh": [0, 290, 340], "max_power_kw": [350, 350, 0], "source": "...", "verified": false },
+    "override": { "breakpoints_kmh": [0, 337, 355], "max_power_kw": [350, 350, 0], "source": "...", "verified": false },
+    "separation_speed_kmh": 290.0,
+    "competition_adjustments": [],
+    "provenance": "RULE"
+  },
+  "energy": {
+    "deploy_limit_per_lap_mj":  { "value": 4.0, "provenance": "RULE", "unit": "MJ", "source": "...", "verified": false },
+    "harvest_limit_per_lap_mj": { "value": 2.0, "provenance": "RULE", "unit": "MJ", "source": "...", "verified": false },
+    "store_capacity_mj":        { "value": 4.0, "provenance": "RULE", "unit": "MJ", "source": "...", "verified": false },
+    "accounting_window": "lap"
+  },
+  "race_control": { "overtake_disabled": false },
+  "unverified_keys": ["power_envelope.normal", "power_envelope.override", "energy.deploy_limit_per_lap_mj", "energy.harvest_limit_per_lap_mj", "energy.store_capacity_mj"]
 }
 ```
 
 Numbers above are placeholders; real values come from the YAML with their sources. The UI must render the regulation snapshot, configuration version, and source for a selected rule on hover or in the panel (§21).
+
+**Power is not a single number** (§20.1). `power_envelope` is a pair of piecewise-linear curves, and the UI should draw them rather than print a peak figure — the shape is the point. `unverified_keys` lists every key whose `verified` is false; each must be badged, and the page must not claim the system is legal by construction while that list is non-empty (§57).
+
+Energy budgets are in **MJ**, matching how the regulations state them. Per-segment deltas elsewhere in this API remain in kJ; the unit is always in the field name.
+
+### 5.3a `GET /rules/{event}/power_envelope`
+
+The envelope alone, sampled for plotting, so the UI does not re-implement interpolation.
+
+Query: `mode` (`normal|override|both`, default `both`), `step_kmh` (default 5).
+
+```json
+{
+  "event": "british_grand_prix",
+  "separation_speed_kmh": 290.0,
+  "curves": {
+    "normal":   [ { "speed_kmh": 0.0, "max_power_kw": 350.0 }, { "speed_kmh": 5.0, "max_power_kw": 350.0 }, "..." ],
+    "override": [ { "speed_kmh": 0.0, "max_power_kw": 350.0 }, "..." ]
+  },
+  "breakpoints": { "normal": [0, 290, 340], "override": [0, 337, 355] },
+  "provenance": "RULE", "verified": false,
+  "model_version": "rules-2026-bgp-r3"
+}
+```
+
+Sampled values come from the same `max_electrical_power_kw` function the DP and simulator use (C3) — there is exactly one implementation of this curve in the system, so the plotted line is the line the optimiser actually saw.
 
 ### 5.4 `GET /battles`
 
@@ -337,9 +433,16 @@ Query: `include_draws=false` (set true to include uncertainty draws).
         "brake_on": false,
         "braking_intensity_proxy": { "value": 0.0, "provenance": "DERIVED" },
         "tyre": { "compound": "MEDIUM", "life_laps": 12, "stint": 2, "degradation_proxy": { "value": 0.31, "provenance": "DERIVED" } },
-        "energy_kj":        { "mean": 1420.0, "low": 1310.0, "high": 1535.0, "provenance": "SIMULATED", "unit": "kJ" },
-        "ers_deployment_kw": { "mean": 210.0, "low": 150.0, "high": 260.0, "provenance": "SIMULATED", "unit": "kW" },
-        "ers_harvest_kw":    { "mean": 0.0,   "low": 0.0,   "high": 20.0,  "provenance": "SIMULATED", "unit": "kW" },
+        "ers": {
+          "ers_soc_est_mj":           { "mean": 3.42, "low": 3.05, "high": 3.80, "provenance": "SIMULATED", "unit": "MJ" },
+          "ers_deploy_budget_remaining_est_mj":  { "mean": 1.18, "low": 0.90, "high": 1.46, "provenance": "SIMULATED", "unit": "MJ" },
+          "ers_deploy_power_est_kw":  { "mean": 210.0, "low": 150.0, "high": 260.0, "provenance": "SIMULATED", "unit": "kW" },
+          "ers_harvest_power_est_kw": { "mean": 0.0, "low": 0.0, "high": 20.0, "provenance": "SIMULATED", "unit": "kW" },
+          "cap_kw":                   { "value": 312.0, "provenance": "RULE", "unit": "kW" },
+          "applicable_mode": "NORMAL", "headroom_kw": { "value": 102.0, "provenance": "DERIVED", "unit": "kW" },
+          "ers_mode_inferred": "NORMAL", "override_active_inferred": { "value": 0.08, "provenance": "INFERRED" },
+          "discriminable": true, "envelope_violation": false
+        },
         "fuel_kg":          { "mean": 48.2,   "low": 45.0,  "high": 51.5,  "provenance": "INFERRED",  "unit": "kg" }
       },
       "defender": {
@@ -348,9 +451,16 @@ Query: `include_draws=false` (set true to include uncertainty draws).
         "brake_on": false,
         "braking_intensity_proxy": { "value": 0.0, "provenance": "DERIVED" },
         "tyre": { "compound": "HARD", "life_laps": 16, "stint": 2, "degradation_proxy": { "value": 0.27, "provenance": "DERIVED" } },
-        "energy_kj":        { "mean": 1180.0, "low": 1040.0, "high": 1330.0, "provenance": "SIMULATED", "unit": "kJ" },
-        "ers_deployment_kw": { "mean": 140.0, "low": 90.0,  "high": 200.0, "provenance": "SIMULATED", "unit": "kW" },
-        "ers_harvest_kw":    { "mean": 0.0,   "low": 0.0,   "high": 20.0,  "provenance": "SIMULATED", "unit": "kW" },
+        "ers": {
+          "ers_soc_est_mj":           { "mean": 2.61, "low": 2.20, "high": 3.02, "provenance": "SIMULATED", "unit": "MJ" },
+          "ers_deploy_budget_remaining_est_mj":  { "mean": 0.09, "low": 0.02, "high": 0.20, "provenance": "SIMULATED", "unit": "MJ" },
+          "ers_deploy_power_est_kw":  { "mean": 318.0, "low": 270.0, "high": 360.0, "provenance": "SIMULATED", "unit": "kW" },
+          "ers_harvest_power_est_kw": { "mean": 0.0, "low": 0.0, "high": 20.0, "provenance": "SIMULATED", "unit": "kW" },
+          "cap_kw":                   { "value": 312.0, "provenance": "RULE", "unit": "kW" },
+          "applicable_mode": "NORMAL", "headroom_kw": { "value": -6.0, "provenance": "DERIVED", "unit": "kW" },
+          "ers_mode_inferred": "OVERRIDE", "override_active_inferred": { "value": 0.71, "provenance": "INFERRED" },
+          "discriminable": true, "envelope_violation": false
+        },
         "fuel_kg":          { "mean": 47.6,   "low": 44.4,  "high": 50.9,  "provenance": "INFERRED",  "unit": "kg" }
       },
 
@@ -397,7 +507,11 @@ Notes for the UI:
 - `race_control` is the C7 gate (M02). When `normal_race_model_eligible` is false — SC, VSC, yellow/red restriction, any pit state, or unknown control state — every model block (`baseline_residuals`, `rival_state`, `eligibility`, `pass`, `shadow_price_s_per_kj`, `recommended_action`) is `null` with a `reason`, because those models are not defined there (§12). The UI shows the gate, not a number. `race_control_transition_flag` / `pit_transition_flag` mark hard boundaries: no rolling quantity is computed across them.
 - `era` distinguishes DRS-era rows (2022–2025, `historical_drs_*`) from 2026 rows (`overtake_*`, from the rule engine only). Never present a historical DRS value as an Overtake state (§41, §58).
 - `weather` is track-relative (M33): head/cross components are wind projected onto `geometry.track_heading_deg`. Raw wind direction is not in the payload because it is not comparable between segments.
-- `fuel_kg` is `INFERRED` from a causal estimator (M34); `ers_deployment_kw` / `ers_harvest_kw` are `SIMULATED` (M14). All carry uncertainty and are never labelled observed (§11).
+- `fuel_kg` is `INFERRED` from a causal estimator (M34); every `ers.*_est_*` field is `SIMULATED` (M14). All carry uncertainty and are never labelled observed (§11).
+- `ers.cap_kw` is the regulatory maximum **at this step's speed** under `applicable_mode` (§20.1) — it is not a constant, and it changes down a straight even when nothing else does. `headroom_kw` is the distance to that cap; near-zero or negative headroom is the interesting state to surface.
+- `ers.override_active_inferred` (M35) is an inference from comparing estimated power against the normal-mode cap (§20.2), not an observation. In the defender block above, the estimate sits above the normal cap, which is what drives `ers_mode_inferred: "OVERRIDE"`. Show it as a probability with an "inferred" badge; never state that a rival *is* in override.
+- `ers.discriminable: false` (below the envelope-separation speed) forces `ers_mode_inferred: "UNKNOWN"` and a `null` probability. Render "unknown" — not "normal" (§20.2).
+- `ers.envelope_violation: true` is a **twin calibration warning**, not a regulatory breach by the car (§28.1). It belongs in a data-quality indicator, never in a "car exceeded the limit" message.
 - `pass.is_opportunity` is true only on segments that are rows in the overtake-opportunity dataset (M07). Elsewhere the whole `pass` block is `null`. When true, `checkpoints` holds one entry per decision checkpoint (§19); a checkpoint not yet reached at this step has `reached: false` and `null` probability. A DETECTION probability was computed from Detection-Line information only — it does not change when later checkpoints are reached; the UI shows all three side by side as they become available.
 - `rival_state.merged` lists any states merged per §25 (e.g. `["CONSERVING","DERATING"]`). If non-empty, `p` has fewer keys.
 - `live_safe` is true when every value in the step was computable from information available at that timestamp (§44). A retrospective step (e.g. one using the known outcome for labelling) is `false` and must be visually distinguished.
@@ -473,7 +587,7 @@ Response: the `rival_state` object from 5.5.
 
 C5. ΔE → Δt for a segment and action.
 
-Request: `{ "state": {"...StrategicState"}, "action": {"...Action"}, "context": { "entry_speed_kmh": 287.0, "tyre_compound": "MEDIUM", "tyre_life_laps": 12, "tyre_performance_state": "...", "fuel_proxy_lap": 31, "aero_state": "NORMAL", "power_envelope_regime": "NORMAL" } }`
+Request: `{ "state": {"...StrategicState"}, "action": {"...Action"}, "context": { "entry_speed_kmh": 287.0, "tyre_compound": "MEDIUM", "tyre_life_laps": 12, "tyre_performance_state": "...", "fuel_proxy_lap": 31, "aero_state": "NORMAL", "applicable_mode": "NORMAL" } }`
 
 Response:
 
@@ -660,6 +774,7 @@ What the UI may and may not send to live routes.
 | source-gated channels (`brake_pressure`, `steering_angle`, `tyre_temperature`, `tyre_pressure`, `brake_temperature`, `damage`, `fuel_consumption`) | only when the registry marks a documented continuous source; never zero-filled | §11 |
 | `pit_stop_duration_s_offline`, `pass_attempted`, outcome distance | no — audit / label only | §11, §19 |
 | raw `wind_direction_deg` | no — send the track-relative head/cross components | §12, §39 |
+| a hardcoded power cap from the client | no — the cap is server-side, from the one evaluator in C3 | §20.1, §32 |
 
 The feature registry (`config/feature_registry.yaml`, M31) is the source of truth for `live_safe`, `decision checkpoint`, `source-gated`, `availability scope`, causal status, counterfactual safety, uncertainty field, regulation version, and interaction group, and is exported at `GET /meta` under `feature_registry_version`.
 
@@ -727,7 +842,13 @@ The UI is part of what makes claims true or false (§57, §58). These are not op
 | Show which decision checkpoint a pass probability belongs to; never merge DETECTION / ACTIVATION / BRAKING into one number | §19 |
 | Show DRS-era rows (2022–2025) with a "historical DRS" badge, never the 2026 Overtake iconography | §41, §58 |
 | Render wind as head / cross components relative to the track, not a compass direction | §12, §39 |
-| Show the applicable power-envelope regime and rule snapshot beside any action constraint | §21, §28 |
+| Draw the power envelope as a curve against speed; never present peak kW as "the" power limit | §20.1 |
+| Badge every number derived from an envelope key whose `verified` is false, and never claim legality by construction while `unverified_keys` is non-empty | §20.1, §57 |
+| Label ERS fields "estimated"; keep the `_est` suffix meaning visible; never write "battery", "SOC", or "measured" | §11, §58 |
+| Show `override_active_inferred` as a probability with an "inferred" badge; show "unknown" when `discriminable` is false | §20.2 |
+| Present `envelope_violation` as a data-quality warning about our model, never as the car breaking a limit | §28.1 |
+| Use MJ for stored/accumulated energy and kW for power, matching the field names | §11 |
+| Show the applicable power-envelope regime and regulation snapshot (source documents, retrieval date) beside any action constraint | §21, §28 |
 | Label energy-to-unlock, eligibility fragility, and alternate-policy results as modelled or simulated rather than observed race facts | §22, §40, §56 |
 
 ---
@@ -739,6 +860,7 @@ The UI is part of what makes claims true or false (§57, §58). These are not op
 | `GET /meta`, `GET /validation` | aggregation | Tanveer |
 | `GET /track/{event}` | C1 + M18 | Tanveer |
 | `GET /rules/{event}` | M18 | Tanveer |
+| `GET /rules/{event}/power_envelope` | M18, M19 | Tanveer |
 | `POST /rules/legal_actions`, `POST /rules/eligibility` | C3 | Tanveer |
 | `POST /pass/predict` | C4 | Tanveer |
 | `POST /twin/segment_time`, `POST /twin/energy_state` | C5 | Tanveer |
@@ -759,7 +881,7 @@ src/trackshift/serve/
     app.py              app factory, /api/v1 prefix, error handlers, stub middleware   (T)
     schemas.py          the JSON shapes in §3 and §5 as typed models                    (T scaffolds, both extend)
     routes_track.py     (T)
-    routes_rules.py     (T)
+    routes_rules.py     (T)  includes /power_envelope
     routes_pass.py      (T)
     routes_twin.py      (T)
     routes_battles.py   (R)
@@ -807,6 +929,9 @@ A model is "ready for UI" when every box is ticked. Tick per model.
 | `CHECKPOINT_VIOLATION` raised for later-checkpoint features | ☐ | — | — | — | — | — | — |
 | `NOT_MODEL_ELIGIBLE` raised / `null` returned outside normal-race rows | ☐ | ☐ | ☐ | — | ☐ | ☐ | ☐ |
 | Causal cutoff recorded (`causal_cutoff_distance_m`, `feature_cutoff_distance_m`) | ☐ | ☐ | ☐ | — | — | — | — |
+| Envelope evaluated only via C3 `max_electrical_power_kw`; no local constant | — | — | ☐ | ☐ | ☐ | ☐ | ☐ |
+| `cap_kw` / `applicable_mode` returned wherever a deploy level appears | — | — | ☐ | ☐ | ☐ | ☐ | ☐ |
+| `verified: false` propagated to every derived response | — | — | ☐ | ☐ | ☐ | ☐ | ☐ |
 
 ---
 
