@@ -34,7 +34,7 @@ from dataclasses import dataclass, field
 from typing import Any, Mapping, Sequence
 
 from .candidates import CANDIDATES, DEFAULT_SEED, PassModel, configure_threads
-from .features import build_matrix, select_features
+from .features import audit_feature_matrix, build_matrix, select_features
 from .metrics import evaluate
 
 __all__ = [
@@ -283,6 +283,7 @@ def fit_cell(
         selection = select_features(
             checkpoint, rows.columns, include_identity=include_identity, dtypes=rows.dtypes
         )
+        audit_feature_matrix(rows, selection)
 
         splits = {}
         for role, index in (("train", fold.train), ("validation", fold.validation),
