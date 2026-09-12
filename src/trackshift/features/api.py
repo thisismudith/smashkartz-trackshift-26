@@ -13,6 +13,14 @@ from .pairwise import (
     PairwiseBuildResult,
     build_pairwise_features,
 )
+from .tyre_pace import (
+    TYRE_PACE_PROVENANCE,
+    TYRE_PACE_SCHEMA_VERSION,
+    TyrePaceConfig,
+    TyrePaceError,
+    build_tyre_pace_overlay,
+    load_tyre_pace_config,
+)
 
 __all__ = [
     "BattleBuildResult",
@@ -25,4 +33,10 @@ __all__ = [
     "PAIRWISE_FEATURE_SCHEMA_VERSION",
     "PairwiseBuildResult",
     "build_pairwise_features",
+    "TYRE_PACE_PROVENANCE",
+    "TYRE_PACE_SCHEMA_VERSION",
+    "TyrePaceConfig",
+    "TyrePaceError",
+    "build_tyre_pace_overlay",
+    "load_tyre_pace_config",
 ]

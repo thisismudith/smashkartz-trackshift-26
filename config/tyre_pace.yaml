@@ -1,0 +1,19 @@
+# M30 causal tyre pace context. This does not model a physical tyre sensor.
+schema_version: m30_tyre_pace_config_v1
+producer_version: m30_tyre_pace_v1
+scope:
+  years: [2026]
+  sessions: [Race, Sprint]
+proxy:
+  initial_baseline_retained_laps: 3
+  rolling_retained_laps: 5
+normalised_pace:
+  minimum_prior_samples: 3
+  similar_tyre_life_laps: 3
+fuel_context:
+  status: UNAVAILABLE_C5
+  note: >-
+    C5/M34 fuel-load estimates are not available. No assumed fuel correction is
+    applied: the proxy mixes tyre ageing, fuel burn, traffic, weather and other
+    unmodelled context effects.
+provenance: DERIVED
