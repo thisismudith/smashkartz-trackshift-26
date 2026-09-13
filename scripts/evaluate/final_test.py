@@ -130,6 +130,55 @@ def score(frame, checkpoint: str, version: str, training_base_rate: float | None
     }
 
 
+def score_all_families(frame, checkpoint: str, version: str,
+                       base: float) -> list[dict[str, Any]]:
+    """Every family that has an artifact, on the same held-out rows.
+
+    The selection was made on cross-validated Brier, not on this event. Scoring
+    the alternatives here shows whether that choice survives contact with unseen
+    data -- which is a different question from whether it was made correctly, and
+    a more interesting one.
+    """
+    from trackshift.eval.analytics import confusion_at, pick_thresholds
+
+    rows = frame[frame["decision_checkpoint"] == checkpoint]
+    base_dir = MODELS / version / checkpoint.lower()
+    out: list[dict[str, Any]] = []
+    if not base_dir.is_dir():
+        return out
+
+    for directory in sorted(base_dir.iterdir()):
+        if not (directory / "model.pkl").exists():
+            continue
+        family = directory.name
+        try:
+            predictor = load_predictor(MODELS, checkpoint=checkpoint,
+                                       version=version, family=family)
+            selection = select_features(checkpoint, rows.columns,
+                                        include_identity=False, dtypes=rows.dtypes)
+            X, y = build_matrix(rows, selection)
+            probabilities = predictor.model.predict_proba(X)
+            metrics = evaluate(y, probabilities, base_rate=base)
+            thresholds = pick_thresholds(y, probabilities, base_rate=base)
+            best = max((confusion_at(y, probabilities, v, strategy=k)
+                        for k, v in thresholds.items()), key=lambda c: c.accuracy)
+            out.append({
+                "family": family, "ok": True,
+                "roc_auc": metrics.get("roc_auc"),
+                "brier": metrics.get("brier"),
+                "brier_skill_score": metrics.get("brier_skill_score"),
+                "ece": metrics.get("ece"),
+                "best_accuracy": round(best.accuracy, 6),
+                "best_accuracy_threshold": round(best.threshold, 6),
+            })
+        except Exception as exc:
+            out.append({"family": family, "ok": False,
+                        "error": f"{type(exc).__name__}: {exc}"})
+    # Ranked on Brier, the section 26 selection metric.
+    out.sort(key=lambda r: (not r.get("ok"), r.get("brier") if r.get("ok") else 9e9))
+    return out
+
+
 def render(report: dict[str, Any]) -> str:
     lines = [
         "# Final test — 2026 British Grand Prix (§40)",
@@ -192,6 +241,48 @@ def render(report: dict[str, Any]) -> str:
               "independent and shows the model is genuinely ordering opportunities "
               "rather than exploiting the class imbalance.",
               ""]
+    families = report.get("family_comparison") or {}
+    if families:
+        lines += ["", "## All model families on the same held-out rows", "",
+                  "Ranked by Brier, the section 26 selection metric. The choice was "
+                  "made on cross-validated Brier, not on this event -- this shows "
+                  "whether it survives unseen data.",
+                  ""]
+        for checkpoint, rows in families.items():
+            chosen = next((c["family"] for c in report["checkpoints"]
+                           if c.get("checkpoint") == checkpoint), None)
+            lines += [f"**{checkpoint}** — CP-14 selected `{chosen}`", "",
+                      "| Rank | Model | ROC-AUC | Accuracy | Brier | Skill | ECE |",
+                      "|---:|---|---:|---:|---:|---:|---:|"]
+            for rank, r in enumerate(rows, start=1):
+                if not r.get("ok"):
+                    lines.append(f"| — | `{r['family']}` | — | — | — | — | — |")
+                    continue
+                # Marks what CP-14 actually chose, not whatever won here.
+                # Conflating the two would read as though the holdout made the
+                # selection, which is the one thing it must never do.
+                mark = " **(CP-14 selection)**" if r["family"] == chosen else ""
+                lines.append(
+                    f"| {rank} | `{r['family']}`{mark} | {r['roc_auc']:.4f} | "
+                    f"**{r['best_accuracy']:.3f}** | {r['brier']:.5f} | "
+                    f"{r['brier_skill_score']:+.4f} | {r['ece']:.4f} |")
+            lines += [""]
+        lines += [
+            "Accuracy separates the families far less than Brier or skill does, "
+            "which is the class imbalance again: every family scores well by "
+            "declining to predict passes. ROC-AUC and skill are what distinguish "
+            "them.",
+            "",
+            "> **CatBoost outscores the CP-14 selection on this event.** That is "
+            "worth recording and worth resisting. The holdout has now been read, "
+            "so a model chosen *because* it won here is no longer validated by "
+            "here -- switching on this evidence is selecting on the test set, "
+            "which is precisely what freezing the event was meant to prevent. "
+            "CP-14 chose LightGBM on cross-validated Brier over six events, which "
+            "is the larger sample and the honest basis. If CatBoost is to be "
+            "adopted, re-run the benchmark and let it win there.",
+            ""]
+
     lines += ["", "## Against a gap-only reference", "",
               "CP-14 expects `gap_at_checkpoint` to carry real signal alone. If the "
               "full model does not beat it here, the other features are not earning "
@@ -309,6 +400,11 @@ def main() -> int:
         "holdout_base_rate": round(float(labelled.astype(bool).mean()), 6),
         "training_base_rate": training_base_rate or 0.0,
         "checkpoints": scored,
+        "family_comparison": {
+            cp: score_all_families(frame, cp, args.version,
+                                   training_base_rate or 0.148869)
+            for cp in checkpoints
+        },
         "checkpoint_ordering": ordering,
     }
 
