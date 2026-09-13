@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { SimStore } from "../store/simStore";
 import {
-  SimRenderer, type CameraMode, type GpuInfo, type GpuPreference, type PerfStats,
+  CAMERA_CONTROL_HELP, SimRenderer,
+  type CameraMode, type GpuInfo, type GpuPreference, type PerfStats,
 } from "../render/scene";
 import { parseTrackModel, type RawTrackModel } from "../data/manifest";
 import { defaultSimSource, type RuleSet } from "../data/source";
@@ -310,6 +311,22 @@ export default function SimCanvas() {
             preference={gpuPref}
             onPreferenceChange={setGpuPref}
           />
+        </details>
+
+        {/* The keyboard/mouse rig has real depth (WASD flight, boost, per-mode chase
+            panning, free-orbit) that a first-time viewer cannot discover by trial. The
+            list itself lives beside the input handlers in scene.ts so the two can never
+            drift apart -- this component only renders it. */}
+        <details className={styles.infoFold}>
+          <summary>Camera controls</summary>
+          <dl className={styles.cameraHelp}>
+            {CAMERA_CONTROL_HELP.map(({ keys, action }) => (
+              <div key={keys} className={styles.cameraHelpRow}>
+                <dt>{keys}</dt>
+                <dd>{action}</dd>
+              </div>
+            ))}
+          </dl>
         </details>
 
         {/* The focused car takes every pixel the controls above leave, because its

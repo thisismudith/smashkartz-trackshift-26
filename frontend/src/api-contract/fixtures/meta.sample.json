@@ -1,0 +1,15 @@
+{
+  "api_version": "1.0.0",
+  "git_commit": "3c5c3ac",
+  "mode": "replay",
+  "stubs": [],
+  "models": {
+    "pass": "pass-2026.03",
+    "rival": "rival-hsmm-2026.02",
+    "twin": "twin-event-2026.01",
+    "segment_time": "segtime-ridge-2026.01",
+    "rules": "rules-2026-bgp-r3",
+    "value": "dp-2026.01",
+    "planner": "beam-2026.01"
+  }
+}

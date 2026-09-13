@@ -75,6 +75,11 @@ export interface RawTrackSurface {
   zCm: (number | null)[];
   slopePermille: (number | null)[];
   camberPermille: (number | null)[];
+  /** Signed distance from the ring to drivable surface, this side, centimetres. Absent
+   * from any artifact built before the road-edge walk landed -- treated the same as an
+   * all-null array by parseTrackSurface, never as zero width. */
+  edgeLeftCm?: (number | null)[];
+  edgeRightCm?: (number | null)[];
   /** 1 per station, 1 = the raycast landed. */
   validMask: number[];
   residual: { stdM: number | null; maxM: number | null };
@@ -283,6 +288,10 @@ export function parseTrackSurface(raw: RawTrackModel): TrackSurface | null {
     zM,
     slope: dequantise(block.slopePermille, n, 1000),
     camber: dequantise(block.camberPermille, n, 1000),
+    // Both absent (pre-road-edge-walk artifact) dequantise to all-NaN, which is exactly
+    // "no measured edge" -- the same absence semantics as slope/camber, no special case.
+    edgeLeftM: dequantise(block.edgeLeftCm, n, 100),
+    edgeRightM: dequantise(block.edgeRightCm, n, 100),
     valid,
     residual: {
       stdM: finiteOrNull(block.residual?.stdM),
@@ -431,51 +440,45 @@ export function gridSlotsOf(track: TrackModel): GridSlot[] {
 }
 
 /**
- * How many metres of drivable road either side of the ring the ARTIFACT has MEASURED
- * at `stationM` -- or null when this circuit is drawn as the procedural ribbon, where
- * the question does not arise.
+ * How many metres of drivable road THIS SIDE of the ring the ARTIFACT has MEASURED at
+ * `stationM` -- or null when this circuit is drawn as the procedural ribbon (the
+ * question does not arise there), or when this specific side's walk found no road.
  *
  * THIS IS NOT halfWidthAt(). The two answer different questions and only one of them
  * is a measurement:
  *
- *   halfWidthAt()  is the RIBBON's half-width. The artifact states its own provenance:
- *                  the SHAPE is "DERIVED from per-station lateral extremes and corner
- *                  markers" but the SCALE is "RULE: HALF_WIDTH_MIN_M..HALF_WIDTH_MAX_M
- *                  (6.0-7.5 m), a stated constant ... The position feed does not
- *                  measure track width." On a circuit drawn as the ribbon that is
- *                  self-consistent -- the road the viewer sees IS that half-width, so a
- *                  car placed inside it is on the road it is drawn on.
+ *   halfWidthAt()  is the RIBBON's half-width -- symmetric by construction, RULE-scaled
+ *                  (6.0-7.5 m). Self-consistent on a circuit drawn as the ribbon: the
+ *                  road the viewer sees IS that half-width.
  *
- *   this function  is about the road a REAL CIRCUIT MODEL has. Once a `surface` block
- *                  is present the viewer is looking at the GLB, not the ribbon, and the
- *                  RULE half-width says nothing about it. Measured at Silverstone by
- *                  raycasting the shipped GLB along the ring's own left normal, in
- *                  0.25 m steps, with the same scorer the bake uses: at the front of
- *                  the grid (stations 5770-5818 m) the asphalt ends 1.75-2.00 m to the
- *                  LEFT of the ring and runs 15.0-17.5 m to the RIGHT. The ring there
- *                  is the RACING LINE out of Club, not the road centre -- the road
- *                  centre is a measured 6.5 m to the right of it -- while the RULE
- *                  half-width claims a symmetric 6.33-7.04 m. The feed's own telemetry
- *                  agrees: over 1,108,923 position samples from the two British packs,
- *                  the largest lateral ever recorded anywhere in that 168 m stretch is
- *                  +2.79 m.
+ *   this function  is about the road a REAL CIRCUIT MODEL has, and it is NOT symmetric.
+ *                  Measured at Silverstone by walking outward from the ring along its
+ *                  own normal in 0.5 m steps with the same scorer the bake uses, one
+ *                  walk per side: at the front of the grid (stations 5770-5818 m) the
+ *                  asphalt ends 1.75-2.00 m to the LEFT of the ring and runs 15.0-17.5 m
+ *                  to the RIGHT. The ring there is the RACING LINE out of Club, not the
+ *                  road centre -- the road centre is a measured 6.5 m to the right of it
+ *                  -- while the RULE half-width claims a symmetric 6.33-7.04 m. The
+ *                  feed's own telemetry agrees: over 1,108,923 position samples from the
+ *                  two British packs, the largest lateral ever recorded anywhere in that
+ *                  168 m stretch is +2.79 m -- inside the 1.75-2.00 m left edge, nowhere
+ *                  near the RULE's claimed 6+ m either way.
  *
- * So the answer today is 0 for every surfaced circuit, and that is a measurement, not a
- * placeholder: `surface_block()` in scripts/simdata/glb_surface.py bakes exactly ONE
- * probe per station -- the ring itself -- and emits height, slope and camber. No
- * lateral extent is measured, therefore none may be claimed. (`camberPermille` is the
- * nearest thing to a width and it is not one: it is non-null wherever probes at one of
- * 2.0/1.5/1.0 m landed, and which baseline won is not published.)
- *
- * What would make this return a real number: the bake emitting a per-station SIGNED
- * road extent -- left and right separately, because the ring is the racing line and a
- * single symmetric half-width cannot express the 6.5 m offset measured above. That is
- * also when this grows a `stationM` argument; it has none today precisely because the
- * artifact carries nothing that varies along the lap. See the handoff.
+ * `sign` selects the side: +1 (left of travel) reads edgeLeftM, -1 (right) reads
+ * edgeRightM -- the same "+ is left" convention as every other lateral in the pipeline.
+ * A side the walk could not measure (no drivable surface reachable outward, or this
+ * circuit predates the road-edge walk) is null on THAT side only; the other side may
+ * still answer. Never averaged, never substituted for each other: Silverstone's two
+ * sides differ by an order of magnitude at the grid.
  */
-export function measuredLateralRoomM(track: Pick<TrackModel, "surface">): number | null {
+export function measuredLateralRoomM(
+  track: Pick<TrackModel, "surface" | "lengthMetres" | "x">, stationM: number, sign: number,
+): number | null {
   if (!track.surface) return null;
-  return 0;
+  const sample = surfaceAt(track, stationM);
+  if (!sample) return null;
+  const room = sign >= 0 ? sample.edgeLeftM : sample.edgeRightM;
+  return room !== null && Number.isFinite(room) && room > 0 ? room : null;
 }
 
 export function parseTrackModel(raw: RawTrackModel): ParsedTrackModel {
@@ -683,5 +686,8 @@ export function surfaceAt(
   };
   const zM = lerp(surface.zM);
   if (zM === null) return null;           // unreachable while valid[] agrees with zM
-  return { zM, slope: lerp(surface.slope), camber: lerp(surface.camber) };
+  return {
+    zM, slope: lerp(surface.slope), camber: lerp(surface.camber),
+    edgeLeftM: lerp(surface.edgeLeftM), edgeRightM: lerp(surface.edgeRightM),
+  };
 }

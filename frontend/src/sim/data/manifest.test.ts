@@ -422,6 +422,11 @@ function makeSurfaceRaw(over: Partial<RawTrackSurface> = {}): RawTrackSurface {
     zCm: [510, 520, 530],
     slopePermille: [10, 20, null],
     camberPermille: [null, 5, 5],
+    // Deliberately asymmetric and station-varying, so a test that swaps left/right or
+    // treats the value as constant across the ring is caught. Station 2 (index 2) has
+    // no measured left edge -- a side the walk did not reach -- to exercise the null path.
+    edgeLeftCm: [175, 300, null],
+    edgeRightCm: [1750, 1600, 1400],
     validMask: [1, 1, 1],
     residual: { stdM: 0.0508, maxM: 0.1652 },
     coverage: 1,
@@ -755,26 +760,54 @@ describe.skipIf(!shipped)("grid slots on every shipped artifact", () => {
   });
 });
 
-describe("measuredLateralRoomM: what the artifact has measured either side of the ring", () => {
-  it("answers null on a circuit drawn as the procedural ribbon", () => {
+describe("measuredLateralRoomM: what the artifact has measured on ONE side of the ring", () => {
+  it("answers null on a circuit drawn as the procedural ribbon, either side", () => {
     // Not 0 and not the RULE half-width: the question does not arise, because the road
     // the viewer sees IS the ribbon and halfWidthAt describes it exactly.
     const model = parseTrackModel(makeRaw());
     expect(model.surface).toBeNull();
-    expect(measuredLateralRoomM(model)).toBeNull();
+    expect(measuredLateralRoomM(model, 0, 1)).toBeNull();
+    expect(measuredLateralRoomM(model, 0, -1)).toBeNull();
   });
 
-  it("answers 0 once a real model is drawn, because the bake probes only the ring", () => {
+  it("reads the LEFT edge for a positive sign and the RIGHT edge for a negative one, never crossed", () => {
     const model = parseTrackModel(makeRaw({ surface: makeSurfaceRaw() }));
-    expect(model.surface).not.toBeNull();
-    expect(measuredLateralRoomM(model)).toBe(0);
+    // station 0: edgeLeftCm=175 -> 1.75 m, edgeRightCm=1750 -> 17.5 m -- the exact
+    // Silverstone-grid asymmetry this function exists to preserve.
+    expect(measuredLateralRoomM(model, 0, 1)).toBeCloseTo(1.75, 6);
+    expect(measuredLateralRoomM(model, 0, -1)).toBeCloseTo(17.5, 6);
   });
 
-  it("says the same thing about the one shipped circuit that has a real model", () => {
+  it("varies along the station axis rather than returning one fixed number", () => {
+    const model = parseTrackModel(makeRaw({ surface: makeSurfaceRaw() }));
+    // Interpolated halfway between station 0 (1.75 m) and station 1 (3.0 m) -- both
+    // sides of THAT interval are measured, unlike the 1 -> 2 interval used below.
+    expect(measuredLateralRoomM(model, 0, 1)).toBeCloseTo(1.75, 6);
+    expect(measuredLateralRoomM(model, 0.5, 1)).toBeCloseTo(2.375, 6);
+  });
+
+  it("answers null on a side the road-edge walk did not reach, independently of the other side", () => {
+    const model = parseTrackModel(makeRaw({ surface: makeSurfaceRaw() }));
+    // station 2's edgeLeftCm is null (no measured left edge there); its right edge
+    // (14.0 m) is still a real answer -- the two sides never borrow from each other.
+    expect(measuredLateralRoomM(model, 2, 1)).toBeNull();
+    expect(measuredLateralRoomM(model, 2, -1)).toBeCloseTo(14.0, 6);
+  });
+
+  it("answers null for every shipped circuit built before the road-edge walk existed", () => {
     for (const { slug, raw } of parseableModels()) {
       const model = parseTrackModel(raw);
-      const room = measuredLateralRoomM(model);
-      expect(room, slug).toBe(raw.surface ? 0 : null);
+      if (!raw.surface) {
+        expect(measuredLateralRoomM(model, 0, 1), slug).toBeNull();
+        continue;
+      }
+      // A shipped surface predating edgeLeftCm/edgeRightCm dequantises to all-NaN,
+      // which reads as null on both sides -- never as a fabricated width.
+      const hasEdges = Array.isArray((raw.surface as { edgeLeftCm?: unknown }).edgeLeftCm);
+      if (!hasEdges) {
+        expect(measuredLateralRoomM(model, 0, 1), slug).toBeNull();
+        expect(measuredLateralRoomM(model, 0, -1), slug).toBeNull();
+      }
     }
   });
 });

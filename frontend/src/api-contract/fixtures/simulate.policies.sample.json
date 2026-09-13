@@ -1,0 +1,14 @@
+{
+  "policies": [
+    { "name": "DEFEND_CONSERVE", "description": "holds energy, deploys only on Activation Line", "parameters": { "deploy_level_default": 0.25 } },
+    { "name": "DEFEND_MIRROR", "description": "matches attacker deployment one segment late", "parameters": {} },
+    { "name": "ATTACK_GREEDY", "description": "counterattack policy after being passed (AGENTS.md §23)", "parameters": {} }
+  ],
+  "provenance": "RULE",
+  "model_version": "sim-2026.01",
+  "versions": {
+    "api_version": "1.0.0",
+    "git_commit": "3c5c3ac",
+    "models": { "sim": "sim-2026.01" }
+  }
+}

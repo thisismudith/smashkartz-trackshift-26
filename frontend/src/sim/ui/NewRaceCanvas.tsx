@@ -20,6 +20,9 @@ interface SimIndex {
 interface CatalogueDriver {
   code: string; team: string | null; colour: string | null; number: string | null;
   firstName?: string | null; lastName?: string | null;
+  /** Sessions this exact (code, team) pairing was seen in -- see driver_registry's own
+   * docstring in scripts/simdata/catalogue.py. Used only to pick ONE row per code below. */
+  sessions?: number;
 }
 interface CatalogueTeam { team: string; colour: string }
 interface WeatherBand { min: number; median: number; max: number }
@@ -40,6 +43,21 @@ interface CatalogueTrack {
 interface Catalogue { drivers: CatalogueDriver[]; teams: CatalogueTeam[]; tracks: CatalogueTrack[] }
 
 const CAMERA_MODES: CameraMode[] = ["broadcast", "onboard", "helicopter", "orbit"];
+
+/** One row per driver code, keeping whichever (code, team) pairing has the most
+ * sessions -- see the registry's own (code, team) keying, documented where this is
+ * called. Stable in the input's own first-seen order, so the roster reads the same
+ * way run to run. */
+function dedupeByCode(drivers: CatalogueDriver[]): CatalogueDriver[] {
+  const best = new Map<string, CatalogueDriver>();
+  const order: string[] = [];
+  for (const d of drivers) {
+    const prior = best.get(d.code);
+    if (!prior) order.push(d.code);
+    if (!prior || (d.sessions ?? 0) > (prior.sessions ?? 0)) best.set(d.code, d);
+  }
+  return order.map((code) => best.get(code)!);
+}
 
 /**
  * The New Race configurator: bounded entirely by the catalogue (plan section 9) --
@@ -179,10 +197,19 @@ export default function NewRaceCanvas() {
    * registry: that registry is the union over every session, so it carries reserve and
    * rookie drivers who only ran a Friday practice. Artifacts built before the catalogue
    * carried `entries` fall back to the registry so an old build still runs.
+   *
+   * The registry itself is keyed (code, team), DELIBERATELY carrying two rows for a
+   * driver who changed team mid-season (measured: LAW Racing Bulls -> Red Bull, ARO
+   * Audi -> Alpine, IWA Racing Bulls -> Red Bull) -- see driver_registry's docstring.
+   * A grid needs exactly one car per driver CODE, so the fallback collapses to the
+   * row with the most sessions (this driver's most representative team this season)
+   * before anything downstream keys a list or a race entry by `code` alone. Without
+   * this, React saw two rows sharing one key and one driver's row would silently
+   * freeze or vanish -- indistinguishable, from the grid, from a car stuck on GRID.
    */
   const entries: CatalogueEntry[] = track?.entries?.length
     ? track.entries
-    : (catalogue?.drivers ?? []).map((d) => ({
+    : dedupeByCode(catalogue?.drivers ?? []).map((d) => ({
         code: d.code, number: d.number, team: d.team, colour: d.colour,
         firstName: d.firstName ?? null, lastName: d.lastName ?? null,
       }));

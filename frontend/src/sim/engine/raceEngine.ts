@@ -498,13 +498,23 @@ export function runRace(config: RaceConfig): GeneratedRaceResult {
       const isPitLap = lap === pitLap.get(e.driver);
       let pitLossThisLap = 0;
       if (isPitLap) {
-        const pl = params.pitLoss[track.slug]?.netLossSeconds.value ?? 22;
-        pitLossThisLap = thisLapNeutral ? pl * 0.4 : pl; // a rough "free stop" discount
+        // Keyed by track.event (the display name fit_params.py groups by), same as every
+        // other per-track lookup in this file -- track.slug never matches an entry here and
+        // was silently forcing every stop, on every track, onto the two literals below.
+        const trackPit = params.pitLoss[track.event];
+        const green = trackPit?.netLossSeconds.value ?? 22;
+        // A stop taken under SC/VSC is typically a measured "free" stop (often a large
+        // NEGATIVE net loss vs. green) -- prefer that fitted per-track median; only fall
+        // back to a flat discount of the green-flag loss where too few neutralised stops
+        // were observed at this track to fit one.
+        pitLossThisLap = thisLapNeutral
+          ? trackPit?.neutralisedNetLossSeconds?.value ?? green * 0.4
+          : green;
       }
 
       const composed = composeLapTime(
         {
-          trackSlug: track.slug,
+          trackEvent: track.event,
           trackBaseSeconds: baseSeconds,
           driver: e.driver,
           team: e.team,

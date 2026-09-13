@@ -1,0 +1,55 @@
+{
+  "battles": [
+    {
+      "battle_id": "2026_GBR_Race_HAM_ANT_Battle03",
+      "year": 2026,
+      "event": "british_grand_prix",
+      "session": "Race",
+      "attacker": "HAM",
+      "defender": "ANT",
+      "attacker_team": "Ferrari",
+      "defender_team": "Mercedes",
+      "start_lap": 29,
+      "end_lap": 33,
+      "duration_segments": 148,
+      "duration_s": 312.4,
+      "minimum_distance_gap_m": 61.5,
+      "minimum_time_gap_s": null,
+      "maximum_closing_rate_mps": 3.2,
+      "detection_opportunities": 4,
+      "pass_attempted": true,
+      "pass_completed": true,
+      "bounded_by": "PASS",
+      "normal_race_only": true,
+      "provenance": "DERIVED"
+    },
+    {
+      "battle_id": "2026_GBR_Race_ANT_HAM_Battle04",
+      "year": 2026,
+      "event": "british_grand_prix",
+      "session": "Race",
+      "attacker": "ANT",
+      "defender": "HAM",
+      "attacker_team": "Mercedes",
+      "defender_team": "Ferrari",
+      "start_lap": 33,
+      "end_lap": 36,
+      "duration_segments": 90,
+      "duration_s": 198.1,
+      "minimum_distance_gap_m": 45.2,
+      "minimum_time_gap_s": null,
+      "maximum_closing_rate_mps": 2.6,
+      "detection_opportunities": 2,
+      "pass_attempted": true,
+      "pass_completed": false,
+      "bounded_by": "SESSION_END",
+      "normal_race_only": true,
+      "provenance": "DERIVED"
+    }
+  ],
+  "versions": {
+    "api_version": "1.0.0",
+    "git_commit": "3c5c3ac",
+    "models": { "rival": "rival-hsmm-2026.02" }
+  }
+}

@@ -145,6 +145,16 @@ export interface TrackSurface {
    * higher -- the same "+ is left of travel" convention as every lateral in the
    * pipeline. NaN where absent, which happens independently of zM. */
   camber: Float32Array;
+  /** Distance, metres, from the ring OUT to the edge of drivable surface on each side --
+   * the RING is the racing line here, not the road centre, so these are two independent
+   * measurements, never a symmetric half-width. Measured at Silverstone: at the grid
+   * (station ~5770-5818 m) the asphalt runs 1.75-2.00 m LEFT of the ring and 15.0-17.5 m
+   * RIGHT of it -- a car placed by a symmetric RULE half-width there sits on the grass or
+   * jammed against the kerb, which is exactly the defect this replaces. NaN where the
+   * walk could not take a single step on that side (no asphalt reachable outward), which
+   * is a fact worth keeping, not a zero. Independent of zM's own validity. */
+  edgeLeftM: Float32Array;
+  edgeRightM: Float32Array;
   /** 1 where the station has a measured height, 0 where it has none. */
   valid: Uint8Array;
   residual: { stdM: number | null; maxM: number | null };
@@ -166,11 +176,17 @@ export interface TrackSurface {
 }
 
 /** One station's baked surface. Every channel is optional EXCEPT the height: a station
- * can have a measured height and no measurable camber. */
+ * can have a measured height and no measurable camber, or a measured height and no
+ * measured road edge on either side. */
 export interface TrackSurfaceSample {
   zM: number;
   slope: number | null;
   camber: number | null;
+  /** Metres from the ring out to drivable surface, this side. Null, independently on
+   * either side, where the walk found no road that way -- never zero, and never the
+   * other side's value. */
+  edgeLeftM: number | null;
+  edgeRightM: number | null;
 }
 
 export interface TrackModel {

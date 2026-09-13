@@ -49,11 +49,13 @@ describe("codec", () => {
   });
 
   it("interpolates linearly between samples and holds at the ends", () => {
-    const buf = encodeSynthetic([0, 1000], [0, 100], [0, 0], [0, 200], [1, 1], [0, 0], [0, 100]);
+    // constant 360 kph (100 m/s) over 1 s covers exactly the 100 m station delta below,
+    // so this is a credible step -- see "rejects a step the speed channel contradicts".
+    const buf = encodeSynthetic([0, 1000], [0, 100], [0, 0], [360, 360], [1, 1], [0, 0], [0, 100]);
     const lap = decodeLap(buf, 0, 2);
     const mid = sampleLap(lap, 0.5, 5000)!;
     expect(mid.stationM).toBeCloseTo(50, 5);
-    expect(mid.speedKph).toBeCloseTo(100, 5);
+    expect(mid.speedKph).toBeCloseTo(360, 5);
     const before = sampleLap(lap, -1, 5000)!;
     expect(before.stationM).toBe(0);
     const after = sampleLap(lap, 5, 5000)!;
@@ -74,6 +76,35 @@ describe("codec", () => {
     const buf = encodeSynthetic([], [], [], [], [], [], []);
     const lap = decodeLap(buf, 0, 0);
     expect(sampleLap(lap, 0, 5000)).toBeNull();
+  });
+
+  /**
+   * Measured live, 2026 Australian GP Race, car index 0: two adjacent DECODED samples
+   * 0.30 s apart landed 50 m apart even though both read a plausible ~250 kph -- an
+   * implied ~600 kph, faster than any 2026 car reaches. sampleLap blended it as a
+   * normal step, which is exactly the sweep-backward-then-teleport the fix log
+   * describes. The station channel disagreeing with the speed channel by more than
+   * physics allows is not a real position change.
+   */
+  it("rejects a step the speed channel contradicts, holding at the prior station", () => {
+    const buf = encodeSynthetic(
+      [0, 300], [100, 180], [0, 0], [250, 250], [7, 7], [0, 0], [100, 100],
+    );
+    const lap = decodeLap(buf, 0, 2);
+    const mid = sampleLap(lap, 0.15, 5000)!;
+    expect(mid.stationM).toBeCloseTo(100, 5);
+    // the non-positional channels are still real measurements and stay interpolated
+    expect(mid.speedKph).toBeCloseTo(250, 5);
+  });
+
+  it("still accepts a large but speed-credible step", () => {
+    // 300 kph (83.3 m/s) for 0.3 s covers 25 m -- comfortably explains this step
+    const buf = encodeSynthetic(
+      [0, 300], [100, 125], [0, 0], [300, 300], [7, 7], [0, 0], [100, 100],
+    );
+    const lap = decodeLap(buf, 0, 2);
+    const mid = sampleLap(lap, 0.15, 5000)!;
+    expect(mid.stationM).toBeCloseTo(112.5, 5);
   });
 });
 
@@ -118,10 +149,12 @@ describe("absent positions", () => {
   });
 
   it("leaves an interval clear of the marker untouched", () => {
+    // constant 200 kph (55.56 m/s) covers the 100 m station delta in 1.8 s, so this is a
+    // credible step; 1.8 s in is this interval's midpoint (was 0.05 s of a 0.1 s interval).
     const clean = decodeLap(encodeSynthetic(
-      [0, 100], [100, 200], [150, -120], [200, 200], [5, 5], [0, 0], [90, 90],
+      [0, 1800], [100, 200], [150, -120], [200, 200], [5, 5], [0, 0], [90, 90],
     ), 0, 2);
-    const s = sampleLap(clean, 0.05, 5000)!;
+    const s = sampleLap(clean, 0.9, 5000)!;
     expect(s.stationM).toBeCloseTo(150, 4);
     expect(s.lateralM).toBeCloseTo(0.15, 4);
   });

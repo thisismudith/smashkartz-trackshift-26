@@ -462,6 +462,31 @@
   margin: 0.4rem;
 }
 
+.cameraHelp {
+  margin: 0.4rem;
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+.cameraHelpRow {
+  display: flex;
+  gap: 0.6rem;
+  padding: 0.1rem 0;
+}
+
+.cameraHelpRow dt {
+  flex: 0 0 auto;
+  min-width: 8rem;
+  color: var(--haas-red);
+  font-family: var(--font-mono, monospace);
+  white-space: nowrap;
+}
+
+.cameraHelpRow dd {
+  margin: 0;
+  color: var(--haas-grey);
+}
+
 /* ---- bottom centre: transport ---- */
 .transport {
   position: absolute;

@@ -223,6 +223,14 @@ function lapDistanceFraction(
  * (3.6 m apart) this replaced, which read as a single file on screen. On a circuit
  * drawn from a real model this fraction has nothing measured to multiply and the
  * columns collapse; that is the honest answer, not a regression. See columnLateral.
+ *
+ * NEVER apply this fraction to a per-side `measuredLateralRoomM` value: that room is
+ * genuinely asymmetric (Silverstone's grid measures 1.5-3.5 m one side, 17.0-17.5 m the
+ * other, because the ring is the racing line, not the road centre, and the wide side's
+ * "drivable surface" reaches into the paved pit apron beside the straight) and multiplying
+ * it gave an 8.75 m column on the wide side alone -- cars visibly standing in the gravel,
+ * not a starting grid. This constant is for the RIBBON's half-width only, which is
+ * symmetric by construction.
  */
 const GRID_COLUMN_FRACTION = 0.5;
 
@@ -248,8 +256,13 @@ const GRID_LATERAL_FALLBACK_M = 1.8;
  *    is looking at. Unchanged.
  *  - drawn from a real circuit model (british-grand-prix today): the ribbon is not what
  *    is on screen, and `halfWidthAt` is a RULE scale that the artifact itself says is
- *    not a measurement of track width. The bake measures ONE point per station -- the
- *    ring -- so zero lateral road is measured and none may be claimed.
+ *    not a measurement of track width. `measuredLateralRoomM` instead reads the ACTUAL
+ *    drivable extent THIS side of the ring at THIS station, signed per side -- never a
+ *    symmetric half-width, because the two sides can differ by an order of magnitude
+ *    (see below). A station or side the road-edge walk could not reach falls back to
+ *    single file on THAT side only, rather than borrowing the other side's number or
+ *    the ribbon's RULE constant, both of which would be claiming a measurement that
+ *    does not exist.
  *
  * Measured, before this rule existed, at the 2026 British GP: the 21 grid slots were
  * placed at +/-3.17..3.52 m while the shipped GLB's asphalt at the front of the grid
@@ -262,11 +275,28 @@ const GRID_LATERAL_FALLBACK_M = 1.8;
 function columnLateral(
   track: TrackModel, stationM: number, sign: number,
 ): number {
-  const measured = measuredLateralRoomM(track);
-  const half = measured !== null ? measured : halfWidthAt(track, stationM);
-  // Only the ribbon path has a degenerate case: a model with no usable half-width at
-  // all. A MEASURED zero is not degenerate, it is the answer.
-  if (measured === null && (!Number.isFinite(half) || half <= 0)) {
+  const surfaced = Boolean(track.surface);
+  const measured = surfaced ? measuredLateralRoomM(track, stationM, sign) : null;
+  // A surfaced circuit NEVER falls through to halfWidthAt: that RULE scale describes
+  // the ribbon, which is not what is drawn once a real model is on screen. Unmeasured
+  // means SINGLE FILE on that side (0), not the ribbon's flat stagger -- claiming a
+  // GRID_LATERAL_FALLBACK_M stagger on a road we have not measured would be exactly the
+  // fabrication this whole path exists to refuse.
+  if (surfaced) {
+    if (measured === null) return 0;
+    const fits = measured - CAR_RENDER_WIDTH_M / 2;
+    // The same fixed, realistic stagger as the ribbon's degenerate case (GRID_LATERAL_
+    // FALLBACK_M) -- NOT a fraction of `measured`. `measured` is this side's real paved
+    // extent, which can be many metres wider than the width of an actual grid box (a
+    // wide paved shoulder or pit apron is real road but is not where a car starts), so it
+    // is used only as a cap, never as the scale of the offset itself.
+    const offset = Math.max(0, Math.min(GRID_LATERAL_FALLBACK_M, fits));
+    return offset === 0 ? 0 : sign * offset;
+  }
+
+  const half = halfWidthAt(track, stationM);
+  // The ribbon's one degenerate case: a model with no usable half-width at all.
+  if (!Number.isFinite(half) || half <= 0) {
     return sign * GRID_LATERAL_FALLBACK_M;
   }
   const fits = half - CAR_RENDER_WIDTH_M / 2;

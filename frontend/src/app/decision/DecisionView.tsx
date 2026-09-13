@@ -14,7 +14,10 @@
  */
 "use client";
 
+import { Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { AwaitingModel } from "@/sim/charts";
+import { PreviewPanels } from "./PreviewPanels";
 import s from "./decision.module.css";
 
 const GATES = [
@@ -53,16 +56,9 @@ const GATES = [
   },
 ];
 
-const DEPENDENCIES = [
-  { label: "Session state", status: "Available", detail: "Manifest-backed timing, drivers and context." },
-  { label: "Rule mask", status: "Available", detail: "Configuration is inspectable; verification is shown on Rules." },
-  { label: "Energy twin", status: "Waiting", detail: "Estimated energy output is not published for this decision route." },
-  { label: "Pass model", status: "Waiting", detail: "Checkpoint-labelled opportunities are not available yet." },
-  { label: "Rival belief", status: "Waiting", detail: "No inferred rival-state stream is published." },
-  { label: "Planner", status: "Waiting", detail: "Requires DP value tables and legal candidate actions." },
-];
+function DecisionContent() {
+  const preview = useSearchParams().get("preview") === "1";
 
-export default function DecisionView() {
   return (
     <main className={s.main}>
       <header className={s.head}>
@@ -79,30 +75,18 @@ export default function DecisionView() {
         </p>
       </header>
 
-      <section className={s.readiness} aria-label="Decision readiness">
-        <div className={s.readinessHeader}>
-          <div><span className={s.readinessKicker}>Readiness gate</span><h2>Evidence chain</h2></div>
-          <span className={s.readinessCount}>2 / {DEPENDENCIES.length} available</span>
-        </div>
-        <div className={s.readinessTrack} aria-hidden="true"><span style={{ width: `${(2 / DEPENDENCIES.length) * 100}%` }} /></div>
-        <div className={s.dependencyGrid}>
-          {DEPENDENCIES.map((d) => (
-            <div key={d.label} className={`${s.dependency} ${d.status === "Available" ? s.available : s.waiting}`}>
-              <div className={s.dependencyTop}><strong>{d.label}</strong><span>{d.status}</span></div>
-              <p>{d.detail}</p>
+      {preview ? (
+        <PreviewPanels />
+      ) : (
+        <div className={s.grid}>
+          {GATES.map((g) => (
+            <div key={g.title} className={s.cell}>
+              <AwaitingModel title={g.title} model={g.model} route={g.route} detail={g.detail} />
+              {g.blocked ? <p className={s.blocked}>{g.blocked}</p> : null}
             </div>
           ))}
         </div>
-      </section>
-
-      <div className={s.grid}>
-        {GATES.map((g) => (
-          <div key={g.title} className={s.cell}>
-            <AwaitingModel title={g.title} model={g.model} route={g.route} detail={g.detail} />
-            {g.blocked ? <p className={s.blocked}>{g.blocked}</p> : null}
-          </div>
-        ))}
-      </div>
+      )}
 
       <section className={s.footnote}>
         <h2 className={s.footHead}>Why this page is empty rather than plausible</h2>
@@ -110,9 +94,24 @@ export default function DecisionView() {
           Every number the system displays carries a provenance tag, and a value that is unavailable
           is rendered as unavailable with a reason — never fabricated. A stub that returns a
           well-shaped guess would pass a demo and fail the only test that matters, which is whether
-          what is on screen is true.
+          what is on screen is true.{" "}
+          {preview ? (
+            <>
+              This <code>?preview=1</code> view is the one exception: it is fed by hand-written
+              sample fixtures under <code>frontend/src/api-contract/fixtures/</code>, not a model,
+              and is banner-labelled as such.
+            </>
+          ) : null}
         </p>
       </section>
     </main>
+  );
+}
+
+export default function DecisionView() {
+  return (
+    <Suspense fallback={null}>
+      <DecisionContent />
+    </Suspense>
   );
 }

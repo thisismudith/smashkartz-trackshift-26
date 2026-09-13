@@ -34,8 +34,9 @@ const PRIMARY_ENTRIES: Entry[] = [
 const TOOL_ENTRIES: Entry[] = [
   { href: "/league", label: "League" },
   { href: "/lab", label: "Lab" },
-  // This is only a link. The simulator itself owns its route and remains out of this workstream.
-  { href: "/sim", label: "Replay" },
+  { href: "/decision", label: "Decision", pending: "awaiting M22" },
+  { href: "/config", label: "Config" },
+  { href: "/sim", label: "Simulator" },
   { href: "/about", label: "About" },
 ];
 

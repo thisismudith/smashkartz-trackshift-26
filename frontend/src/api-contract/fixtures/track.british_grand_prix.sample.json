@@ -1,0 +1,58 @@
+{
+  "event": "british_grand_prix",
+  "track": "silverstone",
+  "lap_length_m": 5891.0,
+  "centreline": [
+    { "distance_m": 0.0, "x_m": 0.0, "y_m": 0.0 },
+    { "distance_m": 20.0, "x_m": 19.8, "y_m": 1.4 },
+    { "distance_m": 5871.0, "x_m": -12.1, "y_m": -3.2 }
+  ],
+  "segments": [
+    {
+      "segment_id": 21,
+      "start_distance_m": 2860.0,
+      "end_distance_m": 3020.0,
+      "segment_length_m": 160.0,
+      "kind": "STRAIGHT",
+      "sector": 2,
+      "zone": 1,
+      "corner_id": null,
+      "corner_type": null,
+      "corner_phase": null,
+      "track_heading_deg": 211.0,
+      "brake_onset_m": null,
+      "mean_gradient": 0.001,
+      "geometry_version": "silverstone-geom-v1",
+      "provenance": "DERIVED"
+    },
+    {
+      "segment_id": 22,
+      "start_distance_m": 3080.0,
+      "end_distance_m": 3260.0,
+      "segment_length_m": 180.0,
+      "kind": "BRAKING",
+      "sector": 2,
+      "zone": 1,
+      "corner_id": 15,
+      "corner_type": "MEDIUM_RIGHT",
+      "corner_phase": "ENTRY",
+      "track_heading_deg": 214.0,
+      "brake_onset_m": 3210.0,
+      "mean_gradient": -0.004,
+      "geometry_version": "silverstone-geom-v1",
+      "provenance": "DERIVED"
+    }
+  ],
+  "lines": [
+    { "kind": "DETECTION", "zone": 1, "distance_m": 2890.0, "provenance": "RULE", "source": "FIA Event Notes 2026 BGP §4.2" },
+    { "kind": "ACTIVATION", "zone": 1, "distance_m": 3020.0, "provenance": "RULE", "source": "FIA Event Notes 2026 BGP §4.2" }
+  ],
+  "zones": [
+    { "zone": 1, "name": "Hangar Straight", "start_distance_m": 3020.0, "end_distance_m": 3900.0 }
+  ],
+  "versions": {
+    "api_version": "1.0.0",
+    "git_commit": "3c5c3ac",
+    "models": { "rules": "rules-2026-bgp-r3" }
+  }
+}

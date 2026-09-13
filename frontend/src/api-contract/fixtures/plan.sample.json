@@ -1,0 +1,34 @@
+{
+  "plan": [
+    { "segment_id": 21, "action": { "deploy_level": 0.5, "lift_amount": 0.0, "label": "HOLD_FOR_DETECTION" }, "expected_gap_s": 0.85, "expected_energy_kj": 1380.0, "lambda_s_per_kj": 0.0026 },
+    { "segment_id": 22, "action": { "deploy_level": 0.5, "lift_amount": 0.0, "label": "HOLD_FOR_DETECTION" }, "expected_gap_s": 0.71, "expected_energy_kj": 1330.0, "lambda_s_per_kj": 0.0031 },
+    { "segment_id": 23, "action": { "deploy_level": 0.75, "lift_amount": 0.0, "label": "ATTACK_DEPLOY" }, "expected_gap_s": 0.42, "expected_energy_kj": 1210.0, "lambda_s_per_kj": 0.0044 }
+  ],
+  "p_ahead_at_horizon": { "mean": 0.63, "low": 0.51, "high": 0.74, "provenance": "INFERRED" },
+  "p_pass_now": { "value": 0.58, "provenance": "INFERRED" },
+  "p_repass_within_horizon": { "value": 0.21, "provenance": "INFERRED" },
+  "final_energy_kj": { "mean": 410.0, "low": 320.0, "high": 505.0, "provenance": "SIMULATED", "unit": "kJ" },
+  "cvar_p_ahead": 0.44,
+  "rule_violations": 0,
+  "latency_ms": 38,
+  "decision": {
+    "dominant_mechanism": "ELIGIBILITY_UNLOCK",
+    "primary_constraint": "NEXT_DETECTION_LINE",
+    "decision_stability": 0.86,
+    "alternatives": [{ "action": { "deploy_level": 0.75, "lift_amount": 0.0 }, "expected_value": 0.59, "regret": 0.04 }]
+  },
+  "baselines": [
+    { "name": "greedy_attack", "p_ahead_at_horizon": 0.51, "final_energy_kj": 120.0, "rule_violations": 0 },
+    { "name": "longest_straight", "p_ahead_at_horizon": 0.55, "final_energy_kj": 380.0, "rule_violations": 0 },
+    { "name": "lap_time_only", "p_ahead_at_horizon": 0.48, "final_energy_kj": 290.0, "rule_violations": 0 },
+    { "name": "dp", "p_ahead_at_horizon": 0.61, "final_energy_kj": 400.0, "rule_violations": 0 },
+    { "name": "beam_dp", "p_ahead_at_horizon": 0.63, "final_energy_kj": 410.0, "rule_violations": 0 },
+    { "name": "oracle_rival_state", "p_ahead_at_horizon": 0.69, "final_energy_kj": 430.0, "rule_violations": 0 }
+  ],
+  "model_version": "beam-2026.01",
+  "versions": {
+    "api_version": "1.0.0",
+    "git_commit": "3c5c3ac",
+    "models": { "planner": "beam-2026.01", "value": "dp-2026.01" }
+  }
+}

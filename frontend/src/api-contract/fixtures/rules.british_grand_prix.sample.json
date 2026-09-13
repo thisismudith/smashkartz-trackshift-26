@@ -1,0 +1,44 @@
+{
+  "event": "british_grand_prix",
+  "year": 2026,
+  "config_version": "rules-2026-bgp-r3",
+  "regulation_snapshot": {
+    "section_issues": ["Sporting Regulations Art. 22.7 (draft)"],
+    "effective_for_event": "2026 British Grand Prix",
+    "source_documents": ["TODO: FIA 2026 Sporting Regulations"],
+    "retrieved_at": "2026-09-01T00:00:00Z"
+  },
+  "overtake": {
+    "enabled": true,
+    "detection_gap_s": { "value": 1.0, "provenance": "RULE", "unit": "s", "source": "TODO: FIA 2026 Sporting Regulations Art. 22.7" },
+    "zones": [{ "zone": 1, "detection_line_m": 2890.0, "activation_line_m": 3020.0 }]
+  },
+  "power_envelope": {
+    "normal": { "breakpoints_kmh": [0, 290, 340], "max_power_kw": [350, 350, 0] },
+    "override": { "breakpoints_kmh": [0, 337, 355], "max_power_kw": [350, 350, 0] },
+    "separation_speed_kmh": 290.0,
+    "provenance": "RULE",
+    "verified": false,
+    "source": "reported values, pending FIA document citation",
+    "competition_adjustments": []
+  },
+  "energy": {
+    "deploy_limit_per_lap_mj": { "value": 4.0, "provenance": "RULE", "unit": "MJ", "source": "TODO: FIA 2026 Technical Regulations" },
+    "harvest_limit_per_lap_mj": { "value": 2.0, "provenance": "RULE", "unit": "MJ", "source": "TODO: FIA 2026 Technical Regulations" },
+    "store_capacity_mj": { "value": 4.0, "provenance": "RULE", "unit": "MJ", "source": "TODO: FIA 2026 Technical Regulations" },
+    "accounting_window": "lap"
+  },
+  "race_control": { "overtake_disabled": false },
+  "unverified_keys": [
+    "power_envelope.normal",
+    "power_envelope.override",
+    "energy.deploy_limit_per_lap_mj",
+    "energy.harvest_limit_per_lap_mj",
+    "energy.store_capacity_mj"
+  ],
+  "versions": {
+    "api_version": "1.0.0",
+    "git_commit": "3c5c3ac",
+    "models": { "rules": "rules-2026-bgp-r3" }
+  }
+}

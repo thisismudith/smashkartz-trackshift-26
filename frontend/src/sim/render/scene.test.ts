@@ -594,6 +594,7 @@ function makeSurface(over: Partial<TrackSurface> = {}): TrackSurface {
     profile: "edelta-scorer",
     transform: ENVIRONMENTS["british-grand-prix"].fit,
     zM: new Float32Array(n), slope: new Float32Array(n), camber: new Float32Array(n),
+    edgeLeftM: new Float32Array(n), edgeRightM: new Float32Array(n),
     valid: new Uint8Array(n).fill(1),
     residual: { stdM: 0.05, maxM: 0.17 }, coverage: 1, roadCoverage: 0.99,
     assetUrl: "/sim/glb/british-grand-prix.0123456789.glb",

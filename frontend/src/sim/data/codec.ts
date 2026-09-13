@@ -35,6 +35,14 @@ export const SAMPLE_BYTES = 12;
  */
 export const LATERAL_ABSENT_CM = -32768;
 
+/** Same numbers, same justification, as lapSamples.ts's own STEP_TOLERANCE_* (not
+ * imported from there to avoid a circular import -- lapSamples.ts already imports
+ * DecodedLap from this file). Change only alongside that file's, with a re-measurement:
+ * see its comment for what these mean and where they came from. */
+const STEP_TOLERANCE_M = 20;
+const STEP_TOLERANCE_REL = 2;
+const STEP_TOLERANCE_BIAS_M = 10;
+
 export interface DecodedLap {
   n: number;
   /** Absolute lap-relative time, seconds, reconstructed by cumulative-summing dtMs. */
@@ -101,6 +109,23 @@ export function sampleLap(lap: DecodedLap, t: number, trackLength: number) {
   let d = s1 - s0;
   if (d > trackLength / 2) d -= trackLength;
   if (d < -trackLength / 2) d += trackLength;
+
+  // The same "credible step" test alongLapDistance.ts applies when judging a whole lap,
+  // applied here at query time: a raw step whose distance disagrees wildly with what the
+  // recorded speed channel says happened over the same interval is not a real position
+  // change. Measured live, 2026 Australian GP Race: two adjacent decoded samples 0.30 s
+  // apart landed 50 m apart (implied ~600 kph -- faster than any 2026 car reaches), which
+  // an untested linear blend drew as the car sweeping backward then teleporting forward.
+  // An incredible step holds at s0 rather than guessing a "corrected" distance, which is
+  // the same choice the absence contract above already makes for a missing sample -- NaN
+  // propagates through this exact arithmetic unaffected, since NaN > tol is false.
+  const dtS = t1 - t0;
+  if (dtS > 0) {
+    const expected = ((lap.speedKph[lo] + lap.speedKph[hi]) / 2 / 3.6) * dtS;
+    const tol = Math.max(STEP_TOLERANCE_M, STEP_TOLERANCE_REL * expected + STEP_TOLERANCE_BIAS_M);
+    if (Math.abs(d - expected) > tol) d = 0;
+  }
+
   let station = s0 + d * f;
   station = ((station % trackLength) + trackLength) % trackLength;
 

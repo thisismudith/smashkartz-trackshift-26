@@ -25,7 +25,7 @@ function makeParams(): FittedParams {
   return {
     sessionPaceTrendPerLap: { pooled: { value: -0.05, provenance: "DERIVED" }, perTrack: {} },
     tyreDegradation: {
-      trackIndex: { "engine-track": { value: 0.05, provenance: "DERIVED" } },
+      trackIndex: { "Engine GP": { value: 0.05, provenance: "DERIVED" } },
       compoundMultiplierDefault: {
         SOFT: { value: 1.35, provenance: "DEFAULT" }, MEDIUM: { value: 1.0, provenance: "DEFAULT" },
         HARD: { value: 0.75, provenance: "DEFAULT" },
@@ -41,8 +41,8 @@ function makeParams(): FittedParams {
       incidentProbability: { value: 0.05, provenance: "DERIVED" },
       incidentMeanExcessSeconds: { value: 0.8, provenance: "DERIVED" },
     },
-    dirtyAirLossPerSecondOfProximity: { "engine-track": { value: 0.1, provenance: "DERIVED" } },
-    pitLoss: { "engine-track": { netLossSeconds: { value: 22, provenance: "DERIVED" }, iqr: [20, 24] } },
+    dirtyAirLossPerSecondOfProximity: { "Engine GP": { value: 0.1, provenance: "DERIVED" } },
+    pitLoss: { "Engine GP": { netLossSeconds: { value: 22, provenance: "DERIVED" }, iqr: [20, 24] } },
     neutralisation: {
       safetyCarLapHazard: { value: 0.02, provenance: "DERIVED" },
       virtualSafetyCarLapHazard: { value: 0.03, provenance: "DERIVED" },

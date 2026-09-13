@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { SAMPLE_BYTES } from "../data/codec";
 import type { RawLapEntry, RawSessionManifest, RawTrackModel } from "../data/manifest";
 import type { GridSlot } from "../data/manifest";
-import { gridSlotsOf, halfWidthAt, parseTrackModel } from "../data/manifest";
+import { gridSlotsOf, halfWidthAt, measuredLateralRoomM, parseTrackModel } from "../data/manifest";
 import type { CarState, TrackModel } from "../contract/types";
 import { CAR_RENDER_WIDTH_M } from "../render/presentation";
 import { ReplayTimeline } from "./timeline";
@@ -1007,11 +1007,20 @@ describe.skipIf(allPacks.length === 0)("placement and frame on every real 2026 p
         // metres off the racing line, so it is not expected to fit the track ribbon.
         if (car.positionProvenance === "OBSERVED" || car.status === "pit") return;
         checked++;
-        const half = halfWidthAt(pack.track, car.stationM);
+        // A surfaced circuit's road is NOT halfWidthAt -- that RULE scale describes the
+        // ribbon, which is not what is drawn once a real model is on screen. This must
+        // use the same measured, per-side room the placement itself was fitted to,
+        // never a symmetric width: british-grand-prix's own asphalt runs 1.5-3.5 m one
+        // side of the grid and 17.0-17.5 m the other.
+        const surfaced = Boolean(pack.track.surface);
+        const sign = car.lateralM >= 0 ? 1 : -1;
+        const half = surfaced
+          ? (measuredLateralRoomM(pack.track, car.stationM, sign) ?? 0)
+          : halfWidthAt(pack.track, car.stationM);
         const over = Math.abs(car.lateralM) + CAR_RENDER_WIDTH_M / 2 - half;
         if (over > worstOff) { worstOff = over; worstWho = `${car.driver}/${car.status}`; }
         expect(over, `${pack.slug}/${pack.session} ${car.driver} (${car.status}) lateral`
-          + ` ${car.lateralM.toFixed(2)} m on a ${half.toFixed(2)} m half-width road`)
+          + ` ${car.lateralM.toFixed(2)} m on a ${half.toFixed(2)} m ${surfaced ? "measured" : "half-width"} road`)
           .toBeLessThanOrEqual(1e-6);
       };
       for (let t = 0; t <= 90; t += 0.25) {
@@ -1098,6 +1107,10 @@ function surfacedTrack(): TrackModel {
       source: "test.glb", sourceSha256: null, profile: "test",
       transform: { scale: 1, yawDeg: 0, mirror: -1, txM: 0, tzM: 0, tyM: 0 },
       zM: new Float32Array(n), slope: new Float32Array(n), camber: new Float32Array(n),
+      // No measured road edge either side, on purpose: this fixture pins the fallback
+      // for a surfaced circuit whose road-edge walk has nothing to report, which the
+      // single-file collapse below depends on.
+      edgeLeftM: new Float32Array(n).fill(NaN), edgeRightM: new Float32Array(n).fill(NaN),
       valid: new Uint8Array(n).fill(1),
       residual: { stdM: 0.05, maxM: 0.17 },
       coverage: 1, roadCoverage: 0.9985,
@@ -1232,22 +1245,39 @@ describe.skipIf(allPacks.length === 0)("placements against the real 2026 packs",
     expect(checked).toBeGreaterThan(500);
   }, 300_000);
 
-  it("claims no lateral road on the circuit that is drawn from a real model", () => {
-    // british-grand-prix is the only shipped circuit with a baked surface. Measured by
-    // raycasting the shipped GLB along the ring's left normal in 0.25 m steps with the
-    // bake's own scorer: at grid stations 5769.7-5817.7 m the asphalt ends +1.75..+2.00 m
-    // from the ring, so the old +/-3.17..3.52 m placement stood ten of 21 cars on the
-    // grass. The feed agrees -- the largest lateral in 1,108,923 position samples
-    // anywhere in that 168 m stretch is +2.79 m.
+  it("claims only the road that is actually measured on the circuit drawn from a real model", () => {
+    // british-grand-prix is the only shipped circuit with a baked surface. This must
+    // hold REGARDLESS of whether the shipped artifact carries a road-edge walk yet:
+    //   - no walk (every artifact before it landed): measuredLateralRoomM is null on
+    //     both sides everywhere, so columnLateral collapses to single file -- 0, exactly
+    //     the "claims nothing" answer this test used to hard-code.
+    //   - a walk that measured this side at this station: the car must fit strictly
+    //     inside that measured room, on the correct side of the ring's own normal
+    //     (sign>0 => left, i.e. lateralM>=0; sign<0 => right, lateralM<=0).
+    // What must NEVER happen, in either state: the ribbon's RULE half-width used as if
+    // it were a measurement of this road. Measured before the walk existed: the old
+    // +/-3.17..3.52 m placement stood ten of 21 cars on the grass, because the asphalt
+    // at the grid ends +1.75..+2.00 m from the ring on that side. The feed agrees -- the
+    // largest lateral in 1,108,923 real position samples anywhere in that 168 m stretch
+    // is +2.79 m.
     const surfaced = allPacks.filter((p) => p.track.surface);
     expect(surfaced.length).toBeGreaterThan(0);
     for (const pack of surfaced) {
       const tl = new ReplayTimeline(pack.manifest, pack.track, pack.bin);
-      let placed = 0;
+      let placed = 0, nonZero = 0;
       const check = (car: CarState, where: string) => {
         if (car.positionProvenance !== "RULE" || car.status === "pit") return;
         placed++;
-        expect(car.lateralM, `${pack.slug}/${pack.session} ${car.driver} (${where})`).toBe(0);
+        if (car.lateralM !== 0) nonZero++;
+        const sign = car.lateralM >= 0 ? 1 : -1;
+        const room = measuredLateralRoomM(pack.track, car.stationM, sign);
+        const label = `${pack.slug}/${pack.session} ${car.driver} (${where})`;
+        if (room === null) {
+          expect(car.lateralM, label).toBe(0);
+        } else {
+          expect(Math.abs(car.lateralM) + CAR_RENDER_WIDTH_M / 2, label)
+            .toBeLessThanOrEqual(room + 1e-6);
+        }
       };
       for (let t = 0; t <= 60; t += 0.25) {
         for (const car of tl.sampleAt(t, false).values()) check(car, car.status);
@@ -1255,7 +1285,8 @@ describe.skipIf(allPacks.length === 0)("placements against the real 2026 packs",
       for (let t = Math.max(0, tl.duration - 120); t <= tl.duration; t += 1) {
         for (const car of tl.sampleAt(t, false).values()) check(car, "parked");
       }
-      console.log(`${pack.slug}/${pack.session}: ${placed} placed car-instants, all at lateral 0`);
+      console.log(`${pack.slug}/${pack.session}: ${placed} placed car-instants, `
+        + `${nonZero} at a measured nonzero lateral`);
       expect(placed).toBeGreaterThan(100);
     }
   }, 300_000);

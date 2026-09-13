@@ -1,0 +1,262 @@
+{
+  "battle_id": "2026_GBR_Race_HAM_ANT_Battle03",
+  "attacker": "HAM",
+  "defender": "ANT",
+  "steps": [
+    {
+      "ref": { "year": 2026, "event": "british_grand_prix", "session": "Race", "lap": 31, "segment_id": 21, "distance_m": 2900.0, "lap_fraction": 0.492 },
+      "session_time_s": 4408.1,
+      "race_context": { "label": "ATTACKING", "provenance": "INFERRED" },
+      "race_control": {
+        "pit_state": "ON_TRACK", "race_control_state": "GREEN",
+        "safety_car_active": false, "virtual_safety_car_active": false,
+        "race_control_transition_flag": false, "pit_transition_flag": false,
+        "green_flag_elapsed_s": 213.7, "normal_race_model_eligible": true, "provenance": "DERIVED"
+      },
+      "era": { "era": "2026", "historical_drs_eligible": null, "historical_drs_open": null, "overtake_eligible": true, "overtake_state": "NOT_ARMED" },
+      "geometry": { "sector": 2, "zone": 1, "corner_id": null, "corner_type": null, "corner_phase": null, "track_heading_deg": 211.0 },
+      "weather": {
+        "wind_head_component_mps": { "value": -2.0, "provenance": "DERIVED", "unit": "m/s" },
+        "wind_cross_component_mps": { "value": 3.3, "provenance": "DERIVED", "unit": "m/s" },
+        "air_density_proxy": { "value": 1.19, "provenance": "DERIVED", "unit": "kg/m3" },
+        "track_temperature": { "value": 41.0, "provenance": "OBSERVED", "unit": "C" },
+        "wet_track_flag": false
+      },
+      "time_gap_s": { "value": 0.91, "provenance": "DERIVED", "unit": "s" },
+      "distance_gap_m": { "value": 71.2, "provenance": "DERIVED", "unit": "m" },
+      "closing_rate_mps": { "value": 1.6, "provenance": "DERIVED", "unit": "m/s" },
+      "relative_speed_to_ahead_mps": { "value": 1.4, "provenance": "DERIVED", "unit": "m/s" },
+      "relative_acceleration_to_ahead_mps2": { "value": 0.09, "provenance": "DERIVED", "unit": "m/s2" },
+      "gap_rate_ahead_s_per_s": { "value": -0.05, "provenance": "DERIVED", "unit": "s/s" },
+      "delta_speed_kmh": { "value": 5.4, "provenance": "DERIVED", "unit": "km/h" },
+      "delta_segment_time_s": { "value": -0.09, "provenance": "DERIVED", "unit": "s" },
+      "tyre_age_delta_laps": { "value": -4, "provenance": "OBSERVED", "unit": "laps" },
+      "compound_pair": "MEDIUM_HARD",
+      "baseline_residuals": {
+        "attacker": {
+          "segment_time_vs_driver_s": { "value": -0.07, "provenance": "DERIVED", "unit": "s", "n": 41 },
+          "segment_time_vs_team_s": { "value": -0.04, "provenance": "DERIVED", "unit": "s", "n": 88 },
+          "segment_time_vs_field_s": { "value": -0.13, "provenance": "DERIVED", "unit": "s", "n": 812 },
+          "exit_speed_vs_driver_kmh": { "value": 1.9, "provenance": "DERIVED", "unit": "km/h", "n": 41 }
+        },
+        "defender": {
+          "segment_time_vs_driver_s": { "value": 0.02, "provenance": "DERIVED", "unit": "s", "n": 39 },
+          "segment_time_vs_team_s": { "value": 0.01, "provenance": "DERIVED", "unit": "s", "n": 85 },
+          "segment_time_vs_field_s": { "value": -0.03, "provenance": "DERIVED", "unit": "s", "n": 812 },
+          "exit_speed_vs_driver_kmh": { "value": -0.4, "provenance": "DERIVED", "unit": "km/h", "n": 39 }
+        },
+        "baseline_valid": true
+      },
+      "attacker": {
+        "speed_kmh": { "value": 283.0, "provenance": "OBSERVED", "unit": "km/h" },
+        "throttle_pct": { "value": 100.0, "provenance": "OBSERVED", "unit": "%" },
+        "brake_on": false,
+        "braking_intensity_proxy": { "value": 0.0, "provenance": "DERIVED" },
+        "tyre": { "compound": "MEDIUM", "life_laps": 12, "stint": 2, "degradation_proxy": { "value": 0.31, "provenance": "DERIVED" } },
+        "ers": {
+          "ers_soc_est_mj": { "mean": 3.55, "low": 3.18, "high": 3.90, "provenance": "SIMULATED", "unit": "MJ" },
+          "ers_store_capacity_mj": { "value": 4.00, "provenance": "RULE", "unit": "MJ" },
+          "ers_deploy_budget_remaining_est_mj": { "mean": 1.30, "low": 1.02, "high": 1.58, "provenance": "SIMULATED", "unit": "MJ" },
+          "ers_harvest_budget_remaining_est_mj": { "mean": 0.60, "low": 0.35, "high": 0.85, "provenance": "SIMULATED", "unit": "MJ" },
+          "ers_energy_used_est_mj": { "mean": 2.70, "low": 2.40, "high": 3.00, "provenance": "SIMULATED", "unit": "MJ" },
+          "ers_energy_harvested_est_mj": { "mean": 0.91, "low": 0.70, "high": 1.10, "provenance": "SIMULATED", "unit": "MJ" },
+          "ers_deploy_power_est_kw": { "mean": 205.0, "low": 148.0, "high": 255.0, "provenance": "SIMULATED", "unit": "kW" },
+          "ers_harvest_power_est_kw": { "mean": 0.0, "low": 0.0, "high": 18.0, "provenance": "SIMULATED", "unit": "kW" },
+          "cap_kw": { "value": 350.0, "provenance": "RULE", "unit": "kW" },
+          "applicable_mode": "NORMAL",
+          "headroom_kw": { "value": 145.0, "provenance": "DERIVED", "unit": "kW" },
+          "ers_mode_inferred": "NORMAL",
+          "override_active_inferred": { "value": 0.06, "provenance": "INFERRED" },
+          "discriminable": true,
+          "envelope_violation": false
+        },
+        "fuel_kg": { "mean": 48.6, "low": 45.4, "high": 51.9, "provenance": "INFERRED", "unit": "kg" }
+      },
+      "defender": {
+        "speed_kmh": { "value": 278.0, "provenance": "OBSERVED", "unit": "km/h" },
+        "throttle_pct": { "value": 100.0, "provenance": "OBSERVED", "unit": "%" },
+        "brake_on": false,
+        "braking_intensity_proxy": { "value": 0.0, "provenance": "DERIVED" },
+        "tyre": { "compound": "HARD", "life_laps": 16, "stint": 2, "degradation_proxy": { "value": 0.27, "provenance": "DERIVED" } },
+        "ers": {
+          "ers_soc_est_mj": { "mean": 2.68, "low": 2.28, "high": 3.08, "provenance": "SIMULATED", "unit": "MJ" },
+          "ers_store_capacity_mj": { "value": 4.00, "provenance": "RULE", "unit": "MJ" },
+          "ers_deploy_budget_remaining_est_mj": { "mean": 0.14, "low": 0.05, "high": 0.25, "provenance": "SIMULATED", "unit": "MJ" },
+          "ers_harvest_budget_remaining_est_mj": { "mean": 0.40, "low": 0.20, "high": 0.62, "provenance": "SIMULATED", "unit": "MJ" },
+          "ers_energy_used_est_mj": { "mean": 3.86, "low": 3.60, "high": 4.00, "provenance": "SIMULATED", "unit": "MJ" },
+          "ers_energy_harvested_est_mj": { "mean": 0.55, "low": 0.35, "high": 0.75, "provenance": "SIMULATED", "unit": "MJ" },
+          "ers_deploy_power_est_kw": { "mean": 312.0, "low": 265.0, "high": 355.0, "provenance": "SIMULATED", "unit": "kW" },
+          "ers_harvest_power_est_kw": { "mean": 0.0, "low": 0.0, "high": 18.0, "provenance": "SIMULATED", "unit": "kW" },
+          "cap_kw": { "value": 350.0, "provenance": "RULE", "unit": "kW" },
+          "applicable_mode": "NORMAL",
+          "headroom_kw": { "value": 38.0, "provenance": "DERIVED", "unit": "kW" },
+          "ers_mode_inferred": "NORMAL",
+          "override_active_inferred": { "value": 0.35, "provenance": "INFERRED" },
+          "discriminable": true,
+          "envelope_violation": false
+        },
+        "fuel_kg": { "mean": 48.1, "low": 44.9, "high": 51.3, "provenance": "INFERRED", "unit": "kg" }
+      },
+      "rival_state": {
+        "p": { "CONSERVING": 0.14, "BALANCED": 0.33, "DEPLOYING": 0.45, "DERATING": 0.08 },
+        "merged": [], "provenance": "INFERRED", "model_version": "rival-hsmm-2026.02"
+      },
+      "eligibility": {
+        "zone": 1, "armed": false,
+        "p_eligible": { "value": 0.58, "provenance": "INFERRED" },
+        "eligibility_margin_s": { "value": 0.09, "provenance": "DERIVED", "unit": "s" },
+        "projected_gap_at_detection_s": { "mean": 0.91, "low": 0.72, "high": 1.12, "provenance": "INFERRED", "unit": "s" },
+        "energy_required_to_unlock_kj": { "mean": 240.0, "low": 190.0, "high": 300.0, "provenance": "SIMULATED", "unit": "kJ" },
+        "eligibility_fragility_per_kj": { "value": 0.0016, "provenance": "SIMULATED", "unit": "1/kJ" }
+      },
+      "pass": null,
+      "shadow_price_s_per_kj": { "value": 0.0022, "provenance": "DERIVED", "unit": "s/kj" },
+      "recommended_action": { "deploy_level": 0.5, "lift_amount": 0.0, "label": "HOLD_FOR_DETECTION" },
+      "legal_actions": [
+        { "deploy_level": 0.0, "lift_amount": 0.0 },
+        { "deploy_level": 0.25, "lift_amount": 0.0 },
+        { "deploy_level": 0.5, "lift_amount": 0.0 },
+        { "deploy_level": 0.75, "lift_amount": 0.0 }
+      ],
+      "live_safe": true
+    },
+    {
+      "ref": { "year": 2026, "event": "british_grand_prix", "session": "Race", "lap": 31, "segment_id": 22, "distance_m": 3140.0, "lap_fraction": 0.533 },
+      "session_time_s": 4412.8,
+      "race_context": { "label": "ATTACKING", "provenance": "INFERRED" },
+      "race_control": {
+        "pit_state": "ON_TRACK", "race_control_state": "GREEN",
+        "safety_car_active": false, "virtual_safety_car_active": false,
+        "race_control_transition_flag": false, "pit_transition_flag": false,
+        "green_flag_elapsed_s": 218.4, "normal_race_model_eligible": true, "provenance": "DERIVED"
+      },
+      "era": { "era": "2026", "historical_drs_eligible": null, "historical_drs_open": null, "overtake_eligible": true, "overtake_state": "NOT_ARMED" },
+      "geometry": { "sector": 2, "zone": 1, "corner_id": 15, "corner_type": "MEDIUM_RIGHT", "corner_phase": "ENTRY", "track_heading_deg": 214.0 },
+      "weather": {
+        "wind_head_component_mps": { "value": -2.1, "provenance": "DERIVED", "unit": "m/s" },
+        "wind_cross_component_mps": { "value": 3.4, "provenance": "DERIVED", "unit": "m/s" },
+        "air_density_proxy": { "value": 1.19, "provenance": "DERIVED", "unit": "kg/m3" },
+        "track_temperature": { "value": 41.0, "provenance": "OBSERVED", "unit": "C" },
+        "wet_track_flag": false
+      },
+      "time_gap_s": { "value": 0.78, "provenance": "DERIVED", "unit": "s" },
+      "distance_gap_m": { "value": 61.5, "provenance": "DERIVED", "unit": "m" },
+      "closing_rate_mps": { "value": 1.9, "provenance": "DERIVED", "unit": "m/s" },
+      "relative_speed_to_ahead_mps": { "value": 1.7, "provenance": "DERIVED", "unit": "m/s" },
+      "relative_acceleration_to_ahead_mps2": { "value": 0.12, "provenance": "DERIVED", "unit": "m/s2" },
+      "gap_rate_ahead_s_per_s": { "value": -0.06, "provenance": "DERIVED", "unit": "s/s" },
+      "delta_speed_kmh": { "value": 6.2, "provenance": "DERIVED", "unit": "km/h" },
+      "delta_segment_time_s": { "value": -0.11, "provenance": "DERIVED", "unit": "s" },
+      "tyre_age_delta_laps": { "value": -4, "provenance": "OBSERVED", "unit": "laps" },
+      "compound_pair": "MEDIUM_HARD",
+      "baseline_residuals": {
+        "attacker": {
+          "segment_time_vs_driver_s": { "value": -0.08, "provenance": "DERIVED", "unit": "s", "n": 41 },
+          "segment_time_vs_team_s": { "value": -0.05, "provenance": "DERIVED", "unit": "s", "n": 88 },
+          "segment_time_vs_field_s": { "value": -0.14, "provenance": "DERIVED", "unit": "s", "n": 812 },
+          "exit_speed_vs_driver_kmh": { "value": 2.1, "provenance": "DERIVED", "unit": "km/h", "n": 41 }
+        },
+        "defender": {
+          "segment_time_vs_driver_s": { "value": 0.03, "provenance": "DERIVED", "unit": "s", "n": 39 },
+          "segment_time_vs_team_s": { "value": 0.01, "provenance": "DERIVED", "unit": "s", "n": 85 },
+          "segment_time_vs_field_s": { "value": -0.02, "provenance": "DERIVED", "unit": "s", "n": 812 },
+          "exit_speed_vs_driver_kmh": { "value": -0.6, "provenance": "DERIVED", "unit": "km/h", "n": 39 }
+        },
+        "baseline_valid": true
+      },
+      "attacker": {
+        "speed_kmh": { "value": 287.0, "provenance": "OBSERVED", "unit": "km/h" },
+        "throttle_pct": { "value": 100.0, "provenance": "OBSERVED", "unit": "%" },
+        "brake_on": false,
+        "braking_intensity_proxy": { "value": 0.0, "provenance": "DERIVED" },
+        "tyre": { "compound": "MEDIUM", "life_laps": 12, "stint": 2, "degradation_proxy": { "value": 0.31, "provenance": "DERIVED" } },
+        "ers": {
+          "ers_soc_est_mj": { "mean": 3.42, "low": 3.05, "high": 3.80, "provenance": "SIMULATED", "unit": "MJ" },
+          "ers_store_capacity_mj": { "value": 4.00, "provenance": "RULE", "unit": "MJ" },
+          "ers_deploy_budget_remaining_est_mj": { "mean": 1.18, "low": 0.90, "high": 1.46, "provenance": "SIMULATED", "unit": "MJ" },
+          "ers_harvest_budget_remaining_est_mj": { "mean": 0.55, "low": 0.30, "high": 0.80, "provenance": "SIMULATED", "unit": "MJ" },
+          "ers_energy_used_est_mj": { "mean": 2.82, "low": 2.55, "high": 3.10, "provenance": "SIMULATED", "unit": "MJ" },
+          "ers_energy_harvested_est_mj": { "mean": 0.94, "low": 0.72, "high": 1.15, "provenance": "SIMULATED", "unit": "MJ" },
+          "ers_deploy_power_est_kw": { "mean": 210.0, "low": 150.0, "high": 260.0, "provenance": "SIMULATED", "unit": "kW" },
+          "ers_harvest_power_est_kw": { "mean": 0.0, "low": 0.0, "high": 20.0, "provenance": "SIMULATED", "unit": "kW" },
+          "cap_kw": { "value": 312.0, "provenance": "RULE", "unit": "kW" },
+          "applicable_mode": "NORMAL",
+          "headroom_kw": { "value": 102.0, "provenance": "DERIVED", "unit": "kW" },
+          "ers_mode_inferred": "NORMAL",
+          "override_active_inferred": { "value": 0.08, "provenance": "INFERRED" },
+          "discriminable": true,
+          "envelope_violation": false
+        },
+        "fuel_kg": { "mean": 48.2, "low": 45.0, "high": 51.5, "provenance": "INFERRED", "unit": "kg" }
+      },
+      "defender": {
+        "speed_kmh": { "value": 281.0, "provenance": "OBSERVED", "unit": "km/h" },
+        "throttle_pct": { "value": 100.0, "provenance": "OBSERVED", "unit": "%" },
+        "brake_on": false,
+        "braking_intensity_proxy": { "value": 0.0, "provenance": "DERIVED" },
+        "tyre": { "compound": "HARD", "life_laps": 16, "stint": 2, "degradation_proxy": { "value": 0.27, "provenance": "DERIVED" } },
+        "ers": {
+          "ers_soc_est_mj": { "mean": 2.61, "low": 2.20, "high": 3.02, "provenance": "SIMULATED", "unit": "MJ" },
+          "ers_store_capacity_mj": { "value": 4.00, "provenance": "RULE", "unit": "MJ" },
+          "ers_deploy_budget_remaining_est_mj": { "mean": 0.09, "low": 0.02, "high": 0.20, "provenance": "SIMULATED", "unit": "MJ" },
+          "ers_harvest_budget_remaining_est_mj": { "mean": 0.30, "low": 0.12, "high": 0.50, "provenance": "SIMULATED", "unit": "MJ" },
+          "ers_energy_used_est_mj": { "mean": 3.91, "low": 3.70, "high": 4.00, "provenance": "SIMULATED", "unit": "MJ" },
+          "ers_energy_harvested_est_mj": { "mean": 0.48, "low": 0.28, "high": 0.68, "provenance": "SIMULATED", "unit": "MJ" },
+          "ers_deploy_power_est_kw": { "mean": 318.0, "low": 270.0, "high": 360.0, "provenance": "SIMULATED", "unit": "kW" },
+          "ers_harvest_power_est_kw": { "mean": 0.0, "low": 0.0, "high": 20.0, "provenance": "SIMULATED", "unit": "kW" },
+          "cap_kw": { "value": 312.0, "provenance": "RULE", "unit": "kW" },
+          "applicable_mode": "NORMAL",
+          "headroom_kw": { "value": -6.0, "provenance": "DERIVED", "unit": "kW" },
+          "ers_mode_inferred": "OVERRIDE",
+          "override_active_inferred": { "value": 0.71, "provenance": "INFERRED" },
+          "discriminable": true,
+          "envelope_violation": false
+        },
+        "fuel_kg": { "mean": 47.6, "low": 44.4, "high": 50.9, "provenance": "INFERRED", "unit": "kg" }
+      },
+      "rival_state": {
+        "p": { "CONSERVING": 0.12, "BALANCED": 0.31, "DEPLOYING": 0.49, "DERATING": 0.08 },
+        "merged": [], "provenance": "INFERRED", "model_version": "rival-hsmm-2026.02"
+      },
+      "eligibility": {
+        "zone": 1, "armed": false,
+        "p_eligible": { "value": 0.64, "provenance": "INFERRED" },
+        "eligibility_margin_s": { "value": 0.22, "provenance": "DERIVED", "unit": "s" },
+        "projected_gap_at_detection_s": { "mean": 0.78, "low": 0.61, "high": 0.97, "provenance": "INFERRED", "unit": "s" },
+        "energy_required_to_unlock_kj": { "mean": 210.0, "low": 165.0, "high": 275.0, "provenance": "SIMULATED", "unit": "kJ" },
+        "eligibility_fragility_per_kj": { "value": 0.0018, "provenance": "SIMULATED", "unit": "1/kJ" }
+      },
+      "pass": {
+        "is_opportunity": true,
+        "opportunity_id": "2026_GBR_Race_HAM_ANT_Battle03_L31_Z1",
+        "outcome_horizon": "zone_exit_v1",
+        "checkpoints": {
+          "DETECTION": { "reached": true, "feature_cutoff_distance_m": 2890.0, "p_pass_by_outcome_horizon": 0.51, "ensemble_spread": 0.08, "model_version": "pass-det-2026.03" },
+          "ACTIVATION": { "reached": true, "feature_cutoff_distance_m": 3020.0, "p_pass_by_outcome_horizon": 0.58, "ensemble_spread": 0.07, "model_version": "pass-act-2026.03" },
+          "BRAKING": { "reached": false, "feature_cutoff_distance_m": 3210.0, "p_pass_by_outcome_horizon": null, "ensemble_spread": null, "model_version": "pass-brk-2026.03" }
+        },
+        "provenance": "INFERRED"
+      },
+      "shadow_price_s_per_kj": { "value": 0.0031, "provenance": "DERIVED", "unit": "s/kj" },
+      "recommended_action": { "deploy_level": 0.5, "lift_amount": 0.0, "label": "HOLD_FOR_DETECTION" },
+      "legal_actions": [
+        { "deploy_level": 0.0, "lift_amount": 0.0 },
+        { "deploy_level": 0.25, "lift_amount": 0.0 },
+        { "deploy_level": 0.5, "lift_amount": 0.0 },
+        { "deploy_level": 0.75, "lift_amount": 0.0 }
+      ],
+      "live_safe": true
+    }
+  ],
+  "versions": {
+    "api_version": "1.0.0",
+    "git_commit": "3c5c3ac",
+    "models": {
+      "pass": "pass-2026.03",
+      "rival": "rival-hsmm-2026.02",
+      "twin": "twin-event-2026.01",
+      "rules": "rules-2026-bgp-r3",
+      "value": "dp-2026.01"
+    }
+  }
+}

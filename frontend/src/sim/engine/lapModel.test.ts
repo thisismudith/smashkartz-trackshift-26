@@ -22,7 +22,7 @@ function makeParams(): FittedParams {
   return {
     sessionPaceTrendPerLap: { pooled: { value: -0.05, provenance: "DERIVED" }, perTrack: {} },
     tyreDegradation: {
-      trackIndex: { "warp-track": { value: 0.05, provenance: "DERIVED" } },
+      trackIndex: { "Warp GP": { value: 0.05, provenance: "DERIVED" } },
       compoundMultiplierDefault: {
         SOFT: { value: 1.35, provenance: "DEFAULT" },
         MEDIUM: { value: 1.0, provenance: "DEFAULT" },
@@ -36,7 +36,7 @@ function makeParams(): FittedParams {
       incidentProbability: { value: 0, provenance: "DERIVED" }, // disabled for determinism tests
       incidentMeanExcessSeconds: { value: 0.9, provenance: "DERIVED" },
     },
-    dirtyAirLossPerSecondOfProximity: { "warp-track": { value: 0.1, provenance: "DERIVED" } },
+    dirtyAirLossPerSecondOfProximity: { "Warp GP": { value: 0.1, provenance: "DERIVED" } },
     pitLoss: {},
     neutralisation: {
       safetyCarLapHazard: { value: 0.01, provenance: "DERIVED" },
@@ -51,7 +51,7 @@ function makeParams(): FittedParams {
 }
 
 const baseCtx: LapModelContext = {
-  trackSlug: "warp-track", trackBaseSeconds: 90, driver: "FAST", team: null,
+  trackEvent: "Warp GP", trackBaseSeconds: 90, driver: "FAST", team: null,
   lapIndex: 5, tyreLifeMinusOne: 3, compound: "MEDIUM",
   gapAheadAtLapStart: null, neutralisation: null, pitLossThisLap: 0,
 };

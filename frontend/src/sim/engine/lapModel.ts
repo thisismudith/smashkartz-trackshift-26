@@ -9,7 +9,13 @@ import type { TrackModel } from "../contract/types";
 import { NEUTRALISATION_MULTIPLIER_DEFAULT, type FittedParams, leafValue } from "./params";
 
 export interface LapModelContext {
-  trackSlug: string;
+  /** The circuit's event display name (TrackModel.event, e.g. "British Grand Prix") --
+   * every per-track leaf in FittedParams (fit_params.py's track_fits) is keyed this way,
+   * NOT by TrackModel.slug. Using the slug here silently misses every real circuit and
+   * falls through to the flat cross-track defaults below, erasing exactly the
+   * track-to-track character (Monaco's dirty air, Barcelona's degradation, ...) this
+   * whole fit exists to capture. */
+  trackEvent: string;
   trackBaseSeconds: number; // the track's own median clean lap time, seconds
   driver: string;
   team: string | null;
@@ -23,7 +29,7 @@ export interface LapModelContext {
 
 export function composeLapTime(ctx: LapModelContext, params: FittedParams, rng: () => number): number {
   const fuel = leafValue(
-    params.sessionPaceTrendPerLap.perTrack[ctx.trackSlug],
+    params.sessionPaceTrendPerLap.perTrack[ctx.trackEvent],
     params.sessionPaceTrendPerLap.pooled.value,
   );
   // The driver-offset fit already absorbs the team effect (it is fitted with driver
@@ -34,11 +40,11 @@ export function composeLapTime(ctx: LapModelContext, params: FittedParams, rng: 
   const driverOffset = params.driverOffsetSeconds[ctx.driver]
     ? leafValue(params.driverOffsetSeconds[ctx.driver], 0)
     : leafValue(ctx.team ? params.teamOffsetSeconds[ctx.team] : undefined, 0);
-  const trackDegIndex = leafValue(params.tyreDegradation.trackIndex[ctx.trackSlug], 0.05);
+  const trackDegIndex = leafValue(params.tyreDegradation.trackIndex[ctx.trackEvent], 0.05);
   const compoundMult = leafValue(params.tyreDegradation.compoundMultiplierDefault[ctx.compound], 1);
   const degradation = trackDegIndex * compoundMult * ctx.tyreLifeMinusOne;
 
-  const dirtyAirB = leafValue(params.dirtyAirLossPerSecondOfProximity[ctx.trackSlug], 0.1);
+  const dirtyAirB = leafValue(params.dirtyAirLossPerSecondOfProximity[ctx.trackEvent], 0.1);
   const proximity = ctx.gapAheadAtLapStart !== null && ctx.gapAheadAtLapStart < 3
     ? dirtyAirB * (3 - ctx.gapAheadAtLapStart)
     : 0;
