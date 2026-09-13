@@ -426,3 +426,31 @@ The integration layer keeps these fields separate:
   evidence and has `final_mode_permitted: false`.
 
 TrackShift is integrated only when it can take one decision-time StrategicState, apply the applicable rule snapshot, estimate state and uncertainty causally, remove illegal actions, evaluate feasible policy alternatives, return an explainable plan, simulate declared counterfactual policies, and serve all of this through one API or one replay bundle without depending on either developer laptop at runtime.
+
+## Synthetic closure hand-off — 2026-09-13
+
+The shared service and replay hand-off is implemented under
+`src/trackshift/serve/`. Routes call the existing public C3, rival, value,
+planner, baseline, simulator, and policy paths; replay generation dispatches
+those same handlers in-process. The fixture is explicitly synthetic and is not
+a final release artifact.
+
+Exact validation:
+
+```bash
+.venv/bin/python -m pytest -q tests/test_serve.py tests/test_registry.py tests/test_chain_v_cores.py tests/test_rival_cp07.py
+.venv/bin/python scripts/simulate/run_closure_synthetic.py --out /tmp/trackshift-closure-9Mhknx --episodes 8 --seed 17 > /tmp/trackshift-closure-synthetic-run.json
+```
+
+Evidence: `58 passed in 1.13s`; closure status
+`SYNTHETIC_DEVELOPMENT_COMPLETE`; planner p95 `4.80098300249665 ms`; aggregate
+rule violations `0`; replay `stubs_used: []`. Local generated evidence is at
+`/tmp/trackshift-closure-9Mhknx/closure_evidence.json` and its replay manifest
+at `/tmp/trackshift-closure-9Mhknx/replay/bundle_manifest.json`.
+
+The required final suite also completed: `.venv/bin/python -m pytest -q` →
+`1222 passed, 23 skipped, 2 warnings in 79.66s (0:01:19)`.
+
+The release gate remains blocked by synthetic-only inputs, unresolved official
+2026 rule leaves, and unavailable accepted public C4/C5 decision-time
+callbacks. British Grand Prix remains excluded from training/calibration.

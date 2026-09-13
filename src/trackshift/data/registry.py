@@ -232,6 +232,23 @@ def _proxy_in_value(value: object) -> bool:
     return False
 
 
+def _drs_names_in_value(value: object) -> set[str]:
+    """Find forbidden DRS names in nested API/state payloads."""
+    if isinstance(value, Mapping):
+        found = {str(key) for key in value if _drs_feature_name(key)}
+        for key, child in value.items():
+            if _drs_feature_name(key):
+                continue
+            found.update(_drs_names_in_value(child))
+        return found
+    if isinstance(value, (list, tuple, set, frozenset)):
+        found: set[str] = set()
+        for child in value:
+            found.update(_drs_names_in_value(child))
+        return found
+    return set()
+
+
 def validate_feature_admission(
     columns: Iterable[str] | Mapping[str, object],
     *,
@@ -258,7 +275,10 @@ def validate_feature_admission(
         raise FeatureBoundaryError(f"year must be an integer or None, got {year!r}") from exc
 
     names = list(columns.keys()) if isinstance(columns, Mapping) else [str(column) for column in columns]
-    drs_names = sorted({str(name) for name in names if _drs_feature_name(name)})
+    drs_names_set = {str(name) for name in names if _drs_feature_name(name)}
+    if isinstance(columns, Mapping):
+        drs_names_set.update(_drs_names_in_value(columns))
+    drs_names = sorted(drs_names_set)
     proxy_seen = _proxy_in_value(provenance) or (isinstance(columns, Mapping) and _proxy_in_value(columns))
 
     if mode_name in FINAL_MODES and (drs_names or proxy_seen):
