@@ -153,39 +153,57 @@ probability as a model output.
 
 ## 6. Route inventory — what is real and what is not
 
-All 17 routes respond. Only the first is backed by a trained model today.
+All 17 routes respond. The distinction that matters is **not** "real route vs
+fake route" — it is *which part* is real. Most of Owner A's routes run genuine
+engines that are being fed synthetic inputs, which is a very different state
+from unimplemented.
 
-| Route | Backing | Safe to show as real? |
-|---|---|---|
-| `POST /pass/predict` | **CP-14 artifact** | **Yes**, with the `INTERIM` grade shown |
-| `GET /meta` | Version metadata | Yes |
-| `GET /validation` | Synthetic report | No — labelled |
-| `GET /track/{event}` | Synthetic centreline and segments | No |
-| `GET /rules/{event}` | Real rule config (CP-03/CP-11) | Yes |
-| `GET /rules/{event}/power_envelope` | Real rule engine | Yes |
-| `POST /rules/legal_actions` | Real rule engine | Yes |
-| `POST /rules/eligibility` | Real eligibility projection (CP-12) | Yes |
-| `GET /battles`, `GET /battles/{id}/timeline` | Synthetic rows | No |
-| `POST /rival/state` | Synthetic rival model | No |
-| `POST /twin/segment_time` | Synthetic | **No** — see below |
-| `POST /twin/energy_state` | Synthetic | **No** — see below |
-| `GET /value/{event}/shadow_price` | Synthetic transition | No |
-| `POST /plan` | Synthetic | No |
-| `POST /simulate`, `GET /simulate/policies` | Synthetic | No |
+| Route | Engine | Inputs | Safe to show as real? |
+|---|---|---|---|
+| `POST /pass/predict` | **Real** — CP-14 artifact | Caller-supplied | **Yes**, with the `INTERIM` grade shown |
+| `GET /rules/{event}` | **Real** — CP-03 rule config | Real | **Yes** |
+| `GET /rules/{event}/power_envelope` | **Real** — CP-11 rule engine | Real | **Yes** |
+| `POST /rules/legal_actions` | **Real** — CP-11 rule engine | Caller-supplied | **Yes** |
+| `POST /rules/eligibility` | **Real** — CP-12 projection | Caller-supplied | **Yes** |
+| `POST /rival/state` | **Real** — `rival_state()` | Caller segments if supplied, else synthetic rows; synthetic rival model | Partly — real when you post segments |
+| `POST /plan` | **Real** — planner DP | `transition_fn=synthetic_transition` | No, until the twin is real |
+| `POST /simulate` | **Real** — simulator | `transition_fn` and `pass_fn` synthetic | No, until the twin is real |
+| `GET /value/{event}/shadow_price` | **Real** — DP shadow price | Synthetic state and transition | No, until the twin is real |
+| `GET /simulate/policies` | **Real** — policy registry | Real | **Yes** |
+| `GET /meta` | Version metadata | Real | Yes |
+| `GET /validation` | Synthetic report | Synthetic | No |
+| `GET /track/{event}` | Synthetic centreline and segments | Synthetic | No |
+| `GET /battles`, `/battles/{id}/timeline` | Synthetic rows | Synthetic | No |
+| `POST /twin/segment_time` | Synthetic | Synthetic | **No** — see below |
+| `POST /twin/energy_state` | Synthetic | Synthetic | **No** — see below |
+
+### The single upstream blocker
+
+Four of those routes are one dependency away. `/plan`, `/simulate`,
+`/value/shadow_price` and both `/twin/*` routes all bottleneck on the same
+thing: a usable physics twin. The planner, simulator and DP are implemented and
+exercised — they are waiting on `transition_fn`, not on code.
+
+`POST /simulate` also takes `pass_fn=synthetic_pass`. That one **can** be
+swapped for the real CP-14 model today, independently of the twin, and is the
+cheapest single upgrade available to this integration.
 
 ### Why the twin routes stay synthetic
 
-This is a deliberate hold, not unfinished wiring. CP-20's physics calibration
-has no accepted rung — every fitted parameter sits on a bound, which means the
-model is missing physics rather than that the bounds are wrong. CP-21's energy
+A deliberate hold, not unfinished wiring. CP-20's physics calibration has no
+accepted rung — every fitted parameter sits on a bound, which means the model is
+missing physics rather than that the bounds are wrong. CP-21's energy
 sensitivity `a_k` is **inverted by segment type**: corners average 7.1 s/MJ
 against straights at 0.63, where the physics says the opposite. Wiring that into
 `/twin/segment_time` would hand the planner a transition pointing the wrong way,
-and the planner would confidently recommend deploying energy where it helps
-least.
+and it would confidently recommend deploying energy where it helps least.
 
-Leave them synthetic until CP-20 produces an accepted rung. The blocker is
-documented in `CHECKPOINTS_TANVEER.md` §CP-20.
+Leave them synthetic until CP-20 produces an accepted rung. Documented in
+`CHECKPOINTS_TANVEER.md` §CP-20.
+
+> **Owner A note.** This table was read off `src/trackshift/serve/app.py`, not
+> agreed with Owner A. If it mischaracterises a route, Owner A's reading wins —
+> correct it here rather than working around it.
 
 ---
 
