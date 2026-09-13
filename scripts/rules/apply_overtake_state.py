@@ -389,13 +389,16 @@ def main() -> int:
     parser.add_argument("--output", type=Path, default=OUT)
     parser.add_argument("--include-british-final-replay", action="store_true",
                         help="Allow British GP only for final replay/final validation, never development.")
+    parser.add_argument("--final-mode", action="store_true",
+                        help="Require the complete official 2026 rule configuration; fail closed on proxies/unresolved values.")
     args = parser.parse_args()
 
     SEGMENTS = args.segments
     requested = args.event or [path.stem for path in (ROOT / "config" / "rules" / "2026").glob("*.yaml") if path.stem != "common"]
     manifests: list[dict[str, Any]] = []
     for event_key in sorted(set(requested)):
-        rules = load_event_rules(event_key)
+        final_mode = bool(args.final_mode or args.include_british_final_replay)
+        rules = load_event_rules(event_key, final_mode=final_mode)
         event_display = _event_display(event_key)
         if event_display == BRITISH_EVENT and not args.include_british_final_replay:
             manifests.append({"event": event_key, "excluded": True, "reason": "British GP held out by default"})

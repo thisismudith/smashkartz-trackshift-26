@@ -2551,6 +2551,33 @@ def test_causal(builder, lap_df):
 
 # Open items
 
+## Regulation-era boundary closure — 2026-09-13
+
+- `config/feature_registry.yaml` marks historical DRS fields
+  `historical_prior_only`; `src/trackshift/data/registry.py` enforces that
+  policy at consumer and final-mode boundaries. Raw/historical DRS is accepted
+  only for explicitly labelled 2022–2025 audit/prior work and never for 2026
+  strategy inputs. `PROXY_HISTORICAL_DRS` is development-fixture provenance
+  only.
+- `src/trackshift/pass_model/features.py` and
+  `scripts/train/calibrate_pass_model.py --final-mode` reject proxy/DRS C4
+  inputs; final mode also requires only non-British 2026 rows. No C4 retraining
+  was run because the required final rule inputs and accepted C5 callback are
+  unavailable. British Grand Prix was not used for training or calibration.
+- Official source ledger: `config/rules/sources_2026.yaml`; common rule
+  snapshot: `config/rules/2026/common.yaml`; British event configuration:
+  `config/rules/2026/british_grand_prix.yaml`. The FIA power curves are sourced;
+  Detection Gap, generic deployment budget, physical store capacity, and
+  event-specific conditions remain unresolved and keep final mode blocked.
+- Focused validation command:
+  `.venv/bin/python -m pytest -q tests/test_strategic_state.py
+  tests/test_registry.py tests/test_rules_config.py tests/test_rules.py
+  tests/test_pass_model.py tests/test_ensemble.py tests/test_rival_chain.py
+  tests/test_rival_cp07.py tests/test_twin.py` → `309 passed in 5.14s`.
+- Generated C4/C5 artifacts were not rebuilt or staged. Existing C4 candidates
+  under `artifacts/models/pass/cp14_2026_v1/` remain development evidence only;
+  no accepted public decision-time C5 transition exists.
+
 | # | Item | Status |
 |---|---|---|
 | T1 | FIA 2026 Sporting/Technical Regulations and per-event notes for all 14 tracks | Research task in CP-03; Tier-C proxy unblocks development meanwhile |

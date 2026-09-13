@@ -186,6 +186,33 @@ Exact outputs and local artifact paths are appended per iteration below.
   `CHECKPOINTS_RISHABH.md`. Generated data, models, caches, manifests, and
   `/tmp` evidence are not staged.
 
+### Regulation-era boundary closure — 2026-09-13
+
+- Registry/final-boundary source: `src/trackshift/data/registry.py`,
+  `src/trackshift/rules/config.py`, `src/trackshift/rules/engine.py`, and
+  `config/feature_registry.yaml`. Historical DRS is accepted only for named
+  2022–2025 audit/prior consumers; it cannot enter 2026 strategy, planner,
+  simulator, API, replay, calibration, or release paths. 2026 all-zero DRS is
+  unavailable. `PROXY_HISTORICAL_DRS` is development-fixture-only.
+- Official rule source artifact: `config/rules/sources_2026.yaml`; rule config
+  version `rules-2026-common-v2-fia-iss08-iss20`. Sourced values include the
+  FIA speed-dependent normal/Overtake-active ERS-K curves and British A1–A4
+  line landmarks. Unresolved final inputs remain explicitly `UNVERIFIED` with
+  official references and block final mode: Detection Gap, generic deployment
+  budget, physical store capacity, and event-specific recharge/zone-end data.
+- Focused command:
+  `.venv/bin/python -m pytest -q tests/test_strategic_state.py
+  tests/test_registry.py tests/test_rules_config.py tests/test_rules.py
+  tests/test_pass_model.py tests/test_ensemble.py tests/test_rival_chain.py
+  tests/test_rival_cp07.py tests/test_twin.py` → `309 passed in 5.14s`.
+- No generated artifacts were staged. No C6/M07 rebuild, C4 retrain, C5
+  acceptance, final CP-10–CP-16 run, route, or replay bundle was performed
+  because the final gates are not met. Existing development-only artifact:
+  `/tmp/trackshift-chain-v-smoke.json` (p95 `3.350438 ms`, zero rule
+  violations, `final_mode_permitted: false`).
+- Status remains `BLOCKED_FINAL_MODE`; British Grand Prix remains excluded from
+  all training/calibration and reserved for held-out replay/demo/final use.
+
 ## Terminal status
 
 `IN_PROGRESS`

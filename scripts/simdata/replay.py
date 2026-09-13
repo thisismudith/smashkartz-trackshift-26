@@ -278,7 +278,19 @@ def encode_lap(ring, lap, session_scale: float = 1.0,
     return bytes(buf), report
 
 
-def build_replay_pack(event: str, session: str):
+def build_replay_pack(event: str, session: str, *, final_mode: bool = False):
+    """Build the development visual replay pack.
+
+    The visual encoder is not the shared Chain-V route/model path. Keep that
+    distinction explicit: a caller asking for final replay evidence is refused
+    until a complete, proxy-free strategic bundle is wired through the same
+    public C3/C4/C5 path.
+    """
+    if final_mode:
+        raise ValueError(
+            "final replay is blocked: this encoder is development-only and is "
+            "not the shared proxy-free Chain-V route/model path"
+        )
     ring, geom_dir, geom_session, _, _ = prepare_ring(event)
     sdir = data_root() / event / session
     table = LapTable(sdir)

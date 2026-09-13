@@ -9,6 +9,7 @@ from typing import Any, Mapping
 import yaml
 
 from trackshift.contracts.strategic_state import validate_strategic_state
+from trackshift.data.registry import assert_final_feature_boundary
 from trackshift.rules import api as rules_api
 
 STUB_RESPONSE = "STUB_RESPONSE"
@@ -96,11 +97,14 @@ def _c3_unavailable(
 
 
 def _c3_action_set(
-    state: Mapping[str, Any], event_rules: Mapping[str, Any],
+    state: Mapping[str, Any], event_rules: Mapping[str, Any], *, final_mode: bool = False,
 ) -> dict[str, Any]:
     """Call only the public C3 boundary and make unavailable responses explicit."""
     try:
-        response = rules_api.legal_actions(state, event_rules)
+        response = (
+            rules_api.legal_actions(state, event_rules, final_mode=True)
+            if final_mode else rules_api.legal_actions(state, event_rules)
+        )
     except Exception as exc:
         return _c3_unavailable(f"C3 legal_actions unavailable: {exc}")
     if not isinstance(response, Mapping):
@@ -111,9 +115,20 @@ def _c3_action_set(
         return _c3_unavailable("C3 legal_actions returned no legal action set", response)
     return dict(response)
 
-def battle_step_to_strategic_state(battle_step: Mapping[str, Any], *, event_rules: Mapping[str, Any] | None = None) -> dict[str, Any]:
+def battle_step_to_strategic_state(
+    battle_step: Mapping[str, Any], *, event_rules: Mapping[str, Any] | None = None,
+    final_mode: bool = False,
+) -> dict[str, Any]:
     """Adapt current-step C1/C2/C7/C8/C9 inputs; never derive missing models."""
     _check_causal(battle_step)
+    if final_mode:
+        assert_final_feature_boundary(battle_step, "strategic-state final input")
+        if event_rules is None:
+            raise StrategicStateAdapterError("final mode requires the event rule configuration")
+        try:
+            rules_api.assert_final_mode_rules(event_rules)
+        except Exception as exc:
+            raise StrategicStateAdapterError(f"final-mode rule configuration rejected: {exc}") from exc
     ref_keys = ("year", "event", "session", "lap", "segment_id", "distance_m")
     if any(battle_step.get(k) is None for k in ref_keys):
         raise StrategicStateAdapterError("decision step lacks C1 identity/ref")
@@ -135,7 +150,7 @@ def battle_step_to_strategic_state(battle_step: Mapping[str, Any], *, event_rule
     if battle_step.get("speed_kmh") is not None:
         state["speed_kmh"] = battle_step["speed_kmh"]
     if event_rules is not None:
-        state["legal_actions"] = _c3_action_set(state, event_rules)  # C3 public boundary only
+        state["legal_actions"] = _c3_action_set(state, event_rules, final_mode=final_mode)  # C3 public boundary only
     return validate_strategic_state(state)
 
 def discretize_state(state: Mapping[str, Any], config_path: Path | None = None) -> dict[str, Any]:

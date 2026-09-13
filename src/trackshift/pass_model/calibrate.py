@@ -50,7 +50,7 @@ from .calibration import (
     wilson_interval,
 )
 from .candidates import DEFAULT_SEED, PassModel
-from .features import build_matrix, select_features
+from .features import assert_model_feature_boundary, build_matrix, select_features
 from .metrics import evaluate, reliability_table
 
 __all__ = [
@@ -144,8 +144,14 @@ def crossfit_calibration_set(
     threads: int = 1,
     deterministic: bool = True,
     include_identity: bool = False,
+    final_mode: bool = False,
 ) -> CalibrationSet:
     """Pool out-of-fold predictions over this fold's training events."""
+    if final_mode:
+        years = sorted({str(value) for value in frame["year"].dropna().unique()})
+        if years != ["2026"]:
+            raise CalibrationError(f"final C4 calibration requires only 2026 rows, got years {years}")
+        assert_model_feature_boundary(frame, year=2026, consumer="C4 calibration", mode="final")
     rows = frame[frame["decision_checkpoint"] == checkpoint]
     if rows.empty:
         raise CalibrationError(f"no rows at checkpoint {checkpoint}")
@@ -286,6 +292,7 @@ def evaluate_variants(
     include_identity: bool = False,
     methods: Sequence[str] = METHODS,
     bins: int = 10,
+    final_mode: bool = False,
 ) -> tuple[list[VariantResult], CalibrationSet | None]:
     """Score every calibration variant for one (checkpoint, family, fold)."""
     import numpy as np
@@ -299,6 +306,7 @@ def evaluate_variants(
         calibration_set = crossfit_calibration_set(
             frame, checkpoint, family, fold, seed=seed, threads=threads,
             deterministic=deterministic, include_identity=include_identity,
+            final_mode=final_mode,
         )
         assert_calibration_disjoint(frame, fold, calibration_set)
     except Exception as exc:
@@ -307,7 +315,9 @@ def evaluate_variants(
     try:
         rows = frame[frame["decision_checkpoint"] == checkpoint]
         selection = select_features(
-            checkpoint, rows.columns, include_identity=include_identity, dtypes=rows.dtypes
+            checkpoint, rows.columns, include_identity=include_identity, dtypes=rows.dtypes,
+            year=2026 if final_mode else None, consumer="C4 calibration",
+            mode="final" if final_mode else "development",
         )
         X_tr, y_tr = build_matrix(rows.loc[rows.index.intersection(fold.train)], selection)
         val_index = rows.index.intersection(fold.validation)
