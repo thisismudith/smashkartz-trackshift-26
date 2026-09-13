@@ -2578,6 +2578,26 @@ def test_causal(builder, lap_df):
   under `artifacts/models/pass/cp14_2026_v1/` remain development evidence only;
   no accepted public decision-time C5 transition exists.
 
+### Rishabh synthetic closure hand-off — 2026-09-13
+
+Rishabh's M13/M22–M27 development paths and shared API/replay hand-off now have
+an executable synthetic fixture. This does not upgrade Tanveer's C4/C5 gates:
+the accepted public decision-time callbacks remain unavailable, and British GP
+remains excluded from training and calibration.
+
+```bash
+.venv/bin/python -m pytest -q tests/test_serve.py tests/test_registry.py tests/test_chain_v_cores.py tests/test_rival_cp07.py
+.venv/bin/python scripts/simulate/run_closure_synthetic.py --out /tmp/trackshift-closure-9Mhknx --episodes 8 --seed 17 > /tmp/trackshift-closure-synthetic-run.json
+```
+
+The focused route/registry/Chain V command returned `58 passed in 1.13s`.
+The synthetic closure run returned `SYNTHETIC_DEVELOPMENT_COMPLETE`, planner
+p95 `4.80098300249665 ms`, and zero aggregate rule violations. Generated
+evidence remains local under `/tmp/trackshift-closure-9Mhknx/`; it is not a
+replacement for a real C4 calibration manifest or C5 acceptance artifact.
+The required full suite completed with `.venv/bin/python -m pytest -q` →
+`1222 passed, 23 skipped, 2 warnings in 79.66s (0:01:19)`.
+
 | # | Item | Status |
 |---|---|---|
 | T1 | FIA 2026 Sporting/Technical Regulations and per-event notes for all 14 tracks | Research task in CP-03; Tier-C proxy unblocks development meanwhile |

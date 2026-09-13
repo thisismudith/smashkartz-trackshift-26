@@ -47,15 +47,15 @@ Each checkpoint uses the same structure.
 | 05 | Rival-state feature dataset | M08 | ☑ |
 | 06 | Synthetic labelled trajectories | M09b | ☑ |
 | 07 | Rival-state benchmark | M09, C10 | ☑ |
-| 08 | Rival-side regulation-era evaluation | M13 | ☐ |
+| 08 | Rival-side regulation-era evaluation | M13 | ☑* |
 | 09 | Strategic-state adapter and stubs | C3 to C6 | ☑ |
-| 10 | Dynamic programming and shadow price | M22 | ☐ |
-| 11 | Counterattack valuation | M23 | ☐ |
-| 12 | Planner | M24 | ☐ |
-| 13 | Planner baselines | M25 | ☐ |
-| 14 | Simulator | M26 | ☐ |
-| 15 | Explicit rival policies | M27 | ☐ |
-| 16 | Routes, replay hand-off, release evidence | API.md | ☐ |
+| 10 | Dynamic programming and shadow price | M22 | ☑* |
+| 11 | Counterattack valuation | M23 | ☑* |
+| 12 | Planner | M24 | ☑* |
+| 13 | Planner baselines | M25 | ☑* |
+| 14 | Simulator | M26 | ☑* |
+| 15 | Explicit rival policies | M27 | ☑* |
+| 16 | Routes, replay hand-off, release evidence | API.md | ☑* |
 
 ---
 
@@ -817,3 +817,56 @@ is deliberately kept out of Git.
   discovered; C1 has 1,823,855 rows; C7 has 1,269,276 rows, including 941,605
   normal-race eligible rows. Monaco C1 alone failed with exit `-11`; its four
   downstream C7 units have no rows. This does not create historical M08.
+
+### Synthetic closure sweep — 2026-09-13
+
+The requested M13/M22–M27 and API/replay implementation paths now execute from
+one deterministic, explicitly synthetic fixture. The progress-table `☑*`
+marker means the development implementation and evidence harness are complete;
+it does not mean that final or real-race evidence has passed.
+
+#### Exact command
+
+```bash
+.venv/bin/python -m pytest -q tests/test_serve.py tests/test_registry.py tests/test_chain_v_cores.py tests/test_rival_cp07.py
+.venv/bin/python scripts/simulate/run_closure_synthetic.py --out /tmp/trackshift-closure-9Mhknx --episodes 8 --seed 17 > /tmp/trackshift-closure-synthetic-run.json
+```
+
+The focused command completed with `58 passed in 1.13s`. The closure command
+completed with `SYNTHETIC_DEVELOPMENT_COMPLETE`, planner p95 latency
+`4.80098300249665 ms`, aggregate rule violations `0`, and
+`final_mode_permitted: false`.
+
+Required final suite: `.venv/bin/python -m pytest -q` → `1222 passed, 23
+skipped, 2 warnings in 79.66s (0:01:19)`.
+
+#### Implemented evidence
+
+- M13 uses the existing regulation-era evaluator through a seeded synthetic
+  2025 historical-prior fixture and synthetic non-British 2026 current rows.
+  It reports strategy/N/provenance fields and never supplies DRS to the 2026
+  tactical state. This is not a real historical-era result.
+- M22 computes the DP value and same-state finite-difference shadow price;
+  M23 evaluates role-switch/counterattack outcomes; M24 produces the
+  uncertainty-aware plan and alternatives.
+- M25 compares six named baselines through the shared legal-action path. M26
+  runs seeded counterfactual episodes with zero illegal actions. M27 exposes
+  `DEFEND_CONSERVE`, `DEFEND_MIRROR`, and `ATTACK_GREEDY` through the shared
+  policy registry.
+- CP-16 routes and replay use the same `src/trackshift/serve/` handlers. The
+  development replay manifest records `stubs_used: []`, provenance
+  `SIMULATED`, and zero rule violations.
+
+#### Generated local evidence (not committed)
+
+- `/tmp/trackshift-closure-synthetic-run.json`
+- `/tmp/trackshift-closure-9Mhknx/closure_evidence.json`
+- `/tmp/trackshift-closure-9Mhknx/replay/bundle_manifest.json`
+
+#### Honest disposition
+
+Final mode remains blocked. The fixture is synthetic, the accepted public C4
+and C5 decision-time callbacks are unavailable, and unresolved official 2026
+inputs remain in the rule snapshot. British Grand Prix remains held out from
+training/calibration and is only permitted as replay/demo/final-held-out data.
+No generated evidence is staged.

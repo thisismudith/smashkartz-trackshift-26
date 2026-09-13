@@ -218,3 +218,36 @@ Exact outputs and local artifact paths are appended per iteration below.
 `IN_PROGRESS`
 
 Release readiness has not been claimed. Human blocking has not yet been proven on both tracks.
+
+### Synthetic closure sweep — 2026-09-13
+
+The requested Rishabh development checkpoints now have one executable service,
+simulation, and replay path. The implementation uses a deterministic fixture
+whose values are labelled `SIMULATED`; it does not convert unavailable inputs
+into final claims.
+
+Exact commands:
+
+```bash
+.venv/bin/python -m pytest -q tests/test_serve.py tests/test_registry.py tests/test_chain_v_cores.py tests/test_rival_cp07.py
+.venv/bin/python scripts/simulate/run_closure_synthetic.py --out /tmp/trackshift-closure-9Mhknx --episodes 8 --seed 17 > /tmp/trackshift-closure-synthetic-run.json
+```
+
+Results: focused tests `58 passed in 1.13s`; closure status
+`SYNTHETIC_DEVELOPMENT_COMPLETE`; planner p95 `4.80098300249665 ms`; aggregate
+rule violations `0`; `final_mode_permitted: false`.
+
+Required full-suite command completed separately:
+`.venv/bin/python -m pytest -q` → `1222 passed, 23 skipped, 2 warnings in
+79.66s (0:01:19)`.
+
+Artifacts (generated and intentionally uncommitted):
+
+- `/tmp/trackshift-closure-synthetic-run.json`
+- `/tmp/trackshift-closure-9Mhknx/closure_evidence.json`
+- `/tmp/trackshift-closure-9Mhknx/replay/bundle_manifest.json`
+
+The development replay is zero-stub and uses the shared route handlers, but
+final mode remains blocked by synthetic-only evidence, unresolved official
+2026 rule inputs, and missing accepted public C4/C5 decision-time callbacks.
+British Grand Prix remains held out from all training/calibration.
