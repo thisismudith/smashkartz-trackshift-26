@@ -1,0 +1,346 @@
+{
+  "cross_validated": {
+    "checkpoint": "DETECTION",
+    "family": "xgboost",
+    "folds": 6,
+    "folds_ok": 6,
+    "errors": [],
+    "brier": 0.11835748763368338,
+    "brier_std": 0.03523305936794986,
+    "brier_n": 6,
+    "brier_reference": 0.13331046293424623,
+    "brier_reference_std": 0.04434238367382325,
+    "brier_reference_n": 6,
+    "log_loss": 0.386732432457547,
+    "log_loss_std": 0.08710950665785534,
+    "log_loss_n": 6,
+    "ece": 0.06334003846819032,
+    "ece_std": 0.033738226570290686,
+    "ece_n": 6,
+    "roc_auc": 0.7409556665667032,
+    "roc_auc_std": 0.04797193519940669,
+    "roc_auc_n": 6,
+    "pr_auc": 0.3696659080630707,
+    "pr_auc_std": 0.11011631265319,
+    "pr_auc_n": 6,
+    "brier_skill_score": 0.11216655445820645,
+    "n": 4005,
+    "n_positive": 622,
+    "seconds": 12.94,
+    "metrics": {
+      "test": {
+        "brier": 0.11835748763368338,
+        "ece": 0.06334003846819032,
+        "log_loss": 0.386732432457547,
+        "roc_auc": 0.7409556665667032,
+        "n": 4005
+      }
+    }
+  },
+  "final_fit": {
+    "checkpoint": "DETECTION",
+    "family": "xgboost",
+    "fold": "final",
+    "ok": false,
+    "metrics": {
+      "train": {
+        "n": 3342,
+        "n_positive": 515,
+        "observed_rate": 0.15409934171154996,
+        "reference_rate": 0.15409934171154996,
+        "brier": 0.07086937994153475,
+        "brier_reference": 0.13035273459561694,
+        "brier_skill_score": 0.4563260973282435,
+        "log_loss": 0.24997425496033027,
+        "log_loss_reference": 0.4297543973535425,
+        "ece": 0.06399421720865296,
+        "roc_auc": 0.9339393710441272,
+        "pr_auc": 0.8011905958642235,
+        "single_class_split": false,
+        "reliability": [
+          {
+            "lower": 0.029530391097068787,
+            "upper": 0.042674630880355835,
+            "n": 337,
+            "mean_predicted": 0.037767941939149834,
+            "observed_rate": 0.0,
+            "gap": -0.037767941939149834
+          },
+          {
+            "lower": 0.042674630880355835,
+            "upper": 0.04946761950850487,
+            "n": 334,
+            "mean_predicted": 0.0459948084846942,
+            "observed_rate": 0.0,
+            "gap": -0.0459948084846942
+          },
+          {
+            "lower": 0.04946761950850487,
+            "upper": 0.05863660499453545,
+            "n": 332,
+            "mean_predicted": 0.05395172454461635,
+            "observed_rate": 0.009036144578313253,
+            "gap": -0.0449155799663031
+          },
+          {
+            "lower": 0.05863660499453545,
+            "upper": 0.06800943613052368,
+            "n": 335,
+            "mean_predicted": 0.06264463988925094,
+            "observed_rate": 0.008955223880597015,
+            "gap": -0.05368941600865392
+          },
+          {
+            "lower": 0.06800943613052368,
+            "upper": 0.08148624002933502,
+            "n": 334,
+            "mean_predicted": 0.0743770095224152,
+            "observed_rate": 0.038922155688622756,
+            "gap": -0.035454853833792446
+          },
+          {
+            "lower": 0.08148624002933502,
+            "upper": 0.1025441437959671,
+            "n": 334,
+            "mean_predicted": 0.09118427980891959,
+            "observed_rate": 0.05389221556886228,
+            "gap": -0.037292064240057314
+          },
+          {
+            "lower": 0.1025441437959671,
+            "upper": 0.1391264647245407,
+            "n": 334,
+            "mean_predicted": 0.11998146022865158,
+            "observed_rate": 0.06287425149700598,
+            "gap": -0.0571072087316456
+          },
+          {
+            "lower": 0.1391264647245407,
+            "upper": 0.2090694695711136,
+            "n": 333,
+            "mean_predicted": 0.17291738773072446,
+            "observed_rate": 0.17417417417417416,
+            "gap": 0.0012567864434497034
+          },
+          {
+            "lower": 0.2090694695711136,
+            "upper": 0.3757413357496262,
+            "n": 334,
+            "mean_predicted": 0.2739139125643376,
+            "observed_rate": 0.2964071856287425,
+            "gap": 0.022493273064404906
+          },
+          {
+            "lower": 0.3757413357496262,
+            "upper": 0.8422121405601501,
+            "n": 335,
+            "mean_predicted": 0.592304050477583,
+            "observed_rate": 0.8955223880597015,
+            "gap": 0.30321833758211847
+          }
+        ],
+        "bins": 10
+      },
+      "validation": {
+        "n": 717,
+        "n_positive": 108,
+        "observed_rate": 0.1506276150627615,
+        "reference_rate": 0.15409934171154996,
+        "brier": 0.10586720302005835,
+        "brier_reference": 0.12795098952918998,
+        "brier_skill_score": 0.17259566800062587,
+        "log_loss": 0.35306489005755654,
+        "log_loss_reference": 0.4238427257423961,
+        "ece": 0.05184126732613752,
+        "roc_auc": 0.8028188286808976,
+        "pr_auc": 0.4749279881551063,
+        "single_class_split": false,
+        "reliability": [
+          {
+            "lower": 0.04378482699394226,
+            "upper": 0.06165337786078453,
+            "n": 72,
+            "mean_predicted": 0.054807979768762984,
+            "observed_rate": 0.0,
+            "gap": -0.054807979768762984
+          },
+          {
+            "lower": 0.06165337786078453,
+            "upper": 0.07434739172458649,
+            "n": 72,
+            "mean_predicted": 0.06739138765260577,
+            "observed_rate": 0.08333333333333333,
+            "gap": 0.015941945680727557
+          },
+          {
+            "lower": 0.07434739172458649,
+            "upper": 0.09715516865253448,
+            "n": 72,
+            "mean_predicted": 0.08550811776270469,
+            "observed_rate": 0.041666666666666664,
+            "gap": -0.04384145109603802
+          },
+          {
+            "lower": 0.09715516865253448,
+            "upper": 0.11912824958562851,
+            "n": 72,
+            "mean_predicted": 0.11038412277897199,
+            "observed_rate": 0.08333333333333333,
+            "gap": -0.027050789445638657
+          },
+          {
+            "lower": 0.11912824958562851,
+            "upper": 0.15221907198429108,
+            "n": 72,
+            "mean_predicted": 0.13605131891866526,
+            "observed_rate": 0.041666666666666664,
+            "gap": -0.0943846522519986
+          },
+          {
+            "lower": 0.15221907198429108,
+            "upper": 0.17366079986095428,
+            "n": 72,
+            "mean_predicted": 0.16328440171976885,
+            "observed_rate": 0.041666666666666664,
+            "gap": -0.1216177350531022
+          },
+          {
+            "lower": 0.17366079986095428,
+            "upper": 0.21991240978240967,
+            "n": 72,
+            "mean_predicted": 0.18883783308168253,
+            "observed_rate": 0.125,
+            "gap": -0.06383783308168253
+          },
+          {
+            "lower": 0.21991240978240967,
+            "upper": 0.2948681354522709,
+            "n": 69,
+            "mean_predicted": 0.2526095470656519,
+            "observed_rate": 0.2608695652173913,
+            "gap": 0.008260018151739379
+          },
+          {
+            "lower": 0.2948681354522709,
+            "upper": 0.4252509355545044,
+            "n": 72,
+            "mean_predicted": 0.3602249324321747,
+            "observed_rate": 0.375,
+            "gap": 0.014775067567825317
+          },
+          {
+            "lower": 0.4252509355545044,
+            "upper": 0.6978568434715271,
+            "n": 72,
+            "mean_predicted": 0.5304126491149267,
+            "observed_rate": 0.4583333333333333,
+            "gap": -0.07207931578159338
+          }
+        ],
+        "bins": 10
+      },
+      "feature_schema": {
+        "schema_version": "m10_pass_features_v2",
+        "decision_checkpoint": "DETECTION",
+        "include_identity": false,
+        "numeric": [
+          "attacker_tyre_life_laps",
+          "closing_rate_s_per_s",
+          "defender_tyre_life_laps",
+          "gap_at_checkpoint",
+          "p_eligible",
+          "track_temperature",
+          "tyre_life_delta_laps",
+          "wind_cross_component_mps",
+          "wind_head_component_mps"
+        ],
+        "categorical": [
+          "attacker_tyre_compound",
+          "corner_type",
+          "defender_tyre_compound",
+          "sector",
+          "tyre_compound_pair",
+          "wet_track_flag"
+        ],
+        "identity": [
+          "attacker",
+          "attacker_team",
+          "defender",
+          "defender_team"
+        ],
+        "label": "passed_by_outcome_horizon",
+        "n_features": 15,
+        "excluded": {
+          "attacker": "identity group, disabled for this run (section 17)",
+          "attacker_team": "identity group, disabled for this run (section 17)",
+          "battle_id": "interaction_group contains 'key'; an identifier, not signal",
+          "battle_join_status": "not in config/feature_registry.yaml (CP-02 owns the namespace)",
+          "crosses_lap_boundary": "structural column of the opportunity schema; never a feature",
+          "decision_checkpoint": "structural column of the opportunity schema; never a feature",
+          "defender": "identity group, disabled for this run (section 17)",
+          "defender_team": "identity group, disabled for this run (section 17)",
+          "distance_activation_to_brake": "rule/display/audit metadata; never a trainable feature",
+          "distance_detection_to_activation": "rule/display/audit metadata; never a trainable feature",
+          "distance_remaining_in_zone": "rule/display/audit metadata; never a trainable feature",
+          "eligibility_margin": "rule/display/audit metadata; never a trainable feature",
+          "event": "interaction_group contains 'key'; an identifier, not signal",
+          "feature_cutoff_distance_m": "structural column of the opportunity schema; never a feature",
+          "feature_cutoff_offset_m": "structural column of the opportunity schema; never a feature",
+          "gap_at_activation_s": "rule/display/audit metadata; never a trainable feature",
+          "label_definition": "structural column of the opportunity schema; never a feature",
+          "lap": "interaction_group contains 'key'; an identifier, not signal",
+          "opportunity_id": "structural column of the opportunity schema; never a feature",
+          "outcome_distance_m": "audit only (section 19); never a feature",
+          "outcome_horizon": "structural column of the opportunity schema; never a feature",
+          "pass_attempted": "audit only (section 19); never a feature",
+          "passed_by_outcome_horizon": "label",
+          "projected_gap_at_detection_s": "rule/display/audit metadata; never a trainable feature",
+          "projected_gap_sigma_s": "rule/display/audit metadata; never a trainable feature",
+          "regulation_era": "structural column of the opportunity schema; never a feature",
+          "schema_version": "structural column of the opportunity schema; never a feature",
+          "session": "interaction_group contains 'key'; an identifier, not signal",
+          "speed_at_activation_kmh": "decision_checkpoint=['ACTIVATION', 'BRAKING']; not knowable at DETECTION",
+          "speed_at_braking_kmh": "decision_checkpoint=['BRAKING']; not knowable at DETECTION",
+          "unavailable_quantities": "rule/display/audit metadata; never a trainable feature",
+          "year": "interaction_group contains 'key'; an identifier, not signal",
+          "zone": "rule/display/audit metadata; never a trainable feature"
+        }
+      }
+    },
+    "model": {
+      "family": "xgboost",
+      "params": {
+        "n_estimators": 2000,
+        "learning_rate": 0.03,
+        "max_depth": 5,
+        "min_child_weight": 5,
+        "subsample": 0.8,
+        "colsample_bytree": 0.8,
+        "reg_lambda": 1.0,
+        "eval_metric": "logloss",
+        "early_stopping_rounds": 100,
+        "random_state": 42,
+        "n_jobs": 2,
+        "tree_method": "hist",
+        "enable_categorical": true
+      },
+      "seed": 42,
+      "threads": 2,
+      "deterministic": true,
+      "best_iteration": 73,
+      "n_numeric": 9,
+      "n_categorical": 6,
+      "categorical_levels": {
+        "attacker_tyre_compound": 4,
+        "corner_type": 4,
+        "defender_tyre_compound": 4,
+        "sector": 1,
+        "tyre_compound_pair": 11,
+        "wet_track_flag": 1
+      }
+    },
+    "error": "test split is empty after dropping unlabelled rows",
+    "seconds": 0.834
+  },
+  "selection_rank": 2
+}

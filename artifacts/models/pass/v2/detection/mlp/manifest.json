@@ -1,0 +1,251 @@
+{
+  "schema_version": "m10_pass_model_v1",
+  "created_utc": "2026-09-13T02:31:19.495708+00:00",
+  "git_commit": "4676aeb70eb5a55cc32c4ed67686e3ba3a576017",
+  "model": {
+    "family": "mlp",
+    "params": {
+      "hidden_layer_sizes": [
+        64,
+        32
+      ],
+      "activation": "relu",
+      "alpha": 0.001,
+      "learning_rate_init": 0.001,
+      "max_iter": 500,
+      "early_stopping": true,
+      "n_iter_no_change": 25,
+      "random_state": 42
+    },
+    "seed": 42,
+    "threads": 2,
+    "deterministic": true,
+    "best_iteration": null,
+    "n_numeric": 9,
+    "n_categorical": 6,
+    "categorical_levels": {
+      "attacker_tyre_compound": 4,
+      "corner_type": 4,
+      "defender_tyre_compound": 4,
+      "sector": 1,
+      "tyre_compound_pair": 11,
+      "wet_track_flag": 1
+    }
+  },
+  "decision_checkpoint": "DETECTION",
+  "feature_schema_version": "m10_pass_features_v2",
+  "feature_schema": "feature_schema.json",
+  "n_features": 15,
+  "seed": 42,
+  "split": {
+    "design": "leave_one_event_out",
+    "split_unit": "battle_id",
+    "seed": 42,
+    "n_folds": 6,
+    "folds": [
+      {
+        "name": "australian_grand_prix",
+        "train": 9399,
+        "validation": 933,
+        "test": 2223,
+        "notes": "validation event: barcelona_grand_prix"
+      },
+      {
+        "name": "barcelona_grand_prix",
+        "train": 7926,
+        "validation": 3696,
+        "test": 933,
+        "notes": "validation event: canadian_grand_prix"
+      },
+      {
+        "name": "canadian_grand_prix",
+        "train": 6825,
+        "validation": 2034,
+        "test": 3696,
+        "notes": "validation event: italian_grand_prix"
+      },
+      {
+        "name": "italian_grand_prix",
+        "train": 9600,
+        "validation": 921,
+        "test": 2034,
+        "notes": "validation event: japanese_grand_prix"
+      },
+      {
+        "name": "japanese_grand_prix",
+        "train": 9054,
+        "validation": 2580,
+        "test": 921,
+        "notes": "validation event: miami_grand_prix"
+      },
+      {
+        "name": "miami_grand_prix",
+        "train": 7752,
+        "validation": 2223,
+        "test": 2580,
+        "notes": "validation event: australian_grand_prix"
+      }
+    ],
+    "holdout_rows": 1239,
+    "c9_manifest": {
+      "schema_version": "c9_split_assignments_v1",
+      "assignment_version": "c9_split_assignments_v1:6a1d0320dee7",
+      "unit": "battle_id",
+      "design": "leave_one_event_out",
+      "seed": 42,
+      "source_row_count": 13794,
+      "assignment_count": 2428,
+      "holdout_event": "British Grand Prix",
+      "assignment_sha256": "6a1d0320dee7f46b5d7c69081aea01b9c46aa4dda3f2bcb9666658b2dca9384e",
+      "modelling_design": "leave_one_event_out",
+      "demo_scope": "track",
+      "persistent_assignment": {
+        "schema_version": "c9_split_assignments_v1",
+        "assignment_version": "c9_split_assignments_v1:6a1d0320dee7",
+        "unit": "battle_id",
+        "design": "leave_one_event_out",
+        "seed": 42,
+        "source_row_count": 13794,
+        "assignment_count": 2428,
+        "holdout_event": "British Grand Prix",
+        "assignment_sha256": "6a1d0320dee7f46b5d7c69081aea01b9c46aa4dda3f2bcb9666658b2dca9384e",
+        "created_utc": "2026-09-13T02:24:08.386795+00:00",
+        "git_commit": "4676aeb70eb5a55cc32c4ed67686e3ba3a576017",
+        "source_datasets": [
+          "data/processed/overtake_opportunities/event=australian_grand_prix/opportunities.parquet",
+          "data/processed/overtake_opportunities/event=barcelona_grand_prix/opportunities.parquet",
+          "data/processed/overtake_opportunities/event=british_grand_prix/opportunities.parquet",
+          "data/processed/overtake_opportunities/event=canadian_grand_prix/opportunities.parquet",
+          "data/processed/overtake_opportunities/event=italian_grand_prix/opportunities.parquet",
+          "data/processed/overtake_opportunities/event=japanese_grand_prix/opportunities.parquet",
+          "data/processed/overtake_opportunities/event=miami_grand_prix/opportunities.parquet",
+          "data/processed/overtake_opportunities/event=monaco_grand_prix/opportunities.parquet"
+        ],
+        "rows_total": 14910,
+        "rows_assignable": 13794,
+        "rows_without_unit": 1116,
+        "unit_coverage": 0.925151,
+        "battle_join_status": {
+          "JOINED": 13794,
+          "NO_EPISODE_FOR_LAP": 1005,
+          "NO_EPISODE_FOR_PAIR": 111
+        }
+      }
+    },
+    "notes": [
+      "One outer fold per event. A battle cannot span two events, so the no-battle-across-folds property CP-14 wanted from battle_id holds here too.",
+      "Per-fold n varies widely; read every metric against its own n.",
+      "events kept in training but never scored as a fold, having fewer than 10 positive labels: monaco_grand_prix (1). Scoring a fold against so few positives would put a meaningless ROC-AUC in the report and let one unmeasurable fold drive the cross-fold variance gate.",
+      "split unit: battle_id populated on every row (CP-14 preferred unit)",
+      "demo holdout scope: track -- every British Grand Prix, all seasons; C9's stricter assertion applied",
+      "C9 assignment c9_split_assignments_v1:6a1d0320dee7 over 'battle_id', read from disk rather than re-derived, so this run is comparable with any other that cites it"
+    ]
+  },
+  "source_datasets": [
+    "data/processed/overtake_opportunities/event=australian_grand_prix/opportunities.parquet",
+    "data/processed/overtake_opportunities/event=barcelona_grand_prix/opportunities.parquet",
+    "data/processed/overtake_opportunities/event=british_grand_prix/opportunities.parquet",
+    "data/processed/overtake_opportunities/event=canadian_grand_prix/opportunities.parquet",
+    "data/processed/overtake_opportunities/event=italian_grand_prix/opportunities.parquet",
+    "data/processed/overtake_opportunities/event=japanese_grand_prix/opportunities.parquet",
+    "data/processed/overtake_opportunities/event=miami_grand_prix/opportunities.parquet",
+    "data/processed/overtake_opportunities/event=monaco_grand_prix/opportunities.parquet"
+  ],
+  "config_files": [
+    "config/feature_registry.yaml",
+    "config/data_registry.yaml"
+  ],
+  "model_files": [
+    "model.pkl"
+  ],
+  "device_trained_on": "cpu",
+  "cpu_inference_verified": true,
+  "cpu_inference_round_trip_delta": 0.0,
+  "cpu_inference_error": null,
+  "platform": {
+    "python": "3.13.6",
+    "system": "Windows",
+    "machine": "AMD64"
+  },
+  "package_versions": {
+    "numpy": "2.5.3",
+    "pandas": "3.0.5",
+    "pyarrow": "25.0.1",
+    "scikit-learn": "1.9.1",
+    "lightgbm": "4.7.0",
+    "xgboost": "3.4.1",
+    "catboost": "1.2.10",
+    "scipy": "1.18.1"
+  },
+  "run": {
+    "created_utc": "2026-09-13T02:31:05.007508+00:00",
+    "git_commit": "4676aeb70eb5a55cc32c4ed67686e3ba3a576017",
+    "seed": 42,
+    "checkpoints": [
+      "DETECTION",
+      "ACTIVATION",
+      "BRAKING"
+    ],
+    "families": [
+      "logistic",
+      "lightgbm",
+      "xgboost",
+      "catboost",
+      "mlp"
+    ],
+    "families_unavailable": null,
+    "include_identity": false,
+    "identity_ablation": true,
+    "deterministic": true,
+    "demo_scope": "track",
+    "primary_pass": "without_identity",
+    "split_unit_required": "battle_id",
+    "evidence": {
+      "grade": "INTERIM",
+      "is_cp14_acceptance_run": false,
+      "design": "leave_one_event_out",
+      "split_unit": "battle_id",
+      "years_present": [
+        "2026"
+      ],
+      "train_years_required": [
+        "2022",
+        "2023",
+        "2024"
+      ],
+      "validation_year_required": "2025",
+      "test_year_required": "2026",
+      "reasons": [
+        "design is 'leave_one_event_out', not CP-14's documented 'year_table'; the table holds no ['2022', '2023', '2024', '2025']",
+        "the benchmark is leakage-safe and its numbers are real, but it does not measure generalisation across regulation eras, which is what CP-14's year table exists to measure"
+      ],
+      "note": "Only a FULL run satisfies CP-14. An INTERIM or REDUCED run is evidence that the pipeline works, not evidence that the checkpoint passed."
+    },
+    "evidence_grade": "INTERIM",
+    "is_cp14_acceptance_run": false,
+    "c9_assignment_version": "c9_split_assignments_v1:6a1d0320dee7",
+    "excluded_rows": {
+      "rows_dropped_without_battle_id": 1116,
+      "rows_kept": 13794,
+      "share_dropped": 0.074849,
+      "battle_join_status": {
+        "NO_EPISODE_FOR_LAP": 1005,
+        "NO_EPISODE_FOR_PAIR": 111
+      },
+      "note": "Excluded, never relabelled: C8 attests to no episode for these opportunities, so they have no leakage-safe split group. See A2 join coverage."
+    }
+  },
+  "hardware": {
+    "workers": 10,
+    "threads_per_fit": 2,
+    "physical_cores": 16,
+    "free_memory_gb": 4.41,
+    "use_process_pool": true,
+    "rationale": [
+      "16 cores detected; 15 budgeted for fits",
+      "9252 training rows is below the 50000-row threshold, so 2 threads per fit and the remaining cores spent on concurrent fits",
+      "workers pinned to 10 by the caller",
+      "process pool of 10 workers, 2 threads each"
+    ]
+  }
+}

@@ -1,0 +1,244 @@
+{
+  "schema_version": "m15_physics_calibration_v1",
+  "created_utc": "2026-09-12T20:13:01.503024+00:00",
+  "git_commit": "2820353bf6736410c21e6c52fff9faed9d60f3d8",
+  "year": "2026",
+  "sessions": [
+    "Practice 1",
+    "Qualifying"
+  ],
+  "clean_classes": [
+    "PUSH",
+    "LONG_RUN",
+    "RACE_PACE"
+  ],
+  "controls_joined": {
+    "segments_rows": 262221,
+    "weather": {
+      "keys": [
+        "year",
+        "event",
+        "session",
+        "driver",
+        "lap",
+        "segment_id"
+      ],
+      "columns": [
+        "air_density_proxy",
+        "wind_head_component_mps",
+        "wind_cross_component_mps",
+        "wet_track_flag"
+      ],
+      "coverage": 0.9095
+    },
+    "energy_twin": {
+      "keys": [
+        "year",
+        "event",
+        "session",
+        "driver",
+        "lap",
+        "segment_id"
+      ],
+      "columns": [
+        "ers_deploy_power_est_kw"
+      ],
+      "coverage": 0.9978
+    },
+    "fuel": {
+      "keys": [
+        "year",
+        "event",
+        "session",
+        "driver",
+        "lap"
+      ],
+      "columns": [
+        "fuel_load_kg_est"
+      ],
+      "coverage": 0.9984
+    },
+    "c2_speed_ceiling": {
+      "coverage": 0.9095
+    },
+    "practice_lap_classes": "joined on ['year', 'event', 'session', 'driver', 'lap']"
+  },
+  "selection": {
+    "rows_before": 262221,
+    "rows_after": 107807,
+    "excluded_by_reason": {
+      "MISSING_TARGET_OR_GEOMETRY": 564,
+      "PRACTICE_LAP_NOT_CLEAN_AIR": 103212,
+      "INACCURATE_TIMING": 41101,
+      "BRITISH_GP_HELD_OUT": 9537
+    }
+  },
+  "split": {
+    "policy": "held out by event, so error measures generalisation to a circuit",
+    "holdout_events": [
+      "Australian Grand Prix",
+      "Italian Grand Prix",
+      "Japanese Grand Prix"
+    ],
+    "train_rows": 4444,
+    "test_rows": 1556
+  },
+  "mae_targets": {
+    "global": 0.15,
+    "event": 0.08,
+    "physics_residual": 0.06
+  },
+  "parameter_bounds": {
+    "cda_m2": [
+      0.6,
+      1.8
+    ],
+    "crr": [
+      0.005,
+      0.025
+    ],
+    "eta_drivetrain": [
+      0.85,
+      0.98
+    ],
+    "p_ice_max_kw": [
+      300.0,
+      500.0
+    ]
+  },
+  "rungs": [
+    {
+      "rung": "analytical",
+      "mae_s": 0.25757851501517,
+      "rmse_s": 0.40172752467858325,
+      "n_segments": 1556,
+      "parameters": {
+        "cda_m2": 1.2,
+        "crr": 0.012,
+        "eta_drivetrain": 0.92,
+        "p_ice_max_kw": 400.0
+      },
+      "at_bound": [],
+      "violations": [],
+      "cells_fitted": 1,
+      "cells_fallen_back": 0,
+      "residual_share": null,
+      "accepted": true,
+      "rejection_reason": null
+    },
+    {
+      "rung": "global",
+      "mae_s": 0.18974767407491236,
+      "rmse_s": 0.39450681534476995,
+      "n_segments": 1556,
+      "parameters": {
+        "cda_m2": 0.6000000000000001,
+        "crr": 0.0050000000000112845,
+        "eta_drivetrain": 0.9799999999999348,
+        "p_ice_max_kw": 498.5878060132419
+      },
+      "at_bound": [
+        "cda_m2=0.6 at a bound. A fit that runs to a bound means the model is missing physics, not that the bound should move.",
+        "crr=0.005 at a bound. A fit that runs to a bound means the model is missing physics, not that the bound should move.",
+        "eta_drivetrain=0.98 at a bound. A fit that runs to a bound means the model is missing physics, not that the bound should move."
+      ],
+      "violations": [],
+      "cells_fitted": 1,
+      "cells_fallen_back": 0,
+      "residual_share": null,
+      "accepted": false,
+      "rejection_reason": "parameter at a bound: cda_m2=0.6 at a bound. A fit that runs to a bound means the model is missing physics, not that the bound should move.; crr=0.005 at a bound. A fit that runs to a bound means the model is missing physics, not that the bound should move.; eta_drivetrain=0.98 at a bound. A fit that runs to a bound means the model is missing physics, not that the bound should move.; held-out MAE 0.1897 s misses the 0.15 s target"
+    },
+    {
+      "rung": "team",
+      "mae_s": 0.1985506416875859,
+      "rmse_s": 0.3809480542425875,
+      "n_segments": 1556,
+      "parameters": {
+        "cells_fitted": 11
+      },
+      "at_bound": [],
+      "violations": [],
+      "cells_fitted": 11,
+      "cells_fallen_back": 0,
+      "residual_share": null,
+      "accepted": false,
+      "rejection_reason": "held-out MAE 0.1986 s does not improve on the previous rung's 0.1897 s"
+    },
+    {
+      "rung": "event",
+      "mae_s": 0.18974767407491236,
+      "rmse_s": 0.39450681534476995,
+      "n_segments": 1556,
+      "parameters": {
+        "cells_fitted": 62
+      },
+      "at_bound": [],
+      "violations": [],
+      "cells_fitted": 62,
+      "cells_fallen_back": 48,
+      "residual_share": null,
+      "accepted": false,
+      "rejection_reason": "held-out MAE 0.1897 s misses the 0.08 s target; held-out MAE 0.1897 s does not improve on the previous rung's 0.1897 s"
+    },
+    {
+      "rung": "physics_residual",
+      "mae_s": 0.19508875350085153,
+      "rmse_s": 0.36945213388746445,
+      "n_segments": 1556,
+      "parameters": {
+        "controls": [
+          "entry_speed_kmh",
+          "segment_length_m",
+          "tyre_life_laps",
+          "fuel_load_kg_est",
+          "wind_head_component_mps",
+          "wind_cross_component_mps",
+          "air_density_proxy",
+          "ers_deploy_power_est_kw",
+          "gap_ahead_m_entry",
+          "segment_baseline_time_s",
+          "corner_id",
+          "sector"
+        ]
+      },
+      "at_bound": [],
+      "violations": [],
+      "cells_fitted": 1,
+      "cells_fallen_back": 0,
+      "residual_share": 0.0405080075286411,
+      "accepted": false,
+      "rejection_reason": "held-out MAE 0.1951 s misses the 0.06 s target; held-out MAE 0.1951 s does not improve on the previous rung's 0.1897 s"
+    }
+  ],
+  "naive_baselines": {
+    "c2_baseline_mae_s": 0.1774344422133355,
+    "best_constant_per_segment_mae_s": 0.16305459024476887,
+    "note": "The section 29 targets sit below the best-constant floor, so reaching them requires explaining lap-to-lap variation within a segment, not just its geometry. The fuel control is the largest missing piece: CP-19 covers Race and Sprint, while section 29 trains on Practice 1 and Qualifying, so mass is constant across every training row."
+  },
+  "calibration_meets_targets": false,
+  "best_mae_s": 0.18974767407491236,
+  "error_by_segment_kind": {
+    "CORNER": {
+      "n": 1335,
+      "mae_s": 0.1755650512588628,
+      "rmse_s": 0.3280295894498021
+    },
+    "EXIT": {
+      "n": 60,
+      "mae_s": 0.26573482277958904,
+      "rmse_s": 0.6089803111710682
+    },
+    "STRAIGHT": {
+      "n": 161,
+      "mae_s": 0.2790307333118413,
+      "rmse_s": 0.6882648115106207
+    }
+  },
+  "artefacts": {
+    "global_jacobian_shape": [
+      4444,
+      4
+    ]
+  }
+}

@@ -1,0 +1,448 @@
+{
+  "scope": {
+    "year": 2026,
+    "session": "Practice 1",
+    "sessions": 17,
+    "laps": 9488
+  },
+  "classifier_version": "m01_practice_lap_rules_v3",
+  "season_shares": {
+    "PUSH": 0.11583052276559865,
+    "LONG_RUN": 0.09274873524451939,
+    "RACE_PACE": 0.2185919055649241,
+    "COOLDOWN": 0.040893760539629,
+    "OUT_LAP": 0.1693718381112985,
+    "IN_LAP": 0.150716694772344,
+    "INTERRUPTED": 0.030459527824620573,
+    "INVALID": 0.05470067453625632,
+    "UNKNOWN": 0.12668634064080944
+  },
+  "season_counts": {
+    "PUSH": 1099,
+    "LONG_RUN": 880,
+    "RACE_PACE": 2074,
+    "COOLDOWN": 388,
+    "OUT_LAP": 1607,
+    "IN_LAP": 1430,
+    "INTERRUPTED": 289,
+    "INVALID": 519,
+    "UNKNOWN": 1202
+  },
+  "gates": {
+    "unknown_lt_15pct": true,
+    "push_between_5pct_and_20pct": true,
+    "sustained_running_between_20pct_and_50pct": true,
+    "standalone_long_run_between_20pct_and_50pct": false
+  },
+  "sustained_running_share": 0.3113406408094435,
+  "unknown_reasons": {
+    "SLOW_BUT_NOT_AFTER_PUSH": 1043,
+    "DEAD_BAND_108_TO_115_PCT": 154,
+    "NO_TYRE_LIFE": 5
+  },
+  "field_quality": {
+    "laps": 9488,
+    "is_accurate_false": 0.25231871838111297,
+    "lap_deleted_true": 0.02244940978077572,
+    "pit_in_present": 0.150716694772344,
+    "pit_out_present": 0.07019392917369309,
+    "track_status_green": 0.9319139966273187,
+    "track_status_non_green": 0.06808600337268128,
+    "track_status_missing": 0.0,
+    "lap_time_missing": 0.08758431703204048,
+    "tyre_life_missing": 0.0010539629005059021,
+    "any_required_field_missing": 0.0884274873524452
+  },
+  "runs": {
+    "candidate_run_rejections": {
+      "LAP_TIME_SPREAD_EXCEEDED": 2153,
+      "STRUCTURAL_BOUNDARY": 1513,
+      "RUN_TOO_SHORT_AT_SESSION_END": 109,
+      "NON_CONTIGUOUS_LAP": 22
+    },
+    "run_length_histogram": {
+      "1": 3212,
+      "2": 220,
+      "3": 94,
+      "4": 67,
+      "5": 54,
+      "6": 50,
+      "7": 36,
+      "8": 21,
+      "9": 24,
+      "10": 11,
+      "11": 3,
+      "12": 5,
+      "13": 1,
+      "14": 1
+    },
+    "race_pace_placement": {
+      "inside_a_run_that_reached_long_run": 722,
+      "inside_a_run_of_2_or_3_laps": 454,
+      "isolated_single_lap": 898,
+      "total": 2074,
+      "share_inside_a_qualifying_run": 0.3481195756991321,
+      "share_in_any_multi_lap_run": 0.5670202507232401
+    },
+    "head_laps_unlabellable_by_causality": 819
+  },
+  "by_session": [
+    {
+      "event": "Australian Grand Prix",
+      "laps": 398,
+      "drivers": 21,
+      "shares": {
+        "PUSH": 0.1407035175879397,
+        "LONG_RUN": 0.022613065326633167,
+        "RACE_PACE": 0.24874371859296482,
+        "COOLDOWN": 0.0829145728643216,
+        "OUT_LAP": 0.14824120603015076,
+        "IN_LAP": 0.0678391959798995,
+        "INTERRUPTED": 0.002512562814070352,
+        "INVALID": 0.09296482412060302,
+        "UNKNOWN": 0.1934673366834171
+      },
+      "sustained_share": 0.271356783919598,
+      "unknown_share": 0.1934673366834171,
+      "push_share": 0.1407035175879397,
+      "non_green_share": 0.12060301507537688,
+      "missing_field_share": 0.09045226130653267
+    },
+    {
+      "event": "Austrian Grand Prix",
+      "laps": 423,
+      "drivers": 22,
+      "shares": {
+        "PUSH": 0.09456264775413711,
+        "LONG_RUN": 0.0425531914893617,
+        "RACE_PACE": 0.19621749408983452,
+        "COOLDOWN": 0.028368794326241134,
+        "OUT_LAP": 0.20567375886524822,
+        "IN_LAP": 0.21749408983451538,
+        "INTERRUPTED": 0.018912529550827423,
+        "INVALID": 0.026004728132387706,
+        "UNKNOWN": 0.1702127659574468
+      },
+      "sustained_share": 0.23877068557919623,
+      "unknown_share": 0.1702127659574468,
+      "push_share": 0.09456264775413711,
+      "non_green_share": 0.061465721040189124,
+      "missing_field_share": 0.08983451536643026
+    },
+    {
+      "event": "Barcelona Grand Prix",
+      "laps": 438,
+      "drivers": 21,
+      "shares": {
+        "PUSH": 0.0958904109589041,
+        "LONG_RUN": 0.05251141552511415,
+        "RACE_PACE": 0.20319634703196346,
+        "COOLDOWN": 0.03881278538812785,
+        "OUT_LAP": 0.23059360730593606,
+        "IN_LAP": 0.21689497716894976,
+        "INTERRUPTED": 0.0091324200913242,
+        "INVALID": 0.00684931506849315,
+        "UNKNOWN": 0.1461187214611872
+      },
+      "sustained_share": 0.2557077625570776,
+      "unknown_share": 0.1461187214611872,
+      "push_share": 0.0958904109589041,
+      "non_green_share": 0.0273972602739726,
+      "missing_field_share": 0.0593607305936073
+    },
+    {
+      "event": "Belgian Grand Prix",
+      "laps": 401,
+      "drivers": 22,
+      "shares": {
+        "PUSH": 0.12967581047381546,
+        "LONG_RUN": 0.02743142144638404,
+        "RACE_PACE": 0.1970074812967581,
+        "COOLDOWN": 0.007481296758104738,
+        "OUT_LAP": 0.18703241895261846,
+        "IN_LAP": 0.16458852867830423,
+        "INTERRUPTED": 0.034912718204488775,
+        "INVALID": 0.2119700748129676,
+        "UNKNOWN": 0.0399002493765586
+      },
+      "sustained_share": 0.22443890274314215,
+      "unknown_share": 0.0399002493765586,
+      "push_share": 0.12967581047381546,
+      "non_green_share": 0.04987531172069826,
+      "missing_field_share": 0.26184538653366585
+    },
+    {
+      "event": "British Grand Prix",
+      "laps": 502,
+      "drivers": 22,
+      "shares": {
+        "PUSH": 0.11752988047808766,
+        "LONG_RUN": 0.025896414342629483,
+        "RACE_PACE": 0.2290836653386454,
+        "COOLDOWN": 0.07171314741035857,
+        "OUT_LAP": 0.17131474103585656,
+        "IN_LAP": 0.13745019920318724,
+        "INTERRUPTED": 0.02390438247011952,
+        "INVALID": 0.07569721115537849,
+        "UNKNOWN": 0.14741035856573706
+      },
+      "sustained_share": 0.2549800796812749,
+      "unknown_share": 0.14741035856573706,
+      "push_share": 0.11752988047808766,
+      "non_green_share": 0.035856573705179286,
+      "missing_field_share": 0.09362549800796813
+    },
+    {
+      "event": "Canadian Grand Prix",
+      "laps": 476,
+      "drivers": 22,
+      "shares": {
+        "PUSH": 0.10294117647058823,
+        "LONG_RUN": 0.07773109243697479,
+        "RACE_PACE": 0.2689075630252101,
+        "COOLDOWN": 0.03361344537815126,
+        "OUT_LAP": 0.16806722689075632,
+        "IN_LAP": 0.04411764705882353,
+        "INTERRUPTED": 0.09243697478991597,
+        "INVALID": 0.07773109243697479,
+        "UNKNOWN": 0.13445378151260504
+      },
+      "sustained_share": 0.34663865546218486,
+      "unknown_share": 0.13445378151260504,
+      "push_share": 0.10294117647058823,
+      "non_green_share": 0.16806722689075632,
+      "missing_field_share": 0.052521008403361345
+    },
+    {
+      "event": "Chinese Grand Prix",
+      "laps": 504,
+      "drivers": 22,
+      "shares": {
+        "PUSH": 0.1111111111111111,
+        "LONG_RUN": 0.07142857142857142,
+        "RACE_PACE": 0.17063492063492064,
+        "COOLDOWN": 0.06547619047619048,
+        "OUT_LAP": 0.14682539682539683,
+        "IN_LAP": 0.15079365079365079,
+        "INTERRUPTED": 0.05952380952380952,
+        "INVALID": 0.12301587301587301,
+        "UNKNOWN": 0.10119047619047619
+      },
+      "sustained_share": 0.24206349206349206,
+      "unknown_share": 0.10119047619047619,
+      "push_share": 0.1111111111111111,
+      "non_green_share": 0.20833333333333334,
+      "missing_field_share": 0.15873015873015872
+    },
+    {
+      "event": "Dutch Grand Prix",
+      "laps": 587,
+      "drivers": 22,
+      "shares": {
+        "PUSH": 0.10902896081771721,
+        "LONG_RUN": 0.04770017035775128,
+        "RACE_PACE": 0.24361158432708688,
+        "COOLDOWN": 0.06303236797274275,
+        "OUT_LAP": 0.13458262350936967,
+        "IN_LAP": 0.13798977853492334,
+        "INTERRUPTED": 0.0817717206132879,
+        "INVALID": 0.010221465076660987,
+        "UNKNOWN": 0.17206132879045996
+      },
+      "sustained_share": 0.29131175468483816,
+      "unknown_share": 0.17206132879045996,
+      "push_share": 0.10902896081771721,
+      "non_green_share": 0.13798977853492334,
+      "missing_field_share": 0.039182282793867124
+    },
+    {
+      "event": "Hungarian Grand Prix",
+      "laps": 436,
+      "drivers": 22,
+      "shares": {
+        "PUSH": 0.10321100917431193,
+        "LONG_RUN": 0.06192660550458716,
+        "RACE_PACE": 0.24770642201834864,
+        "COOLDOWN": 0.0389908256880734,
+        "OUT_LAP": 0.16972477064220184,
+        "IN_LAP": 0.1628440366972477,
+        "INTERRUPTED": 0.045871559633027525,
+        "INVALID": 0.02522935779816514,
+        "UNKNOWN": 0.1444954128440367
+      },
+      "sustained_share": 0.3096330275229358,
+      "unknown_share": 0.1444954128440367,
+      "push_share": 0.10321100917431193,
+      "non_green_share": 0.06192660550458716,
+      "missing_field_share": 0.06651376146788991
+    },
+    {
+      "event": "Italian Grand Prix",
+      "laps": 463,
+      "drivers": 22,
+      "shares": {
+        "PUSH": 0.13174946004319654,
+        "LONG_RUN": 0.0755939524838013,
+        "RACE_PACE": 0.20950323974082075,
+        "COOLDOWN": 0.0755939524838013,
+        "OUT_LAP": 0.1879049676025918,
+        "IN_LAP": 0.14254859611231102,
+        "INTERRUPTED": 0.004319654427645789,
+        "INVALID": 0.0367170626349892,
+        "UNKNOWN": 0.13606911447084233
+      },
+      "sustained_share": 0.28509719222462204,
+      "unknown_share": 0.13606911447084233,
+      "push_share": 0.13174946004319654,
+      "non_green_share": 0.03455723542116631,
+      "missing_field_share": 0.11231101511879049
+    },
+    {
+      "event": "Japanese Grand Prix",
+      "laps": 435,
+      "drivers": 22,
+      "shares": {
+        "PUSH": 0.13793103448275862,
+        "LONG_RUN": 0.04367816091954023,
+        "RACE_PACE": 0.22758620689655173,
+        "COOLDOWN": 0.07126436781609195,
+        "OUT_LAP": 0.17011494252873563,
+        "IN_LAP": 0.15402298850574714,
+        "INTERRUPTED": 0.0,
+        "INVALID": 0.027586206896551724,
+        "UNKNOWN": 0.167816091954023
+      },
+      "sustained_share": 0.271264367816092,
+      "unknown_share": 0.167816091954023,
+      "push_share": 0.13793103448275862,
+      "non_green_share": 0.02528735632183908,
+      "missing_field_share": 0.05747126436781609
+    },
+    {
+      "event": "Miami Grand Prix",
+      "laps": 630,
+      "drivers": 22,
+      "shares": {
+        "PUSH": 0.09523809523809523,
+        "LONG_RUN": 0.1349206349206349,
+        "RACE_PACE": 0.19206349206349208,
+        "COOLDOWN": 0.044444444444444446,
+        "OUT_LAP": 0.15714285714285714,
+        "IN_LAP": 0.14126984126984127,
+        "INTERRUPTED": 0.03333333333333333,
+        "INVALID": 0.06984126984126984,
+        "UNKNOWN": 0.13174603174603175
+      },
+      "sustained_share": 0.326984126984127,
+      "unknown_share": 0.13174603174603175,
+      "push_share": 0.09523809523809523,
+      "non_green_share": 0.05238095238095238,
+      "missing_field_share": 0.07936507936507936
+    },
+    {
+      "event": "Monaco Grand Prix",
+      "laps": 540,
+      "drivers": 22,
+      "shares": {
+        "PUSH": 0.1962962962962963,
+        "LONG_RUN": 0.003703703703703704,
+        "RACE_PACE": 0.2388888888888889,
+        "COOLDOWN": 0.040740740740740744,
+        "OUT_LAP": 0.1425925925925926,
+        "IN_LAP": 0.037037037037037035,
+        "INTERRUPTED": 0.06481481481481481,
+        "INVALID": 0.07777777777777778,
+        "UNKNOWN": 0.19814814814814816
+      },
+      "sustained_share": 0.2425925925925926,
+      "unknown_share": 0.19814814814814816,
+      "push_share": 0.1962962962962963,
+      "non_green_share": 0.15,
+      "missing_field_share": 0.03888888888888889
+    },
+    {
+      "event": "Pre-Season Testing",
+      "laps": 960,
+      "drivers": 18,
+      "shares": {
+        "PUSH": 0.10729166666666666,
+        "LONG_RUN": 0.1875,
+        "RACE_PACE": 0.21979166666666666,
+        "COOLDOWN": 0.022916666666666665,
+        "OUT_LAP": 0.1625,
+        "IN_LAP": 0.18229166666666666,
+        "INTERRUPTED": 0.019791666666666666,
+        "INVALID": 0.01875,
+        "UNKNOWN": 0.07916666666666666
+      },
+      "sustained_share": 0.40729166666666666,
+      "unknown_share": 0.07916666666666666,
+      "push_share": 0.10729166666666666,
+      "non_green_share": 0.03333333333333333,
+      "missing_field_share": 0.08229166666666667
+    },
+    {
+      "event": "Pre-Season Testing 1",
+      "laps": 960,
+      "drivers": 18,
+      "shares": {
+        "PUSH": 0.10729166666666666,
+        "LONG_RUN": 0.1875,
+        "RACE_PACE": 0.21979166666666666,
+        "COOLDOWN": 0.022916666666666665,
+        "OUT_LAP": 0.1625,
+        "IN_LAP": 0.18229166666666666,
+        "INTERRUPTED": 0.019791666666666666,
+        "INVALID": 0.01875,
+        "UNKNOWN": 0.07916666666666666
+      },
+      "sustained_share": 0.40729166666666666,
+      "unknown_share": 0.07916666666666666,
+      "push_share": 0.10729166666666666,
+      "non_green_share": 0.03333333333333333,
+      "missing_field_share": 0.08229166666666667
+    },
+    {
+      "event": "Pre-Season Testing 2",
+      "laps": 863,
+      "drivers": 21,
+      "shares": {
+        "PUSH": 0.09385863267670916,
+        "LONG_RUN": 0.20046349942062572,
+        "RACE_PACE": 0.22363847045191193,
+        "COOLDOWN": 0.009269988412514484,
+        "OUT_LAP": 0.18308227114716108,
+        "IN_LAP": 0.1969872537659328,
+        "INTERRUPTED": 0.0011587485515643105,
+        "INVALID": 0.019698725376593278,
+        "UNKNOWN": 0.07184241019698726
+      },
+      "sustained_share": 0.4241019698725377,
+      "unknown_share": 0.07184241019698726,
+      "push_share": 0.09385863267670916,
+      "non_green_share": 0.004634994206257242,
+      "missing_field_share": 0.06141367323290846
+    },
+    {
+      "event": "Spanish Grand Prix",
+      "laps": 472,
+      "drivers": 22,
+      "shares": {
+        "PUSH": 0.13135593220338984,
+        "LONG_RUN": 0.00847457627118644,
+        "RACE_PACE": 0.17584745762711865,
+        "COOLDOWN": 0.03389830508474576,
+        "OUT_LAP": 0.18008474576271186,
+        "IN_LAP": 0.1483050847457627,
+        "INTERRUPTED": 0.023305084745762712,
+        "INVALID": 0.1292372881355932,
+        "UNKNOWN": 0.1694915254237288
+      },
+      "sustained_share": 0.1843220338983051,
+      "unknown_share": 0.1694915254237288,
+      "push_share": 0.13135593220338984,
+      "non_green_share": 0.0423728813559322,
+      "missing_field_share": 0.1504237288135593
+    }
+  ]
+}

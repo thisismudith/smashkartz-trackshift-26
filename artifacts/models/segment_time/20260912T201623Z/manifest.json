@@ -1,0 +1,51 @@
+{
+  "schema_version": "m16_segment_time_v1",
+  "created_utc": "2026-09-12T20:16:23.250454+00:00",
+  "git_commit": "2820353bf6736410c21e6c52fff9faed9d60f3d8",
+  "year": "2026",
+  "sessions": [
+    "Race"
+  ],
+  "form": "t_k(dE, L) = t_base,k - a_k * dE + c_k * L",
+  "segments_fitted": 214,
+  "segments_refused": {
+    "NON_POSITIVE_ENERGY_SENSITIVITY": 12,
+    "NO_ENERGY_VARIATION": 128
+  },
+  "refusal_note": "A non-positive a_k is refused, not published. Section 30 puts physical plausibility above MAE: a transition saying energy costs time would send the planner the wrong way, and the usual cause is that hard deployment coincides with defending or traffic.",
+  "mean_in_sample_mae_s": 0.18675842502833803,
+  "mae_target_s": 0.06,
+  "mae_target_met": false,
+  "energy_sensitivity_by_segment_kind": {
+    "by_kind": {
+      "CORNER": {
+        "n": 187,
+        "mean_a_k": 7.145208983919731,
+        "max_a_k": 461.68470048715153,
+        "min_a_k": 0.13022032835409708
+      },
+      "EXIT": {
+        "n": 7,
+        "mean_a_k": 6.8885495129428005,
+        "max_a_k": 38.25830832320074,
+        "min_a_k": 0.3875386812503526
+      },
+      "STRAIGHT": {
+        "n": 20,
+        "mean_a_k": 0.6285253863483676,
+        "max_a_k": 3.0399903053982444,
+        "min_a_k": 0.04368039744600488
+      }
+    },
+    "straight_exceeds_corner": false,
+    "flat": false
+  },
+  "all_monotonic": true,
+  "all_extrapolation_safe": false,
+  "gates": {
+    "every_a_k_positive": true,
+    "monotone_in_energy": true,
+    "straight_sensitivity_exceeds_corner": false,
+    "mae_below_target": false
+  }
+}
