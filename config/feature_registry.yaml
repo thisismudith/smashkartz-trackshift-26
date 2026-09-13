@@ -1057,6 +1057,7 @@ features:
     regulation_source: null
     interaction_group: [regulation era]
     consuming_models: [M07, M13]
+    era_policy: historical_prior_only
 
   - name: driver_ahead_number
     definition: Car number of the driver directly ahead at this sample.
@@ -2151,7 +2152,7 @@ features:
     uncertainty_field: null
     causal_status: CAUSAL
     counterfactual_safe: true
-    regulation_version: rules-2026-common-v1
+    regulation_version: rules-2026-common-v2-fia-iss08-iss20
     regulation_source: config/rules/2026/common.yaml and event YAML
     interaction_group: [overtake, rule, metadata_only]
     consuming_models: [M20, M21, M07, M10]
@@ -2171,7 +2172,7 @@ features:
     uncertainty_field: null
     causal_status: CAUSAL
     counterfactual_safe: true
-    regulation_version: rules-2026-common-v1
+    regulation_version: rules-2026-common-v2-fia-iss08-iss20
     regulation_source: config/rules/2026/common.yaml and event YAML
     interaction_group: [overtake, rule, metadata_only]
     consuming_models: [M20, M21, M07, M10]
@@ -2191,7 +2192,7 @@ features:
     uncertainty_field: null
     causal_status: CAUSAL
     counterfactual_safe: true
-    regulation_version: rules-2026-common-v1
+    regulation_version: rules-2026-common-v2-fia-iss08-iss20
     regulation_source: config/rules/2026/common.yaml and event YAML
     interaction_group: [overtake, availability, metadata_only]
     consuming_models: [M20, M21, M07, M10]
@@ -2215,6 +2216,7 @@ features:
     regulation_source: observed DRS channel and race-control messages
     interaction_group: [historical_drs, metadata_only]
     consuming_models: [M07, M10, M13]
+    era_policy: historical_prior_only
 
   - name: historical_drs_open
     definition: Historical 2022-2025 observed raw DRS-open covariate gated by observed DRS ENABLED/DISABLED race control; null in 2026.
@@ -2235,6 +2237,7 @@ features:
     regulation_source: observed DRS channel and race-control messages
     interaction_group: [historical_drs, metadata_only]
     consuming_models: [M07, M10, M13]
+    era_policy: historical_prior_only
 
   # ------------------------------------------------------- M33 / CP-06 weather
   - <<: *weather_alignment_defaults

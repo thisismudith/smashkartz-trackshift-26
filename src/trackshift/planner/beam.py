@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from typing import Any, Callable, Mapping, Sequence
 
 from trackshift.rules import api as c3
+from trackshift.data.registry import assert_final_feature_boundary
 from trackshift.value.dp import DPConfig, DPResult, required_state_inputs, solve_dp
 from trackshift.value.state import STUB_RESPONSE, c3_candidate_actions, c3_excluded_actions, reject_stubs_for_final
 
@@ -67,6 +68,9 @@ def plan(
         return {"schema_version": PLANNER_SCHEMA_VERSION, "status": "UNAVAILABLE", "provenance": "DERIVED", "reason": inputs["reason"], "legal_actions": [], "excluded_actions": []}
     if not isinstance(event_rules, Mapping) or not event_rules:
         return {"schema_version": PLANNER_SCHEMA_VERSION, "status": "UNAVAILABLE", "provenance": "RULE", "reason": "C3 event rules unavailable", "legal_actions": [], "excluded_actions": []}
+    if final_mode:
+        assert_final_feature_boundary(state, "planner final state")
+        c3.assert_final_mode_rules(event_rules)
     try:
         action_set = action_fn(state, event_rules)
     except Exception as exc:

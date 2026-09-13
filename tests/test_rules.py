@@ -18,11 +18,14 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
+from trackshift.data.registry import FeatureBoundaryError  # noqa: E402
+
 from trackshift.rules.api import (  # noqa: E402
     COAST,
     DEPLOY_LEVELS,
     LIFT_AMOUNTS,
     RuleEngineError,
+    FinalModeError,
     RuleKeyMissing,
     UnknownEvent,
     UnsourcedValue,
@@ -32,6 +35,7 @@ from trackshift.rules.api import (  # noqa: E402
     legal_actions,
     load_event_rules,
     max_electrical_power_kw,
+    resolve,
     separation_speed_kmh,
     stub_action_set,
     verify_envelope_table,
@@ -320,10 +324,26 @@ def test_unknown_event_raises(rules):
         legal_actions(state(100.0), {})
 
 
-def test_strict_mode_refuses_the_unverified_envelope():
+def test_strict_mode_allows_sourced_envelope_but_refuses_unverified_gap():
     strict = load_event_rules(EVENT, SEASON, strict=True)
+    assert max_electrical_power_kw(200.0, "normal", strict) == pytest.approx(350.0)
     with pytest.raises(UnsourcedValue, match="strict_mode"):
-        max_electrical_power_kw(200.0, "normal", strict)
+        resolve(strict, "overtake.detection_gap_s")
+
+
+def test_final_c3_rejects_proxy_config_before_action_scoring():
+    proxy_rules = load_event_rules("italian_grand_prix", SEASON)
+    with pytest.raises(FinalModeError, match="final mode blocked"):
+        legal_actions(state(200.0), proxy_rules, final_mode=True)
+
+
+def test_final_c3_rejects_historical_drs_state_before_rule_evaluation(rules):
+    with pytest.raises(FeatureBoundaryError, match="final-mode admission"):
+        legal_actions(
+            state(200.0, historical_drs_open=True),
+            rules,
+            final_mode=True,
+        )
 
 
 def test_stub_mode_has_the_real_shape_and_is_labelled(rules):

@@ -400,4 +400,57 @@ The integration layer keeps these fields separate:
 
 ## 13. Final definition of done
 
+## Closure-loop v2 regulation boundary — 2026-09-13
+
+- Final API/state boundaries now reject raw DRS, `historical_drs_*`, and
+  `PROXY_HISTORICAL_DRS`; the 2026 all-zero raw channel remains unavailable.
+  Historical DRS is limited to explicitly labelled 2022–2025 audit/prior work.
+- Final C3 validates sourced 2026 rules before action generation and retains
+  legal-by-construction filtering: illegal actions are removed before scoring.
+  Gap convention remains positive = our car behind; energy convention remains
+  positive MGU-K = deployment and negative = harvesting.
+- Tracked rule evidence is in `config/rules/sources_2026.yaml` and the two
+  2026 rule YAML files. Official FIA sources establish the power envelope and
+  British A1–A4 line landmarks. Final mode is still blocked by unresolved
+  Detection Gap, generic deployment budget, physical Energy Store capacity,
+  and event-specific/replay dependencies.
+- No C6/M07 rebuild, C4/C5 acceptance, CP-10–CP-16 final execution, route, or
+  replay bundle was generated. British remains final-held-out/replay/demo only.
+- Focused command:
+  `.venv/bin/python -m pytest -q tests/test_strategic_state.py
+  tests/test_registry.py tests/test_rules_config.py tests/test_rules.py
+  tests/test_pass_model.py tests/test_ensemble.py tests/test_rival_chain.py
+  tests/test_rival_cp07.py tests/test_twin.py` → `309 passed in 5.14s`.
+- Existing development smoke artifact `/tmp/trackshift-chain-v-smoke.json`
+  reports p95 `3.350438 ms` and zero illegal actions; it is not final latency
+  evidence and has `final_mode_permitted: false`.
+
 TrackShift is integrated only when it can take one decision-time StrategicState, apply the applicable rule snapshot, estimate state and uncertainty causally, remove illegal actions, evaluate feasible policy alternatives, return an explainable plan, simulate declared counterfactual policies, and serve all of this through one API or one replay bundle without depending on either developer laptop at runtime.
+
+## Synthetic closure hand-off — 2026-09-13
+
+The shared service and replay hand-off is implemented under
+`src/trackshift/serve/`. Routes call the existing public C3, rival, value,
+planner, baseline, simulator, and policy paths; replay generation dispatches
+those same handlers in-process. The fixture is explicitly synthetic and is not
+a final release artifact.
+
+Exact validation:
+
+```bash
+.venv/bin/python -m pytest -q tests/test_serve.py tests/test_registry.py tests/test_chain_v_cores.py tests/test_rival_cp07.py
+.venv/bin/python scripts/simulate/run_closure_synthetic.py --out /tmp/trackshift-closure-9Mhknx --episodes 8 --seed 17 > /tmp/trackshift-closure-synthetic-run.json
+```
+
+Evidence: `58 passed in 1.13s`; closure status
+`SYNTHETIC_DEVELOPMENT_COMPLETE`; planner p95 `4.80098300249665 ms`; aggregate
+rule violations `0`; replay `stubs_used: []`. Local generated evidence is at
+`/tmp/trackshift-closure-9Mhknx/closure_evidence.json` and its replay manifest
+at `/tmp/trackshift-closure-9Mhknx/replay/bundle_manifest.json`.
+
+The required final suite also completed: `.venv/bin/python -m pytest -q` →
+`1222 passed, 23 skipped, 2 warnings in 79.66s (0:01:19)`.
+
+The release gate remains blocked by synthetic-only inputs, unresolved official
+2026 rule leaves, and unavailable accepted public C4/C5 decision-time
+callbacks. British Grand Prix remains excluded from training/calibration.

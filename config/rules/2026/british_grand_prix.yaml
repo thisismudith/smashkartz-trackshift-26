@@ -45,37 +45,80 @@ geometry:
 
 overtake:
   enabled: true
-  tier_c_proxy_exclusions:
-    - candidate_m: [4100.0, 4900.0]
-      reason: "historical DRS candidate crosses CP-05 brake-onset boundary at 4880.0 m"
-  # Race control states WHETHER Overtake is available, never WHERE. Line
-  # positions are not derivable from rcm.json and stay UNVERIFIED until an
-  # FIA event note is found, or PROXY_HISTORICAL_DRS from derive_drs_zones.py.
-  # One Detection Line per lap, at Safety Car Line 1 (the pit-entry bollard).
-  # Shared by every zone below; a zone-level detection_line_m would override it.
-  detection_line_m:
-    value: 5520.0
-    value_source: DERIVED_TELEMETRY
-    source: "FIA 2026 Race Director's Competition Notes: \"The detection line referred to in Article B 7.2.1 of the FIA F1 Regulations, is at the same location of the Safety Car Line 1.\" Stated verbatim in the Belgian, Chinese and Hungarian notes. Item 14.3 of the same notes places Safety Car Line 1 at the pit-entry bollard: \"any driver passing to the right-hand side of the bollard at safety car line 1 will be considered as entering the pit lane.\" Pit entry measured in telemetry distance as the row where lap_start_session_s + lap_elapsed_s is closest to pit_in_session_s, over 53 Race and Sprint in-lap(s) of the 2026 lake; median 5520 m, interquartile range 5520-5540 m (20 m, one 20 m resample bin). Evidence and method in artifacts/detection_lines/harvest_2026.json."
-    note: "One Detection Line per lap, shared by every zone: the 2026 notes describe it in the singular at a single location, unlike DRS per-zone detection. The rule is Tier A; this value is the measured position of that rule's location, so it is DERIVED_TELEMETRY rather than RULE_FIA. This event's own notes are silent on the detection line; the wording is identical across the three events that do state it, which is why it is applied here, but it is not separately confirmed for this circuit."
   zones:
-    - zone: 1
-      name: "Historical DRS active-zone proxy 1"
+    # The FIA circuit map gives each line as a landmark offset. The metre
+    # values below are the same offsets aligned to this repository's observed
+    # corner-distance coordinate, so they are DERIVED_TELEMETRY, not invented
+    # 2022-2025 DRS geometry. The authoritative landmark remains RULE_FIA.
+    - zone: A1
+      name: "Overtake A1"
       detection_line_m:
+        value: 5789.3
+        value_source: DERIVED_TELEMETRY
+        source: "Aligned to official FIA 2026 British Grand Prix circuit map, Document 6, p. 2, OVERTAKE DETECTION 115m after T18, https://www.fia.com/system/files/decision-document/2026_british_grand_prix_-_competition_notes_-_circuit_map_pit_lane_drawing_emergency_exits_map_and_red_zone.pdf; T18 observed corner distance 5674.3m from geometry.corner_distances_m"
+        landmark: "115m after T18"
+      activation_line_m:
+        value: 5739.3
+        value_source: DERIVED_TELEMETRY
+        source: "Aligned to official FIA 2026 British Grand Prix circuit map, Document 6, p. 2, OVERTAKE ACTIVATION 65m after T18, https://www.fia.com/system/files/decision-document/2026_british_grand_prix_-_competition_notes_-_circuit_map_pit_lane_drawing_emergency_exits_map_and_red_zone.pdf; T18 observed corner distance 5674.3m from geometry.corner_distances_m"
+        landmark: "65m after T18"
+      zone_end_m:
         value: null
         value_source: UNVERIFIED
-        source: "No Detection Line is supplied by artifacts/drs_zones/british_grand_prix.json: scripts/data/derive_drs_zones.py derives only historical DRS active-zone starts and ends, not Detection Lines. No authoritative historical Detection-Line source is configured."
-        note: "Retained null: no fixed upstream offset, speed, segment, or heuristic may manufacture a 2026 Detection Line."
+        source: "UNRESOLVED: official FIA 2026 British Grand Prix circuit map identifies the Overtake Activation Line but does not publish an Overtake zone-end line"
+
+    - zone: A2
+      name: "Overtake A2"
+      wraps_to_start_finish: true
+      detection_line_m:
+        value: 1338.2
+        value_source: DERIVED_TELEMETRY
+        source: "Aligned to official FIA 2026 British Grand Prix circuit map, Document 6, p. 2, OVERTAKE DETECTION 115m after T5, https://www.fia.com/system/files/decision-document/2026_british_grand_prix_-_competition_notes_-_circuit_map_pit_lane_drawing_emergency_exits_map_and_red_zone.pdf; T5 observed corner distance 1223.2m from geometry.corner_distances_m"
+        landmark: "115m after T5"
       activation_line_m:
-        value: 1300.0
-        value_source: PROXY_HISTORICAL_DRS
-        source: "2022, 2023, 2024 and 2025 British Grand Prix Race historical DRS; scripts/data/derive_drs_zones.py --raw-root data/raw --all; MIN_LAP_SHARE=0.08, MIN_ZONE_LENGTH_M=300 m, BIN_M=20 m, consensus >=2 seasons; artifacts/drs_zones/british_grand_prix.json consensus zone 1300-1800 m."
-        note: "Tier-C development-only proxy for historical DRS active-zone start; not a 2026 FIA Overtake fact and rejected by strict_mode."
+        value: 1278.2
+        value_source: DERIVED_TELEMETRY
+        source: "Aligned to official FIA 2026 British Grand Prix circuit map, Document 6, p. 2, OVERTAKE ACTIVATION 55m after T5, https://www.fia.com/system/files/decision-document/2026_british_grand_prix_-_competition_notes_-_circuit_map_pit_lane_drawing_emergency_exits_map_and_red_zone.pdf; T5 observed corner distance 1223.2m from geometry.corner_distances_m"
+        landmark: "55m after T5"
       zone_end_m:
-        value: 1800.0
-        value_source: PROXY_HISTORICAL_DRS
-        source: "2022, 2023, 2024 and 2025 British Grand Prix Race historical DRS; scripts/data/derive_drs_zones.py --raw-root data/raw --all; MIN_LAP_SHARE=0.08, MIN_ZONE_LENGTH_M=300 m, BIN_M=20 m, consensus >=2 seasons; artifacts/drs_zones/british_grand_prix.json consensus zone 1300-1800 m."
-        note: "Tier-C development-only proxy for historical DRS active-zone end; not a 2026 FIA Overtake fact and rejected by strict_mode."
+        value: null
+        value_source: UNVERIFIED
+        source: "UNRESOLVED: official FIA 2026 British Grand Prix circuit map identifies the Overtake Activation Line but does not publish an Overtake zone-end line"
+
+    - zone: A3
+      name: "Overtake A3"
+      detection_line_m:
+        value: null
+        value_source: RULE_FIA
+        source: "Official FIA 2026 British Grand Prix circuit map, Document 6, p. 2, OVERTAKE DETECTION n/a for A3, https://www.fia.com/system/files/decision-document/2026_british_grand_prix_-_competition_notes_-_circuit_map_pit_lane_drawing_emergency_exits_map_and_red_zone.pdf"
+        not_applicable: true
+        landmark: "n/a"
+      activation_line_m:
+        value: 2330.9
+        value_source: DERIVED_TELEMETRY
+        source: "Aligned to official FIA 2026 British Grand Prix circuit map, Document 6, p. 2, OVERTAKE ACTIVATION 155m after T7, https://www.fia.com/system/files/decision-document/2026_british_grand_prix_-_competition_notes_-_circuit_map_pit_lane_drawing_emergency_exits_map_and_red_zone.pdf; T7 observed corner distance 2175.9m from geometry.corner_distances_m"
+        landmark: "155m after T7"
+      zone_end_m:
+        value: null
+        value_source: UNVERIFIED
+        source: "UNRESOLVED: official FIA 2026 British Grand Prix circuit map identifies the Overtake Activation Line but does not publish an Overtake zone-end line"
+
+    - zone: A4
+      name: "Overtake A4"
+      detection_line_m:
+        value: 4104.6
+        value_source: DERIVED_TELEMETRY
+        source: "Aligned to official FIA 2026 British Grand Prix circuit map, Document 6, p. 2, OVERTAKE DETECTION 125m after T14, https://www.fia.com/system/files/decision-document/2026_british_grand_prix_-_competition_notes_-_circuit_map_pit_lane_drawing_emergency_exits_map_and_red_zone.pdf; T14 observed corner distance 3979.6m from geometry.corner_distances_m"
+        landmark: "125m after T14"
+      activation_line_m:
+        value: 4044.6
+        value_source: DERIVED_TELEMETRY
+        source: "Aligned to official FIA 2026 British Grand Prix circuit map, Document 6, p. 2, OVERTAKE ACTIVATION 65m after T14, https://www.fia.com/system/files/decision-document/2026_british_grand_prix_-_competition_notes_-_circuit_map_pit_lane_drawing_emergency_exits_map_and_red_zone.pdf; T14 observed corner distance 3979.6m from geometry.corner_distances_m"
+        landmark: "65m after T14"
+      zone_end_m:
+        value: null
+        value_source: UNVERIFIED
+        source: "UNRESOLVED: official FIA 2026 British Grand Prix circuit map identifies the Overtake Activation Line but does not publish an Overtake zone-end line"
 
 race_control:
   overtake_windows_source: "artifacts/race_control/2026_british_grand_prix.json"

@@ -5,6 +5,7 @@ import sys
 import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from trackshift.contracts.strategic_state import validate_strategic_state
+from trackshift.data.registry import FeatureBoundaryError
 from trackshift.value import state as strategic_state_module
 from trackshift.value.api import battle_step_to_strategic_state, c3_candidate_actions, c3_excluded_actions, dependency_stub, discretize_state, reject_stubs_for_final, STUB_RESPONSE, StrategicStateAdapterError
 
@@ -21,6 +22,14 @@ def test_stubs_are_marked_and_rejected_from_final():
  with pytest.raises(StrategicStateAdapterError): reject_stubs_for_final(stub)
 def test_cpu_only_import():
  assert "torch" not in sys.modules
+
+def test_final_adapter_rejects_historical_drs_before_rule_adapter():
+ with pytest.raises(FeatureBoundaryError, match="regulation-era/proxy"):
+  battle_step_to_strategic_state(step() | {"historical_drs_open": 0}, final_mode=True, event_rules={})
+
+def test_final_adapter_requires_event_rules():
+ with pytest.raises(StrategicStateAdapterError, match="event rule configuration"):
+  battle_step_to_strategic_state(step(), final_mode=True)
 
 
 def _public_c3_response():

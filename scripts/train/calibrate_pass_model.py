@@ -49,6 +49,7 @@ from trackshift.pass_model.api import (  # noqa: E402
     select_variant,
     summarise,
 )
+from trackshift.pass_model.features import assert_model_feature_boundary  # noqa: E402
 from trackshift.pass_model.reliability import plot_all, write_bin_table  # noqa: E402
 
 OPPORTUNITIES = ROOT / "data" / "processed" / "overtake_opportunities"
@@ -252,6 +253,10 @@ def main() -> int:
         ),
     )
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument(
+        "--final-mode", action="store_true",
+        help="Require a proxy-free 2026 non-British calibration input; unresolved final gates fail closed",
+    )
     args = parser.parse_args()
 
     from trackshift.pass_model.calibration import MIN_ECE_N
@@ -265,32 +270,20 @@ def main() -> int:
     methods = args.method or list(METHODS)
 
     frame, sources = load_opportunities(args.opportunities_root)
-    # Same split contract as CP-14: battle_id against a written C9 assignment,
-    # and rows C8 has no episode for are excluded rather than relabelled.
-    # Re-deriving the split here would let this stage disagree with the
-    # benchmark it is calibrating, with nothing in either artifact to say so.
-    require_unit = None if args.allow_event_split else "battle_id"
-    assignments = None
-    excluded_rows = {}
-    if require_unit:
-        assignments = load_assignments(args.split_assignments)
-        usable = frame[require_unit].notna() & (
-            frame[require_unit].astype(str).str.strip() != "")
-        dropped = int((~usable).sum())
-        if dropped:
-            excluded_rows = {
-                "rows_dropped_without_battle_id": dropped,
-                "rows_kept": int(usable.sum()),
-                "share_dropped": round(dropped / len(frame), 6),
-            }
-            print(f"excluding {dropped} of {len(frame)} rows with no battle_id "
-                  f"({dropped / len(frame):.1%})", flush=True)
-            frame = frame[usable].reset_index(drop=True)
-        if frame.empty:
-            raise SystemExit(
-                "every row was dropped for want of a battle_id; the A2 C8 join has "
-                "not been applied to this M07 build.")
-
+    if args.final_mode:
+        years = set(frame["year"].dropna().astype(int).unique()) if "year" in frame else set()
+        if years != {2026}:
+            raise SystemExit(f"final mode requires only 2026 opportunity rows; found years {sorted(years)}")
+        if "event" in frame:
+            british = frame["event"].astype(str).str.contains("british", case=False, na=False)
+            if bool(british.any()):
+                raise SystemExit("final mode rejects British Grand Prix rows: held-out replay/demo only")
+        try:
+            assert_model_feature_boundary(
+                frame, year=2026, consumer="C4 calibration", mode="final",
+            )
+        except Exception as exc:
+            raise SystemExit(f"final-mode C4 feature boundary rejected: {exc}") from exc
     plan = plan_splits(frame, design=args.design, seed=args.seed,
                        demo_scope=DemoScope(args.demo_scope),
                        require_unit=require_unit, assignments=assignments)
@@ -313,6 +306,7 @@ def main() -> int:
                     frame, checkpoints[0], families[0], fold,
                     seed=args.seed, threads=hardware.threads_per_fit,
                     deterministic=not args.fast, include_identity=args.identity,
+                    final_mode=args.final_mode,
                 )
                 licensed, why = recommended_method(cal.n)
                 preview.append({"fold": fold.name, **cal.as_dict(),
@@ -337,7 +331,7 @@ def main() -> int:
                     frame, checkpoint, family, fold,
                     seed=args.seed, threads=hardware.threads_per_fit,
                     deterministic=not args.fast, include_identity=args.identity,
-                    methods=methods, bins=args.bins,
+                    methods=methods, bins=args.bins, final_mode=args.final_mode,
                 )
                 per_fold.extend(r.as_dict() for r in results)
                 if cal is not None and checkpoint == checkpoints[0] and family == families[0]:
@@ -371,6 +365,7 @@ def main() -> int:
         "min_ece_n": MIN_ECE_N,
         "calibration_sets": calibration_sets,
         "source_datasets": sources,
+        "final_mode": args.final_mode,
     }
 
     plots: list[str] = []

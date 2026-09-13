@@ -6,6 +6,7 @@ from random import Random
 from typing import Any, Callable, Mapping, Sequence
 
 from trackshift.rules import api as c3
+from trackshift.data.registry import assert_final_feature_boundary
 from trackshift.value.state import STUB_RESPONSE, c3_candidate_actions, reject_stubs_for_final
 from trackshift.value.dp import required_state_inputs
 from .rival_policies import POLICIES, choose_policy_action
@@ -55,6 +56,10 @@ def simulate(
     if not isinstance(event_rules, Mapping) or not event_rules:
         return {"schema_version": SIMULATOR_SCHEMA_VERSION, "status": "UNAVAILABLE", "provenance": "RULE", "reason": "C3 event rules unavailable", "summary": {"n_episodes": n_episodes, "seed": seed, "rule_violations": 0}, "episodes": []}
     if final_mode:
+        assert_final_feature_boundary(initial_state, "simulator final state")
+        for segment in segments:
+            assert_final_feature_boundary(segment, "simulator final segment")
+        c3.assert_final_mode_rules(event_rules)
         raise ValueError("final mode requires calibrated C4/C5 public callbacks; development simulator cannot certify them")
     if rival_policy not in POLICIES:
         raise ValueError(f"unsupported rival policy {rival_policy!r}")

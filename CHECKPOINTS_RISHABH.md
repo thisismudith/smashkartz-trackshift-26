@@ -47,15 +47,15 @@ Each checkpoint uses the same structure.
 | 05 | Rival-state feature dataset | M08 | ☑ |
 | 06 | Synthetic labelled trajectories | M09b | ☑ |
 | 07 | Rival-state benchmark | M09, C10 | ☑ |
-| 08 | Rival-side regulation-era evaluation | M13 | ☐ |
+| 08 | Rival-side regulation-era evaluation | M13 | ☑* |
 | 09 | Strategic-state adapter and stubs | C3 to C6 | ☑ |
-| 10 | Dynamic programming and shadow price | M22 | ☐ |
-| 11 | Counterattack valuation | M23 | ☐ |
-| 12 | Planner | M24 | ☐ |
-| 13 | Planner baselines | M25 | ☐ |
-| 14 | Simulator | M26 | ☐ |
-| 15 | Explicit rival policies | M27 | ☐ |
-| 16 | Routes, replay hand-off, release evidence | API.md | ☐ |
+| 10 | Dynamic programming and shadow price | M22 | ☑* |
+| 11 | Counterattack valuation | M23 | ☑* |
+| 12 | Planner | M24 | ☑* |
+| 13 | Planner baselines | M25 | ☑* |
+| 14 | Simulator | M26 | ☑* |
+| 15 | Explicit rival policies | M27 | ☑* |
+| 16 | Routes, replay hand-off, release evidence | API.md | ☑* |
 
 ---
 
@@ -741,6 +741,39 @@ Owner A route modules in **src/trackshift/serve/**, service tests, replay inputs
 
 ## Closure-loop v2 execution record — 2026-09-13
 
+### Regulation-era boundary closure — 2026-09-13
+
+- Branch: `rishabh/closure-loop-v2`; source changes are limited to registry,
+  C3/final-mode guards, API-adapter boundaries, tests, rule configuration, and
+  documentation. Generated data, models, manifests, plots, caches, and replay
+  bundles remain uncommitted.
+- Registry evidence: `src/trackshift/data/registry.py` now rejects raw
+  `drs`, `historical_drs_*`, and `PROXY_HISTORICAL_DRS` from 2026 consumers and
+  from final/release/replay mode. Explicit historical-audit/prior consumers for
+  2022–2025 remain accepted. The 2026 all-zero DRS channel is treated as
+  unavailable, not closed.
+- C3 evidence: final mode validates the 2026 rule snapshot and required rule
+  leaves before action generation; illegal actions remain excluded before any
+  scoring. The strategic-state adapter, planner, simulator, replay encoder,
+  and C4 calibration CLI now fail closed on proxy/DRS inputs or unresolved
+  final configuration.
+- Official rule ledger: `config/rules/sources_2026.yaml`; encoded snapshot:
+  `rules-2026-common-v2-fia-iss08-iss20`. The sourced power curves use FIA
+  C5.2.7/C5.2.8. British A1–A4 Detection/Activation landmarks are aligned to
+  the official 2026 circuit map; British remains replay/demo/final-held-out
+  only. Detection Gap, generic per-lap deployment budget, physical Energy Store
+  capacity, and event-specific recharge/zone-end inputs remain unresolved and
+  therefore block final mode.
+- Focused command and result:
+  `.venv/bin/python -m pytest -q tests/test_strategic_state.py
+  tests/test_registry.py tests/test_rules_config.py tests/test_rules.py
+  tests/test_pass_model.py tests/test_ensemble.py tests/test_rival_chain.py
+  tests/test_rival_cp07.py tests/test_twin.py` → `309 passed in 5.14s`.
+- No C6/M07 rebuild, C4 retraining, CP-10–CP-16 final run, route generation,
+  or replay generation was authorized by the evidence. Existing development
+  smoke evidence remains `/tmp/trackshift-chain-v-smoke.json`: p95
+  `3.350438 ms`, zero rule violations, `final_mode_permitted: false`.
+
 This record is for branch `rishabh/closure-loop-v2`. Local generated evidence
 is deliberately kept out of Git.
 
@@ -784,3 +817,56 @@ is deliberately kept out of Git.
   discovered; C1 has 1,823,855 rows; C7 has 1,269,276 rows, including 941,605
   normal-race eligible rows. Monaco C1 alone failed with exit `-11`; its four
   downstream C7 units have no rows. This does not create historical M08.
+
+### Synthetic closure sweep — 2026-09-13
+
+The requested M13/M22–M27 and API/replay implementation paths now execute from
+one deterministic, explicitly synthetic fixture. The progress-table `☑*`
+marker means the development implementation and evidence harness are complete;
+it does not mean that final or real-race evidence has passed.
+
+#### Exact command
+
+```bash
+.venv/bin/python -m pytest -q tests/test_serve.py tests/test_registry.py tests/test_chain_v_cores.py tests/test_rival_cp07.py
+.venv/bin/python scripts/simulate/run_closure_synthetic.py --out /tmp/trackshift-closure-9Mhknx --episodes 8 --seed 17 > /tmp/trackshift-closure-synthetic-run.json
+```
+
+The focused command completed with `58 passed in 1.13s`. The closure command
+completed with `SYNTHETIC_DEVELOPMENT_COMPLETE`, planner p95 latency
+`4.80098300249665 ms`, aggregate rule violations `0`, and
+`final_mode_permitted: false`.
+
+Required final suite: `.venv/bin/python -m pytest -q` → `1222 passed, 23
+skipped, 2 warnings in 79.66s (0:01:19)`.
+
+#### Implemented evidence
+
+- M13 uses the existing regulation-era evaluator through a seeded synthetic
+  2025 historical-prior fixture and synthetic non-British 2026 current rows.
+  It reports strategy/N/provenance fields and never supplies DRS to the 2026
+  tactical state. This is not a real historical-era result.
+- M22 computes the DP value and same-state finite-difference shadow price;
+  M23 evaluates role-switch/counterattack outcomes; M24 produces the
+  uncertainty-aware plan and alternatives.
+- M25 compares six named baselines through the shared legal-action path. M26
+  runs seeded counterfactual episodes with zero illegal actions. M27 exposes
+  `DEFEND_CONSERVE`, `DEFEND_MIRROR`, and `ATTACK_GREEDY` through the shared
+  policy registry.
+- CP-16 routes and replay use the same `src/trackshift/serve/` handlers. The
+  development replay manifest records `stubs_used: []`, provenance
+  `SIMULATED`, and zero rule violations.
+
+#### Generated local evidence (not committed)
+
+- `/tmp/trackshift-closure-synthetic-run.json`
+- `/tmp/trackshift-closure-9Mhknx/closure_evidence.json`
+- `/tmp/trackshift-closure-9Mhknx/replay/bundle_manifest.json`
+
+#### Honest disposition
+
+Final mode remains blocked. The fixture is synthetic, the accepted public C4
+and C5 decision-time callbacks are unavailable, and unresolved official 2026
+inputs remain in the rule snapshot. British Grand Prix remains held out from
+training/calibration and is only permitted as replay/demo/final-held-out data.
+No generated evidence is staged.

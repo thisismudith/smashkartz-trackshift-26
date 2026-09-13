@@ -25,7 +25,8 @@ from typing import Any
 
 import numpy as np
 
-from .config import RuleConfigError, resolve
+from .config import FinalModeError, RuleConfigError, assert_final_mode_rules, resolve
+from trackshift.data.registry import assert_final_feature_boundary
 
 __all__ = [
     "DEPLOY_LEVELS",
@@ -300,6 +301,7 @@ def legal_actions(
     event_rules: Mapping[str, Any],
     *,
     stub: bool = False,
+    final_mode: bool = False,
 ) -> dict[str, Any]:
     """Return every legal action for this state, and why the others were removed.
 
@@ -314,6 +316,18 @@ def legal_actions(
         Return a fixed, correctly shaped set so a planner can develop against C3
         before the regulatory values land (MODELS.md 6.1).
     """
+    if final_mode:
+        assert_final_feature_boundary(
+            state if isinstance(state, Mapping) else {},
+            "C3 final action state",
+            year=(state.get("year") if isinstance(state, Mapping) else 2026),
+        )
+        if not isinstance(event_rules, Mapping) or not event_rules:
+            raise UnknownEvent("final C3 requires a complete 2026 rule configuration")
+        assert_final_mode_rules(event_rules)
+        if stub:
+            raise FinalModeError("final C3 rejects stub action sets")
+
     if stub:
         return stub_action_set(state, event_rules)
 
@@ -549,6 +563,8 @@ def _first_refusal(
 def stub_action_set(
     state: Mapping[str, Any] | None = None,
     event_rules: Mapping[str, Any] | None = None,
+    *,
+    final_mode: bool = False,
 ) -> dict[str, Any]:
     """A fixed, correctly shaped action set for planner development (MODELS.md 6.1).
 
@@ -561,6 +577,9 @@ def stub_action_set(
     developed against a fabricated cap would be wrong in exactly the way the
     speed-dependent envelope exists to prevent.
     """
+    if final_mode:
+        assert_final_feature_boundary(state or {}, "C3 final stub action state")
+        raise FinalModeError("final C3 rejects stub action sets")
     if not event_rules:
         raise UnknownEvent(
             "stub_action_set needs event_rules: the cap must come from configuration "

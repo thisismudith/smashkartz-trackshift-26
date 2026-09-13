@@ -31,6 +31,11 @@ __all__ = [
     "DATASET_STATUSES",
     "UnregisteredColumns",
     "RegistryError",
+    "FeatureBoundaryError",
+    "RAW_DRS_FEATURES",
+    "HISTORICAL_DRS_FEATURES",
+    "validate_feature_admission",
+    "assert_final_feature_boundary",
     "load_feature_registry",
     "load_data_registry",
     "feature",
@@ -73,6 +78,20 @@ class RegistryError(ValueError):
 
 class UnregisteredColumns(RuntimeError):
     """A dataset produced columns that are not in the feature registry."""
+
+
+class FeatureBoundaryError(RegistryError):
+    """A feature crossed a regulation-era or final-mode boundary."""
+
+
+# ``drs_open`` is the canonicalized raw ``tel.json drs`` channel.  Keep both
+# spellings here because raw frames and API payloads can legitimately expose
+# the source spelling before canonicalization.  Neither is a 2026 strategic
+# signal; 2026 Overtake state comes from the rule engine.
+RAW_DRS_FEATURES = frozenset({"drs", "drs_open"})
+HISTORICAL_DRS_FEATURES = frozenset({"historical_drs_open", "historical_drs_eligible"})
+HISTORICAL_DRS_CONSUMERS = frozenset({"historical_audit", "historical_prior"})
+FINAL_MODES = frozenset({"final", "release", "replay"})
 
 
 def _load_yaml(path: Path) -> dict:
@@ -198,6 +217,120 @@ def assert_registered(columns: Iterable[str], context: str, config_dir: Path | N
     )
 
 
+def _drs_feature_name(name: object) -> bool:
+    text = str(name).lower()
+    return text in RAW_DRS_FEATURES or text in HISTORICAL_DRS_FEATURES or text.startswith("historical_drs_")
+
+
+def _proxy_in_value(value: object) -> bool:
+    if isinstance(value, str):
+        return "PROXY_HISTORICAL_DRS" in value.upper()
+    if isinstance(value, Mapping):
+        return any(_proxy_in_value(k) or _proxy_in_value(v) for k, v in value.items())
+    if isinstance(value, (list, tuple, set, frozenset)):
+        return any(_proxy_in_value(item) for item in value)
+    return False
+
+
+def _drs_names_in_value(value: object) -> set[str]:
+    """Find forbidden DRS names in nested API/state payloads."""
+    if isinstance(value, Mapping):
+        found = {str(key) for key in value if _drs_feature_name(key)}
+        for key, child in value.items():
+            if _drs_feature_name(key):
+                continue
+            found.update(_drs_names_in_value(child))
+        return found
+    if isinstance(value, (list, tuple, set, frozenset)):
+        found: set[str] = set()
+        for child in value:
+            found.update(_drs_names_in_value(child))
+        return found
+    return set()
+
+
+def validate_feature_admission(
+    columns: Iterable[str] | Mapping[str, object],
+    *,
+    year: int | str | None,
+    consumer: str,
+    mode: str = "development",
+    provenance: object | None = None,
+    config_dir: Path | None = None,
+) -> None:
+    """Enforce the DRS regulation-era boundary at a consumer boundary.
+
+    Historical DRS channels may be used only by explicitly named 2022--2025
+    audit/prior consumers.  They can never enter a 2026 consumer, and no raw
+    DRS/proxy value may cross a final/replay/release boundary.  This function
+    intentionally accepts mappings as well as column lists so API/state
+    payloads receive the same guard as tabular builders.
+    """
+    mode_name = str(mode).lower()
+    if mode_name not in {"development", "audit", "prior", *FINAL_MODES}:
+        raise FeatureBoundaryError(f"unknown feature admission mode {mode!r}")
+    try:
+        numeric_year = int(year) if year is not None else None
+    except (TypeError, ValueError) as exc:
+        raise FeatureBoundaryError(f"year must be an integer or None, got {year!r}") from exc
+
+    names = list(columns.keys()) if isinstance(columns, Mapping) else [str(column) for column in columns]
+    drs_names_set = {str(name) for name in names if _drs_feature_name(name)}
+    if isinstance(columns, Mapping):
+        drs_names_set.update(_drs_names_in_value(columns))
+    drs_names = sorted(drs_names_set)
+    proxy_seen = _proxy_in_value(provenance) or (isinstance(columns, Mapping) and _proxy_in_value(columns))
+
+    if mode_name in FINAL_MODES and (drs_names or proxy_seen):
+        offenders = drs_names + (["PROXY_HISTORICAL_DRS"] if proxy_seen else [])
+        raise FeatureBoundaryError(
+            f"{consumer}: final-mode admission rejects regulation-era/proxy input(s): "
+            f"{', '.join(offenders)}. Raw and historical DRS are audit/prior-only, "
+            "and PROXY_HISTORICAL_DRS is development-fixture provenance only."
+        )
+
+    if not drs_names:
+        if numeric_year == 2026 and proxy_seen:
+            raise FeatureBoundaryError(
+                f"{consumer}: PROXY_HISTORICAL_DRS cannot enter a 2026 consumer"
+            )
+        return
+
+    if numeric_year == 2026:
+        raise FeatureBoundaryError(
+            f"{consumer}: raw/historical DRS input {', '.join(drs_names)} is forbidden "
+            "and cannot enter a 2026 consumer; an all-zero 2026 raw DRS channel "
+            "means unavailable, not closed"
+        )
+    if numeric_year not in {2022, 2023, 2024, 2025}:
+        raise FeatureBoundaryError(
+            f"{consumer}: DRS input {', '.join(drs_names)} has no permitted regulation era for year {year!r}"
+        )
+    if consumer not in HISTORICAL_DRS_CONSUMERS or mode_name not in {"development", "audit", "prior"}:
+        raise FeatureBoundaryError(
+            f"{consumer}: DRS input {', '.join(drs_names)} is permitted only for an explicitly "
+            "labelled historical_audit/historical_prior consumer in development/audit/prior mode"
+        )
+
+
+def assert_final_feature_boundary(
+    payload: Mapping[str, object],
+    context: str,
+    *,
+    year: int | str | None = None,
+    config_dir: Path | None = None,
+) -> None:
+    """Reject DRS/proxy keys anywhere in a final decision payload."""
+    validate_feature_admission(
+        payload,
+        year=2026 if year is None else year,
+        consumer=context,
+        mode="final",
+        provenance=payload,
+        config_dir=config_dir,
+    )
+
+
 def live_safe_features(config_dir: Path | None = None) -> set[str]:
     """Features usable at decision time (section 44)."""
     return {n for n, e in load_feature_registry(config_dir).items() if e.get("live_safe") is True}
@@ -308,6 +441,17 @@ def validate_registries(config_dir: Path | None = None) -> list[str]:
     features = load_feature_registry(config_dir)
     for name, entry in features.items():
         problems.extend(_check_feature(name, entry))
+        if _drs_feature_name(name):
+            years = entry.get("supported_years") or []
+            if 2026 in years or "2026" in years:
+                problems.append(
+                    f"{name}: raw/historical DRS features cannot list 2026 in supported_years"
+                )
+            if entry.get("era_policy") != "historical_prior_only":
+                problems.append(
+                    f"{name}: raw/historical DRS features must declare era_policy "
+                    "historical_prior_only"
+                )
     problems.extend(_near_duplicate_names(features))
     for name, entry in load_data_registry(config_dir).items():
         problems.extend(_check_dataset(name, entry))

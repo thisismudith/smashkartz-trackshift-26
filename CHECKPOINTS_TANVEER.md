@@ -2726,6 +2726,53 @@ def test_causal(builder, lap_df):
 
 # Open items
 
+## Regulation-era boundary closure — 2026-09-13
+
+- `config/feature_registry.yaml` marks historical DRS fields
+  `historical_prior_only`; `src/trackshift/data/registry.py` enforces that
+  policy at consumer and final-mode boundaries. Raw/historical DRS is accepted
+  only for explicitly labelled 2022–2025 audit/prior work and never for 2026
+  strategy inputs. `PROXY_HISTORICAL_DRS` is development-fixture provenance
+  only.
+- `src/trackshift/pass_model/features.py` and
+  `scripts/train/calibrate_pass_model.py --final-mode` reject proxy/DRS C4
+  inputs; final mode also requires only non-British 2026 rows. No C4 retraining
+  was run because the required final rule inputs and accepted C5 callback are
+  unavailable. British Grand Prix was not used for training or calibration.
+- Official source ledger: `config/rules/sources_2026.yaml`; common rule
+  snapshot: `config/rules/2026/common.yaml`; British event configuration:
+  `config/rules/2026/british_grand_prix.yaml`. The FIA power curves are sourced;
+  Detection Gap, generic deployment budget, physical store capacity, and
+  event-specific conditions remain unresolved and keep final mode blocked.
+- Focused validation command:
+  `.venv/bin/python -m pytest -q tests/test_strategic_state.py
+  tests/test_registry.py tests/test_rules_config.py tests/test_rules.py
+  tests/test_pass_model.py tests/test_ensemble.py tests/test_rival_chain.py
+  tests/test_rival_cp07.py tests/test_twin.py` → `309 passed in 5.14s`.
+- Generated C4/C5 artifacts were not rebuilt or staged. Existing C4 candidates
+  under `artifacts/models/pass/cp14_2026_v1/` remain development evidence only;
+  no accepted public decision-time C5 transition exists.
+
+### Rishabh synthetic closure hand-off — 2026-09-13
+
+Rishabh's M13/M22–M27 development paths and shared API/replay hand-off now have
+an executable synthetic fixture. This does not upgrade Tanveer's C4/C5 gates:
+the accepted public decision-time callbacks remain unavailable, and British GP
+remains excluded from training and calibration.
+
+```bash
+.venv/bin/python -m pytest -q tests/test_serve.py tests/test_registry.py tests/test_chain_v_cores.py tests/test_rival_cp07.py
+.venv/bin/python scripts/simulate/run_closure_synthetic.py --out /tmp/trackshift-closure-9Mhknx --episodes 8 --seed 17 > /tmp/trackshift-closure-synthetic-run.json
+```
+
+The focused route/registry/Chain V command returned `58 passed in 1.13s`.
+The synthetic closure run returned `SYNTHETIC_DEVELOPMENT_COMPLETE`, planner
+p95 `4.80098300249665 ms`, and zero aggregate rule violations. Generated
+evidence remains local under `/tmp/trackshift-closure-9Mhknx/`; it is not a
+replacement for a real C4 calibration manifest or C5 acceptance artifact.
+The required full suite completed with `.venv/bin/python -m pytest -q` →
+`1222 passed, 23 skipped, 2 warnings in 79.66s (0:01:19)`.
+
 | # | Item | Status |
 |---|---|---|
 | T1 | FIA 2026 Sporting/Technical Regulations and per-event notes for all 14 tracks | Research task in CP-03; Tier-C proxy unblocks development meanwhile |

@@ -738,3 +738,27 @@ def test_artifact_round_trips_and_records_cpu_verification(frame, tmp_path):
     assert on_disk["feature_schema_version"] == selection.schema_version
     np.testing.assert_allclose(reloaded.predict_proba(X.head(5)),
                                model.predict_proba(X.head(5)))
+
+
+def test_2026_feature_selection_excludes_raw_drs_from_c4():
+    selection = select_features(
+        "DETECTION", ["speed_kmh", "drs_open"], year=2026, consumer="C4"
+    )
+    assert "drs_open" not in selection.columns
+    assert "drs_open" in selection.excluded
+
+
+def test_historical_prior_can_explicitly_admit_2025_raw_drs():
+    selection = select_features(
+        "DETECTION", ["speed_kmh", "drs_open"], year=2025,
+        consumer="historical_prior",
+    )
+    assert "drs_open" in selection.columns
+
+
+def test_final_feature_selection_rejects_raw_drs():
+    with pytest.raises(FeatureSelectionError, match="final-mode admission"):
+        select_features(
+            "DETECTION", ["speed_kmh", "drs_open"], year=2026,
+            consumer="C4", mode="final",
+        )

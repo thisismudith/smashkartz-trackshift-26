@@ -21,6 +21,7 @@ from trackshift.data.registry import (  # noqa: E402
     REQUIRED_DATASET_KEYS,
     REQUIRED_FEATURE_KEYS,
     RegistryError,
+    FeatureBoundaryError,
     UnregisteredColumns,
     assert_registered,
     dataset,
@@ -31,6 +32,8 @@ from trackshift.data.registry import (  # noqa: E402
     load_feature_registry,
     source_gated_features,
     validate_registries,
+    validate_feature_admission,
+    assert_final_feature_boundary,
 )
 
 # The seven channels section 11 gates on a documented source.
@@ -118,6 +121,36 @@ def test_drs_is_historical_only_and_not_supported_in_2026():
     entry = feature("drs_open")
     assert 2026 not in entry["supported_years"]
     assert "2026" in entry["definition"] or "Overtake" in entry["definition"]
+
+
+def test_historical_drs_is_admitted_only_to_an_explicit_historical_prior():
+    validate_feature_admission(
+        ["historical_drs_open", "historical_drs_eligible"],
+        year=2025,
+        consumer="historical_prior",
+    )
+
+
+@pytest.mark.parametrize("year", [2026, "2026"])
+def test_historical_drs_is_rejected_by_every_2026_consumer(year):
+    with pytest.raises(FeatureBoundaryError, match="cannot enter a 2026 consumer"):
+        validate_feature_admission(
+            ["historical_drs_open"], year=year, consumer="C4"
+        )
+
+
+def test_raw_drs_is_not_a_historical_prior_without_an_explicit_consumer():
+    with pytest.raises(FeatureBoundaryError, match="explicitly labelled"):
+        validate_feature_admission(["drs"], year=2025, consumer="C4")
+
+
+def test_final_boundary_rejects_drs_and_proxy_even_for_historical_years():
+    with pytest.raises(FeatureBoundaryError, match="final-mode admission"):
+        assert_final_feature_boundary(
+            {"historical_drs_open": True, "provenance": "PROXY_HISTORICAL_DRS"},
+            "final replay",
+            year=2025,
+        )
 
 
 def test_gap_and_position_features_are_race_like_only():
