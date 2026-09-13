@@ -18,7 +18,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { Field, ProvenanceBadge, Value } from "@/components/provenance/Provenance";
+import { ProvenanceBadge, Value } from "@/components/provenance/Provenance";
 import { formatQuantity, formatProbability, rankDistribution } from "@/serve/format";
 import type { Result } from "@/serve/guards";
 import type { BattlesResponse, TimelineResponse } from "@/serve/types";
