@@ -1,11 +1,31 @@
-# Model integration handoff — swap telemetry overrides for real models
+# TrackShift integration guide
 
-**Audience:** the session that built the frontend/backend integration against
-synthetic telemetry overrides. Written for someone who knows the UI and the API
-surface but has not seen the model artifacts.
+**Audience:** whoever is wiring the frontend to the backend. Written for someone
+who knows the UI and the API surface but has not seen the model artifacts.
 
-The models now exist. This is what they are, where they live, what they accept,
-what they refuse, and what is still synthetic and must stay labelled that way.
+The service has always answered. What changed is that some of those answers are
+now real models rather than synthetic placeholders — and the rest still are not.
+This document says which is which, what the real ones accept, what they refuse,
+and what must stay labelled as synthetic.
+
+**The one rule that matters.** A `SIMULATED` value must never be rendered as
+though it were observed or modelled. Every response carries provenance and an
+`is_stub` flag for exactly this reason. Read §6 before you decide a route is
+ready to show as real.
+
+## Quick start
+
+```powershell
+git pull
+.venv/Scripts/python.exe scripts/serve/run_service.py --check   # readiness, no port
+.venv/Scripts/python.exe scripts/serve/run_service.py           # serve on :8000
+.venv/Scripts/python.exe -m pytest tests/test_pass_service.py -q
+```
+
+`--check` prints which checkpoints are backed by a real artifact and which would
+fall back to the synthetic model. Run it first: a service that starts cleanly
+and then serves placeholder probabilities is the failure worth catching before
+the UI does.
 
 ---
 
@@ -131,18 +151,41 @@ probability as a model output.
 
 ---
 
-## 6. Routes that are still synthetic
+## 6. Route inventory — what is real and what is not
 
-Leave them synthetic and keep them labelled. Promoting a `SIMULATED` value to
-look observed is the one thing this project treats as unrecoverable.
+All 17 routes respond. Only the first is backed by a trained model today.
 
-| Route | Status |
-|---|---|
-| `POST /pass/predict` | **Real model** |
-| `POST /twin/segment_time` | Synthetic. CP-21's `a_k` is inverted by segment type, so wiring it would hand the planner a transition pointing the wrong way |
-| `POST /twin/energy_state` | Synthetic. CP-20 has no accepted rung |
-| `GET /value/{event}/shadow_price`, `POST /plan`, `POST /simulate` | Synthetic, and depend on the twin above |
-| `GET /track`, `/rules`, `/battles`, `POST /rival/state` | Rishabh's half |
+| Route | Backing | Safe to show as real? |
+|---|---|---|
+| `POST /pass/predict` | **CP-14 artifact** | **Yes**, with the `INTERIM` grade shown |
+| `GET /meta` | Version metadata | Yes |
+| `GET /validation` | Synthetic report | No — labelled |
+| `GET /track/{event}` | Synthetic centreline and segments | No |
+| `GET /rules/{event}` | Real rule config (CP-03/CP-11) | Yes |
+| `GET /rules/{event}/power_envelope` | Real rule engine | Yes |
+| `POST /rules/legal_actions` | Real rule engine | Yes |
+| `POST /rules/eligibility` | Real eligibility projection (CP-12) | Yes |
+| `GET /battles`, `GET /battles/{id}/timeline` | Synthetic rows | No |
+| `POST /rival/state` | Synthetic rival model | No |
+| `POST /twin/segment_time` | Synthetic | **No** — see below |
+| `POST /twin/energy_state` | Synthetic | **No** — see below |
+| `GET /value/{event}/shadow_price` | Synthetic transition | No |
+| `POST /plan` | Synthetic | No |
+| `POST /simulate`, `GET /simulate/policies` | Synthetic | No |
+
+### Why the twin routes stay synthetic
+
+This is a deliberate hold, not unfinished wiring. CP-20's physics calibration
+has no accepted rung — every fitted parameter sits on a bound, which means the
+model is missing physics rather than that the bounds are wrong. CP-21's energy
+sensitivity `a_k` is **inverted by segment type**: corners average 7.1 s/MJ
+against straights at 0.63, where the physics says the opposite. Wiring that into
+`/twin/segment_time` would hand the planner a transition pointing the wrong way,
+and the planner would confidently recommend deploying energy where it helps
+least.
+
+Leave them synthetic until CP-20 produces an accepted rung. The blocker is
+documented in `CHECKPOINTS_TANVEER.md` §CP-20.
 
 ---
 
@@ -188,3 +231,40 @@ Add for the integration:
   route was synthetic — exactly what it existed to detect. `--final` now raises
   on a non-empty set.
 - **Prefer `v2` over `v1`.** Same feature count; `v2` is the later build.
+
+---
+
+## 9. Integration checklist
+
+Work top to bottom; each step is verifiable on its own.
+
+- [ ] `run_service.py --check` reports all three checkpoints backed, exit 0
+- [ ] Startup logs one line per checkpoint: artifact version, family, feature
+      count, evidence grade — and a named warning on any that fail to load
+- [ ] Frontend field names mapped to the model schema (§3); contract test added
+- [ ] `CHECKPOINT_VIOLATION` renders as an explanatory state, not an error toast
+- [ ] `NOT_MODEL_ELIGIBLE` renders as an explanatory state
+- [ ] `evidence_grade` visible in the UI wherever a probability is shown
+- [ ] `is_stub: true` visibly marked, never rendered as a model output
+- [ ] `features_missing` surfaced somewhere the user can reach
+- [ ] Twin, planner and simulate routes still labelled `SIMULATED`
+- [ ] `pytest tests/test_pass_service.py -q` green
+- [ ] One prediction under 50 ms once loaded
+
+## 10. Where to look when something is wrong
+
+| Symptom | Look at |
+|---|---|
+| Every probability is identical or suspiciously smooth | `is_stub` — the synthetic curve is answering. Check `run_service.py --check` |
+| Probabilities barely move as the UI changes inputs | `features_missing` — the field names probably do not match §3 |
+| 422 on a request that looks fine | `detail.code`. `CHECKPOINT_VIOLATION` means a future-scoped field was sent with a value; send `null` instead |
+| First request slow, rest fast | Expected — the model unpickles once. If *every* request is slow, the cache is not being used |
+| Service starts then 500s on predict | An artifact is present but unreadable. The startup log names which |
+
+## 11. Related documents
+
+- `CHECKPOINTS_TANVEER.md` — the completion register, per-checkpoint gate status,
+  and why the partial ones are partial
+- `runbooks/CLOSURE_LOOP.md` — the append-only evidence log for both owners
+- `API.md` — the route contracts
+- `MODELS.md` — artifact layout and versioning rules
