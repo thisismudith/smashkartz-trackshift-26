@@ -332,6 +332,37 @@ function roadCentreFromRing(track: TrackModel, stationM: number): number | null 
  */
 const MAX_MEASURED_ROAD_WIDTH_M = 25;
 
+/**
+ * Metres to shift the two columns LEFT of the road centre the edge walk computes.
+ *
+ * MEASURED against the circuit model's own painted grid boxes, the same top-down render
+ * that produced CAR_REFERENCE_AHEAD_M (23.479 px/m): with the columns centred on the
+ * walked midpoint, ANT sat 0.54 m and HAM 0.80 m to the RIGHT of the box painted under
+ * them. Consistent in sign across the field and a fraction of a car's width, which is
+ * what a centre derived from a walk quantised in 0.5 m steps can be out by.
+ *
+ * It corrects the CENTRE, not the stagger, so the two columns stay the same distance
+ * apart; and it applies only where there is a measured road to be off the middle of --
+ * a ribbon circuit has no painted boxes to calibrate against and is left alone.
+ */
+const GRID_COLUMN_CALIBRATION_M = 0.65;
+
+/** How far behind its own box a stationary car may read and still count as being in it,
+ * metres. The feed's station jitters by centimetres under a car that is not moving; this
+ * is a car length, far below the ~300-600 m launch window and far above that jitter. */
+const BOX_JITTER_M = 5;
+
+/**
+ * Metres off the racing line beyond which a car on a pit lap is on the PIT ROAD.
+ *
+ * Measured on both sides. Genuine on-circuit laterals: over 52,383 status-"track"
+ * instants across the 2026 British GP race, 99.84 % sit within 3 m of the line and the
+ * 99.9th percentile is 4.57 m. The lane on the other side: 19.3 m off the ring at
+ * Silverstone's pit exit and 35.0 m at the boxes, ~22 m at Spa's entry. 8 m is above
+ * every on-circuit reading and less than half the nearest part of any lane.
+ */
+const PIT_DIVERGENCE_M = 8;
+
 /** Both measured edges at a station, or null unless the pair describes one road. */
 function roadEdgesAt(
   track: TrackModel, stationM: number,
@@ -358,7 +389,8 @@ function columnLateral(
       // Smoothed against single-station bake noise (see roadCentreFromRing); falls
       // back to this exact station's own value only when too few neighbours measured
       // both sides to smooth with.
-      const centreFromRing = roadCentreFromRing(track, stationM) ?? (leftRoom - rightRoom) / 2;
+      const centreFromRing = (roadCentreFromRing(track, stationM) ?? (leftRoom - rightRoom) / 2)
+        + GRID_COLUMN_CALIBRATION_M;
       const target = centreFromRing + sign * GRID_LATERAL_FALLBACK_M;
       // Still never past the edge of the actually-measured road AT THIS STATION,
       // regardless of what the smoothed aim point says -- a car parked here must fit
@@ -385,6 +417,23 @@ function columnLateral(
   // `sign * 0` is -0 for sign -1, which is a different value from 0 under Object.is and
   // would publish two distinct "on the centreline" laterals. There is one centreline.
   return offset === 0 ? 0 : sign * offset;
+}
+
+/**
+ * Metres from `stationM` to the next corner, or null when the model names no corners.
+ *
+ * Used as the LAUNCH WINDOW: the distance over which the field stops being a grid and
+ * becomes a queue. It is a per-circuit measurement, not a chosen number -- pole to the
+ * first corner is 336.6 m at Silverstone, 318.9 m at Zandvoort, 602.6 m at Monza.
+ */
+function metresToNextCorner(track: TrackModel, stationM: number): number | null {
+  const L = track.lengthMetres;
+  let best: number | null = null;
+  for (const c of track.corners) {
+    const d = (((c.station - stationM) % L) + L) % L;
+    if (d > 0 && (best === null || d < best)) best = d;
+  }
+  return best;
 }
 
 /** Alternating sides, the fallback rule for a placement the producer never published
@@ -447,6 +496,17 @@ export class ReplayTimeline implements RaceTimeline {
   readonly driverList: string[];
   readonly totalLaps: number | null;
   readonly duration: number;
+  /**
+   * Seconds subtracted from every absolute session timestamp to make this
+   * timeline start at 0 (the earliest lap-1 lST).
+   *
+   * Exposed because anything holding an ABSOLUTE session time -- the evidence
+   * reel's overtake moments come straight out of the telemetry parquet -- has to
+   * subtract this before seeking. Without it a seek to 3670 lands 3670 s after
+   * the race start instead of at it, which is a different lap and a car on its
+   * own.
+   */
+  readonly clockOffsetS: number;
 
   private byDriver: Map<string, DriverLaps>;
   private raceControl: RawSessionManifest["raceControl"];
@@ -466,6 +526,8 @@ export class ReplayTimeline implements RaceTimeline {
    * could not place) at indices past the last published slot. Only a driver in here may
    * be held on a grid slot. */
   private gridBoxed = new Set<string>();
+  /** Metres from pole's box to the first corner, or null when the model names none. */
+  private launchWindowM: number | null = null;
   /** driver -> index in gridOrder. sampleAt runs at 60 Hz; indexOf inside a comparator
    * is O(n) per comparison, this is O(1). */
   private gridIndex = new Map<string, number>();
@@ -497,6 +559,7 @@ export class ReplayTimeline implements RaceTimeline {
     }
     this.totalLaps = maxLap || null;
     this.duration = maxSesT;
+    this.clockOffsetS = normalised.offset;
 
     // Finished vs retired must be judged by LAP COUNT REACHED, never by session time:
     // the winner typically has the EARLIEST final sesT of any finisher (they simply
@@ -550,6 +613,9 @@ export class ReplayTimeline implements RaceTimeline {
         .map((x) => x.driver);
     }
 
+    // Pole's run to the first corner, measured once: `launchBlend` asks per sample and
+    // the corner list does not change with time.
+    this.launchWindowM = metresToNextCorner(track, gridSlotStation(track, 0));
     // the fallback order is lap-1 completion order: every driver in it is a starter the
     // producer simply could not slot, so all of them keep a box
     if (this.gridBoxed.size === 0) this.gridBoxed = new Set(this.gridOrder);
@@ -632,6 +698,78 @@ export class ReplayTimeline implements RaceTimeline {
     // The parked queue is this file's own presentation placement, not one the producer
     // publishes, so its side comes from the fallback rule rather than grid.slots.
     return columnLateral(this.track, this.parkedStation(driver), paritySign(idx));
+  }
+
+  /**
+   * The drawn lateral for a car still on its run to the first corner, or null once it is
+   * past that (and for every car that never had a box).
+   *
+   * Eases the RULE stagger into whatever the feed reports, over the measured distance
+   * from the box to the first corner. Null -- not 0 -- everywhere it does not apply, so
+   * the caller falls through to the ordinary measured path untouched.
+   *
+   * A sample with no usable lateral of its own blends toward the centreline instead of
+   * toward NaN: an absent reading must not be able to hide a car that is plainly there.
+   */
+  private launchBlend(
+    driver: string, lap: RawLapEntry, sample: { stationM: number; lateralM: number } | null,
+  ): number | undefined | null {
+    if (lap.lap !== 1 || !sample || !Number.isFinite(sample.stationM)) return null;
+    if (!this.gridBoxed.has(driver) || this.pitStarters.has(driver)) return null;
+    const slot = this.gridIndex.get(driver) ?? -1;
+    if (slot < 0) return null;
+    const window = this.launchWindowM;
+    if (window === null) return null;
+    const box = gridSlotStation(this.track, slot);
+    const L = this.track.lengthMetres;
+    // FORWARD distance from the box, with the one wrap that is not forward motion folded
+    // back to zero: a stationary car's station jitters either side of its own box by
+    // centimetres, and a plain modulo reads a car 0.05 m short of its box as 5825.69 m
+    // PAST it, which flickered it onto the racing line for a frame (measured on STR, the
+    // one 2026 British GP car whose box is behind the timing line).
+    //
+    // It must NOT be a signed difference clamped at zero, which is what this was: that
+    // maps every car more than half a lap from its box back to "still in its box", so the
+    // stagger never decayed and the whole field was drawn 2-9 m off the racing line for
+    // the WHOLE of lap 1 while the feed was reporting 0.0-0.15 m.
+    const forward = (((sample.stationM - box) % L) + L) % L;
+    const travelled = forward > L - BOX_JITTER_M ? 0 : forward;
+    if (travelled >= window) return null;
+    const u = travelled / window;
+    const boxLateral = columnLateral(
+      this.track, box, this.slotSign.get(driver) ?? paritySign(slot),
+    );
+    const measured = Number.isFinite(sample.lateralM) ? sample.lateralM : 0;
+    return boxLateral * (1 - u) + measured * u;
+  }
+
+  /**
+   * Whether a sample is on the PIT ROAD rather than on the circuit.
+   *
+   * Only ever asked of a lap that is already known to pit (`pin` is not null), which is
+   * what makes both of its tests safe: every car crosses the entry stretch every lap, and
+   * a car can run wide without pitting. What this adds is WHEN, for a car that is going
+   * to pit -- the moment it leaves the circuit rather than the moment the lane's timing
+   * point sees it, which measures 3.0-4.9 s later on every in-lap of the British pack.
+   *
+   * The station half is false when the artifact publishes no entry station, which is the
+   * honest answer for a model that cannot say where its pit lane begins.
+   *
+   */
+  private onPitRoad(sample: { stationM: number; lateralM: number } | null): boolean {
+    if (!sample || !Number.isFinite(sample.stationM)) return false;
+    // Off the racing line by more than any car on the circuit ever is. The published
+    // entry is a POINT, and a car does not leave the track at a point: measured, the
+    // divergence begins 18 m BEFORE the published entry at Spa and 4 m after it at
+    // Silverstone, so the station test alone misses the first seconds at some circuits.
+    if (Number.isFinite(sample.lateralM)
+      && Math.abs(sample.lateralM) > PIT_DIVERGENCE_M) return true;
+    const entry = this.track.pitLane.entryStation;
+    if (entry === null) return false;
+    const L = this.track.lengthMetres;
+    const span = (((this.track.timingLines.sf - entry) % L) + L) % L;
+    const along = (((sample.stationM - entry) % L) + L) % L;
+    return along <= span;
   }
 
   /** The last real sample of a lap: used for the brief, effectively-instantaneous
@@ -803,12 +941,59 @@ export class ReplayTimeline implements RaceTimeline {
         officialPos: lastCompletedOfficial(dl.laps, idx, t),
       };
     }
+    // THE LAUNCH. A car that has just left its box is drawn between the box and the
+    // racing line, not snapped from one to the other.
+    //
+    // This is a presentation rule and it replaces nothing measured, because THE FEED
+    // CARRIES NO LATERAL AT ALL HERE. Measured over the 2026 British GP's whole lap 1:
+    // the standard deviation of every car's reported lateral is 0.03-0.16 m for the
+    // first 1200 m and the largest single reading is 0.72 m, on a road 15-18 m wide with
+    // a field that is genuinely two abreast off the line. Every car's x/y projects onto
+    // the reference line, so "their own position" and "one single line on the racing
+    // line" are the same thing in this data -- which is why the stagger vanished the
+    // instant telemetry took over and the whole field slid sideways onto one file.
+    //
+    // The window is the circuit's own: pole to the first corner (336.6 m at Silverstone,
+    // 318.9 m at Zandvoort, 602.6 m at Monza), which is the stretch over which a real
+    // field does funnel from two columns into a queue. Past it the drawn lateral is the
+    // feed's own value again, whatever that is worth.
+    const launch = this.launchBlend(dl.entry.driver, lap, sample);
+    if (launch !== null) {
+      return {
+        lapsDone: nonFf1gLapsBefore,
+        lapProgress: lapDistanceFraction(
+          decoded, sample, this.track.lengthMetres, this.track.timingLines.sf, rel,
+        ),
+        rankProgress: nonFf1gLapsBefore + lapDistanceFraction(
+          decoded, sample, this.track.lengthMetres, this.track.timingLines.sf, rel,
+        ),
+        stationM: sample!.stationM,
+        lapEntry: lap, kind: "track", cur,
+        lateralOverride: launch,
+        // The STATION is the measurement it always was; only the lateral is placed.
+        posProvenance: framedProvenance, positionFrame: frame,
+        officialPos: lastCompletedOfficial(dl.laps, idx, t),
+      };
+    }
     // A lap carrying a pit entry OR exit is a pit lap for its whole length. The
     // out-lap matters as much as the in-lap: the car spent part of it crawling down
     // the lane, so the station-derived gap is meaningless there (it was reporting a
     // P2 car as +90 s behind while P3 showed +4 s, which cannot both be true). The
     // dashboard shows PIT for these instead of a number it cannot stand behind.
-    const inPit = (lap.pin !== null && t >= lap.pin) || lap.pout !== null;
+    //
+    // ON AN IN-LAP THE CLOCK IS NOT THE ENTRY. `pin` is the lane's own timing point,
+    // some way down it, and the car has left the circuit well before that: measured over
+    // all 52 in-laps of the 2026 British GP race, the car is already more than 15 m off
+    // the ring 3.0-4.9 s BEFORE its own `pin` (median 3.7 s), at station 5326-5336
+    // against a published pit entry of 5322.1. Every lap, no exceptions.
+    //
+    // For those seconds the car was drawn with honest pit-lane coordinates -- tens of
+    // metres off the racing line -- while being called an on-circuit car, so it took the
+    // racing surface's elevation instead of the lane's and declutterLanes was free to
+    // shove it sideways. It reads as a car that has left the track. The entry the
+    // producer publishes is the real boundary, so that is what decides it.
+    const inPit = (lap.pin !== null && (t >= lap.pin || this.onPitRoad(sample)))
+      || lap.pout !== null;
     // DISTANCE along the lap, never elapsed-time-over-own-lap-time. Dividing by each
     // car's own lap duration makes a car on a quicker lap read as further round at
     // the same instant than a slower car physically ahead of it -- which put a car

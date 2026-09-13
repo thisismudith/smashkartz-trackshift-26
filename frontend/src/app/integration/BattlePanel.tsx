@@ -74,8 +74,7 @@ export function BattlePanel({
       }
     >
       <Callout>
-        Ids come from <code>/battles</code>. Nothing here hard-codes the example id in API.md —
-        the development fixture is synthetic and uses its own.
+        Ids come from <code>/battles</code>, never hard-coded — the fixture uses its own.
       </Callout>
 
       {battles === null ? <Loading what="the battle index" /> : null}
@@ -143,17 +142,14 @@ export function BattlePanel({
           </div>
 
           <Callout>
-            Everything below the cutoff index used only information available at or before that
-            point. Estimated electrical energy is a twin output tagged <strong>SIMULATED</strong> —
-            it is not a battery reading, and the rival state is a model&apos;s belief, not an
-            observation.
+            Causal to the cutoff index. Energy is a twin estimate, not a battery reading; rival
+            state is a belief, not an observation.
           </Callout>
 
           <div className={s.tableWrap}>
             <table className={s.table}>
               <caption className={s.caption}>
-                Per-segment joined model output. Rival state is shown as a full distribution
-                (API.md 8) rather than its most likely label.
+                Rival state as a full distribution, not its most likely label.
               </caption>
               <thead>
                 <tr>

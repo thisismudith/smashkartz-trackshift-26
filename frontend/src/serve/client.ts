@@ -140,7 +140,12 @@ async function request<T>(
 
   if (!res.ok) {
     const { code, message } = readErrorBody(body, text || res.statusText || `HTTP ${res.status}`);
-    return { ok: false, kind: "http", status: res.status, code, message, url, mode: source.mode };
+    // A 502 from our own proxy means it could not reach the backend at all. That is a dead
+    // backend, not a service that refused the request, and the two need different words: one
+    // says "start it or switch to replay", the other says "read the error code". Without this
+    // the most common failure in development is described wrongly.
+    const kind = code === "UPSTREAM_UNREACHABLE" ? "network" : "http";
+    return { ok: false, kind, status: res.status, code, message, url, mode: source.mode };
   }
 
   if (!shape.check(body)) {

@@ -54,13 +54,10 @@ const KIND_WORD: Record<string, string> = {
 };
 
 const KIND_ADVICE: Record<string, string> = {
-  network:
-    "Start the development service, or switch the source above to the replay bundle — the UI is built to work from the bundle alone.",
-  http: "Check the error code. UNKNOWN_BATTLE means the battle id is not in this source's index; take ids from /battles rather than typing one.",
-  malformed:
-    "This is a contract change, not a transient failure: the response parsed as JSON but is not the shape this build renders. Nothing is displayed rather than guessing at the fields.",
-  unsupported:
-    "The replay bundle is nine files; this route is not one of them. Switch to the live service for it, or read the fallback shown below.",
+  network: "Start the service, or switch the source above to the replay bundle.",
+  http: "Read the code. UNKNOWN_BATTLE means the id is not in this source — take ids from /battles.",
+  malformed: "A contract change, not a transient failure. Nothing is shown rather than guessed at.",
+  unsupported: "Not one of the bundle's nine files. Use the live service, or the fallback below.",
 };
 
 export function ErrorState({ result, what }: { result: Extract<Result<unknown>, { ok: false }>; what: string }) {

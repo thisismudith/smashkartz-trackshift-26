@@ -41,7 +41,7 @@ export type MainToWorker =
   | { type: "setSpeed"; multiplier: number };
 
 export type WorkerToMain =
-  | { type: "ready"; driverList: string[]; totalLaps: number | null; duration: number }
+  | { type: "ready"; driverList: string[]; totalLaps: number | null; duration: number; clockOffsetS: number }
   | { type: "meta"; events: unknown[]; neutralisations: unknown[]; weather: unknown }
   | { type: "pose"; sessionTime: number; buffer: ArrayBuffer; carCount: number }
   | { type: "dashboard"; snapshot: unknown }

@@ -47,6 +47,57 @@ Used across all routes. Field names are exact.
 "OBSERVED" | "DERIVED" | "INFERRED" | "SIMULATED" | "RULE"
 ```
 
+These five are the whole vocabulary. There is no `MISSING` member and none is
+added: a quantity with no value is `null` with a `reason` (principle 5, §3.2)
+and keeps the provenance of the source that would have supplied it.
+`provenance` says what kind of claim the number *is*, which does not change
+when the number is absent. A tag from any other vocabulary in this field — in
+particular a rule `value_source` (§3.1a) — is a contract violation, not a
+richer answer.
+
+### 3.1a `value_source` — what evidence fixed a rule value
+
+Orthogonal to §3.1, and never a substitute for it. `provenance` says what kind
+of statement a number is; `value_source` says what evidence fixed its value. A
+rule-sourced number carries **both**, in two separate fields:
+
+```text
+"RULE_FIA" | "OBSERVED_RCM" | "OBSERVED" | "DERIVED_TELEMETRY" | "PROXY_HISTORICAL_DRS" | "UNVERIFIED"
+```
+
+```json
+{ "value": 5789.3, "provenance": "RULE", "unit": "m", "value_source": "DERIVED_TELEMETRY",
+  "source": "FIA 2026 British GP circuit map, Doc 6 p. 2, OVERTAKE DETECTION 115 m after T18; T18 at 5674.3 m from geometry.corner_distances_m" }
+```
+
+`RULE_FIA | OBSERVED_RCM | OBSERVED | DERIVED_TELEMETRY` are the **claimable**
+tiers — a public claim may rest on them. `PROXY_HISTORICAL_DRS` is development
+only and never claimable, because historical DRS is not 2026 Overtake (§41); a
+bundle containing one is rejected (§7). `UNVERIFIED` means the number is present
+but not yet traced to a source: it is what `unverified_keys` (5.3) lists and
+what the badge-and-never-claim-legality obligation exists for (§57). An
+`UNVERIFIED` value is still `provenance: "RULE"` — the tier is not a provenance
+and never appears in the `provenance` field. A rule key with no value at all is
+`value: null` plus a `reason` (principle 5), which is a different state again.
+
+`verified` is exactly `value_source ∈ {RULE_FIA, OBSERVED_RCM, OBSERVED,
+DERIVED_TELEMETRY}`; `unverified_keys` is the list of keys where it is false.
+
+`OBSERVED` appears in both vocabularies with different meanings: in §3.1 it
+means the number is a measurement in the timing/telemetry feed; here it means
+the rule value was read off a non-regulatory raw source such as `corners.json`.
+Read it against the field it is in. Collapsing the two vocabularies into one
+field is what produces the drift this section exists to stop.
+
+Source of truth for the tiers: `TIERS` and `CLAIMABLE_TIERS` in
+`src/trackshift/rules/config.py`.
+
+*The service does not yet match.* `GET /track/{event}` writes the `value_source`
+into `provenance`, so a Detection Line arrives tagged `DERIVED_TELEMETRY` — a
+value §3.1 does not define — and the field that should hold it is absent.
+`GET /rules/{event}` has the opposite half of the same fault: it emits
+`value_source` and omits `provenance`. Both routes must emit both fields.
+
 ### 3.2 `Quantity` — a single number with provenance
 
 ```json
@@ -278,12 +329,19 @@ Geometry for drawing the map. Source: M03 segments (C1) plus M18 lines.
     }
   ],
   "lines": [
-    { "kind": "DETECTION",  "zone": 1, "distance_m": 2890.0, "provenance": "RULE", "source": "FIA Event Notes 2026 BGP §4.2" },
-    { "kind": "ACTIVATION", "zone": 1, "distance_m": 3020.0, "provenance": "RULE", "source": "FIA Event Notes 2026 BGP §4.2" }
+    { "kind": "DETECTION",  "zone": 1, "distance_m": 2890.0, "provenance": "RULE", "value_source": "DERIVED_TELEMETRY", "source": "FIA Event Notes 2026 BGP §4.2, OVERTAKE DETECTION 115 m after T18; T18 measured from geometry.corner_distances_m" },
+    { "kind": "ACTIVATION", "zone": 1, "distance_m": 3020.0, "provenance": "RULE", "value_source": "DERIVED_TELEMETRY", "source": "FIA Event Notes 2026 BGP §4.2, OVERTAKE ACTIVATION 65 m after T18; T18 measured from geometry.corner_distances_m" }
   ],
   "zones": [ { "zone": 1, "name": "Hangar Straight", "start_distance_m": 3020.0, "end_distance_m": 3900.0 } ]
 }
 ```
+
+Each line carries both tags of §3.1a: `provenance: "RULE"` because a Detection
+Line is a regulatory landmark, and `value_source` for the evidence that fixed
+its distance — a landmark quoted in metres from a numbered corner is
+`DERIVED_TELEMETRY`, because the corner's distance was measured. The service
+currently writes the `value_source` into `provenance` and omits the field,
+which is the drift §3.1a forbids.
 
 `centreline` is derived geometry (§12); raw `x`/`y` are never used directly across circuits. `kind` ∈ `STRAIGHT | BRAKING | CORNER | EXIT`. `corner_type` is the versioned geometry classification from §12 (hairpin / chicane / slow / medium / fast, with left / right / straight), never a free-text label; `geometry_version` changes whenever the classification or segment boundaries change, and every downstream artifact records it.
 
@@ -297,7 +355,7 @@ The rule configuration as loaded by M18, with sources, for the rule panel.
   "regulation_snapshot": { "section_issues": ["..."], "effective_for_event": "...", "source_documents": ["..."], "retrieved_at": "..." },
   "overtake": {
     "enabled": true,
-    "detection_gap_s": { "value": 1.0, "provenance": "RULE", "unit": "s", "source": "FIA Sporting Regulations 2026 Art. 22.7" },
+    "detection_gap_s": { "value": 1.0, "provenance": "RULE", "unit": "s", "value_source": "RULE_FIA", "source": "FIA Sporting Regulations 2026 Art. 22.7" },
     "zones": [ { "zone": 1, "detection_line_m": 2890.0, "activation_line_m": 3020.0 } ]
   },
   "power_envelope": {
@@ -319,6 +377,11 @@ The rule configuration as loaded by M18, with sources, for the rule panel.
 ```
 
 Numbers above are placeholders; real values come from the YAML with their sources. The UI must render the regulation snapshot, configuration version, and source for a selected rule on hover or in the panel (§21).
+
+Every rule value block carries `value_source` and `source` (§3.1a) beside its
+`provenance`, and they answer different questions: `provenance` is `RULE` for
+all of them, `value_source` is what the number rests on. `verified` is exactly
+`value_source ∈ {RULE_FIA, OBSERVED_RCM, OBSERVED, DERIVED_TELEMETRY}`.
 
 **Power is not a single number** (§20.1). `power_envelope` is a pair of piecewise-linear curves, and the UI should draw them rather than print a peak figure — the shape is the point. `unverified_keys` lists every key whose `verified` is false; each must be badged, and the page must not claim the system is legal by construction while that list is non-empty (§57).
 
@@ -519,7 +582,7 @@ Notes for the UI:
 - `ers.override_active_inferred` (M35) is an inference from comparing estimated power against the normal-mode cap (§20.2), not an observation. In the defender block above, the estimate sits above the normal cap, which is what drives `ers_mode_inferred: "OVERRIDE"`. Show it as a probability with an "inferred" badge; never state that a rival *is* in override.
 - `ers.discriminable: false` (below the envelope-separation speed) forces `ers_mode_inferred: "UNKNOWN"` and a `null` probability. Render "unknown" — not "normal" (§20.2).
 - `ers.envelope_violation: true` is a **twin calibration warning**, not a regulatory breach by the car (§28.1). It belongs in a data-quality indicator, never in a "car exceeded the limit" message.
-- `pass.is_opportunity` is true only on segments that are rows in the overtake-opportunity dataset (M07). Elsewhere the whole `pass` block is `null`. When true, `checkpoints` holds one entry per decision checkpoint (§19); a checkpoint not yet reached at this step has `reached: false` and `null` probability. A DETECTION probability was computed from Detection-Line information only — it does not change when later checkpoints are reached; the UI shows all three side by side as they become available.
+- `pass.is_opportunity` is true only on segments that are rows in the overtake-opportunity dataset (M07). Elsewhere the whole `pass` block is `null`. When true, `checkpoints` holds one entry per decision checkpoint (§19); a checkpoint not yet reached at this step has `reached: false` and `null` probability. A DETECTION probability was computed from Detection-Line information only — it does not change when later checkpoints are reached; the UI shows all three side by side as they become available. `p_pass_by_outcome_horizon` is a bare float **here** because `pass.provenance` tags the whole block and each checkpoint names its own `model_version` beside the number; 5.8 returns the same quantity on its own, where it must carry its own tag and is a `Quantity`. A client reading both routes handles both spellings.
 - `rival_state.merged` lists any states merged per §25 (e.g. `["CONSERVING","DERATING"]`). If non-empty, `p` has fewer keys.
 - `live_safe` is true when every value in the step was computable from information available at that timestamp (§44). A retrospective step (e.g. one using the known outcome for labelling) is `false` and must be visually distinguished.
 - `energy_kj` is always `SIMULATED`. Label it "estimated electrical energy", never "battery" or "SOC" (§58).
@@ -559,28 +622,150 @@ C4. Pass probability at an opportunity, **at one decision checkpoint**.
 Request:
 
 ```json
-{ "decision_checkpoint": "DETECTION", "feature_schema_id": "pass-det-2026.03",
-  "features": { "gap_at_checkpoint_s": 0.71, "delta_speed_checkpoint_kmh": 6.2, "delta_acceleration_checkpoint_mps2": 0.4,
-                "closing_rate_mps": 1.9, "closing_rate_trend": 0.2, "recent_pace_delta_s": -0.11,
-                "attacker_tyre_compound": "MEDIUM", "defender_tyre_compound": "HARD", "attacker_tyre_life": 12, "defender_tyre_life": 16,
-                "attacker_tyre_degradation_proxy": 0.31, "defender_tyre_degradation_proxy": 0.27,
-                "fuel_load_delta_kg_est": 0.6, "ers_energy_delta_kj_est": 240.0,
-                "eligibility_margin_s": 0.29, "overtake_eligible": true, "overtake_state": "NOT_ARMED",
-                "corner_type": "MEDIUM_RIGHT", "corner_phase": "ENTRY", "sector": 2, "regulation_era": "2026",
-                "wind_head_component_mps": -2.1, "track_temperature": 41.0, "wet_track_flag": false, "...": "..." } }
+{ "decision_checkpoint": "DETECTION", "feature_schema_id": "m10_pass_features_v2",
+  "features": { "gap_at_checkpoint_s": 0.71, "closing_rate_s_per_s": 0.04, "p_eligible": 0.64,
+                "attacker_tyre_life_laps": 12, "defender_tyre_life_laps": 16, "tyre_life_delta_laps": -4,
+                "wind_head_component_mps": -2.1, "wind_cross_component_mps": 3.4, "track_temperature_c": 41.0,
+                "attacker_tyre_compound": "MEDIUM", "defender_tyre_compound": "HARD",
+                "tyre_compound_pair": "MEDIUM|HARD", "corner_type": "MEDIUM_RIGHT", "sector": 2,
+                "wet_track_flag": false } }
 ```
 
-Features are named, not positional; the server orders them against the locked schema **for that checkpoint** and rejects mismatches (§53). All must be `LIVE_SAFE` and must exist at or before the named checkpoint (§19): a `DETECTION` request carrying `gap_at_activation_s`, any braking-point speed, or a centred rolling statistic is refused with `CHECKPOINT_VIOLATION`. The state must be `normal_race_model_eligible`, else `NOT_MODEL_ELIGIBLE`.
+Features are named, not positional; the server orders them against the locked schema **for that checkpoint** and rejects mismatches (§53). All must be `LIVE_SAFE` and must exist at or before the named checkpoint (§19): a `DETECTION` request carrying `gap_at_activation_s`, any braking-point speed, or a centred rolling statistic is refused with `CHECKPOINT_VIOLATION`. A `null` is not a violation — only a *value* is a claim. The state must be `normal_race_model_eligible`, else `NOT_MODEL_ELIGIBLE`.
+
+**The locked schema is the vocabulary.** The feature names below are the ones
+fitted into the artifact (`artifacts/models/pass/v2/<checkpoint>/<family>/feature_schema.json`,
+`schema_version: m10_pass_features_v2`), not the UI's. A name the schema does
+not hold is accepted, ignored, and absent from `features_supplied` — so a
+request written to any other vocabulary is scored on zero features and returns
+the model's unconditional prior, which looks exactly like a prediction and moves
+for no input. Fifteen features are shared by all three checkpoints:
+
+| Wire name | Unit | Schema name | Notes |
+|---|---|---|---|
+| `gap_at_checkpoint_s` | s | `gap_at_checkpoint` | attacker-to-defender time gap at this checkpoint |
+| `closing_rate_s_per_s` | s/s | `closing_rate_s_per_s` | **positive while closing** — the opposite sign to 5.5's `gap_rate_ahead_s_per_s`. The two are never aliased |
+| `p_eligible` | probability | `p_eligible` | from 5.7, not an `ARMED`/`NOT_ARMED` toggle mapped to 1.0/0.0 |
+| `attacker_tyre_life_laps` | laps | `attacker_tyre_life_laps` | |
+| `defender_tyre_life_laps` | laps | `defender_tyre_life_laps` | |
+| `tyre_life_delta_laps` | laps | `tyre_life_delta_laps` | attacker − defender |
+| `wind_head_component_mps` | m/s | `wind_head_component_mps` | track-relative (§12, §39) |
+| `wind_cross_component_mps` | m/s | `wind_cross_component_mps` | track-relative |
+| `track_temperature_c` | °C | `track_temperature` | |
+| `attacker_tyre_compound` | enum | `attacker_tyre_compound` | `SOFT` / `MEDIUM` / `HARD` |
+| `defender_tyre_compound` | enum | `defender_tyre_compound` | |
+| `tyre_compound_pair` | enum | `tyre_compound_pair` | e.g. `"MEDIUM\|HARD"` |
+| `corner_type` | enum | `corner_type` | the §12 classification, e.g. `MEDIUM_RIGHT` |
+| `sector` | enum | `sector` | `null` in C1 for every 2026 row today; send it or omit it, it carries no signal yet |
+| `wet_track_flag` | bool | `wet_track_flag` | |
+
+Plus, by checkpoint:
+
+| Checkpoint | Extra | Total |
+|---|---|---|
+| `DETECTION` | — | 15 |
+| `ACTIVATION` | `speed_at_activation_kmh` (km/h) | 16 |
+| `BRAKING` | `speed_at_activation_kmh`, `speed_at_braking_kmh` (km/h) | 17 |
+
+Where the two columns differ, the schema spelling drops the unit suffix that
+principle 3 requires on the wire. The wire keeps the suffix and the server maps it: the
+authoritative map is `FEATURE_ALIASES` in `src/trackshift/serve/pass_service.py`
+(`gap_s`, `time_gap_s`, `gap_at_checkpoint_s` → `gap_at_checkpoint`;
+`track_temperature_c` → `track_temperature`; `speed_at_*_kph` →
+`speed_at_*_kmh`). Schema spellings are accepted directly as well. **The aliases
+are renames only and never convert a unit** — a field whose unit differs from the
+schema's is deliberately left unmapped so that it surfaces in `features_missing`
+rather than being silently rescaled.
+
+Both request shapes are accepted: the `features` envelope above, and the same
+names at the top level of the body (INTEGRATION.md §3). On a clash the envelope
+wins, being the more specific statement of intent. `decision_checkpoint` is the
+contract name for the checkpoint; `checkpoint` is accepted as a legacy alias.
+`feature_schema_id` is optional and is not yet verified by the service, so a
+wrong id does not raise `FEATURE_SCHEMA_MISMATCH` today.
+
+**Partial payloads are allowed.** A missing feature stays missing — the trees
+handle NaN natively — and comes back under `features_missing`. Wire the fields
+you have and add the rest incrementally, but show `features_missing`: a
+probability built from 3 of 15 features is a weaker claim than one built from
+15, and the number alone does not say which it is.
+
+Names from earlier editions of this section — `delta_speed_checkpoint_kmh`,
+`delta_acceleration_checkpoint_mps2`, `closing_rate_mps`, `closing_rate_trend`,
+`recent_pace_delta_s`, `attacker_tyre_life`, `defender_tyre_life`,
+`*_tyre_degradation_proxy`, `fuel_load_delta_kg_est`, `ers_energy_delta_kj_est`,
+`eligibility_margin_s`, `overtake_eligible`, `overtake_state`, `corner_phase`,
+`regulation_era` — are **not** features of any checkpoint. Several are excluded
+by the schema on purpose and say so in its `excluded` block (`eligibility_margin`,
+`gap_at_activation_s` and the `distance_*` fields are "rule/display/audit
+metadata; never a trainable feature"). They remain valid display quantities in
+5.5; they are not request inputs here.
 
 Response:
 
 ```json
-{ "decision_checkpoint": "DETECTION", "p_pass_by_outcome_horizon": 0.51, "outcome_horizon": "zone_exit_v1",
-  "ensemble_spread": 0.08, "calibration": "isotonic", "era": "2026",
-  "provenance": "INFERRED", "model_version": "pass-det-2026.03" }
+{ "decision_checkpoint": "DETECTION", "checkpoint": "DETECTION",
+  "p_pass_by_outcome_horizon": { "value": 0.1632, "unit": null, "provenance": "INFERRED",
+                                 "model": "M10/lightgbm", "artifact_version": "v2/detection/lightgbm" },
+  "outcome_horizon": "zone_exit_v1",
+  "ensemble_spread": { "value": null, "provenance": "INFERRED",
+                       "reason": "M12 spread not wired; artifacts/models/pass/v1/ensemble.json exists and is not read" },
+  "calibration": "uncalibrated", "era": "2026",
+  "features_supplied": ["gap_at_checkpoint", "track_temperature"],
+  "features_missing": ["p_eligible", "closing_rate_s_per_s", "..."],
+  "evidence_grade": "INTERIM",
+  "is_stub": false,
+  "empirical": {
+    "p_pass_by_outcome_horizon": { "value": 0.076023, "provenance": "DERIVED", "model": "empirical-rate-table" },
+    "interval": { "low": 0.060093, "high": 0.095747, "method": "wilson", "level": 0.95 },
+    "support": { "n": 855, "passes": 65, "gap_bucket_s": [0.5, 1.0] }
+  } }
 ```
 
-`outcome_horizon` names the fixed, versioned definition of the training label `passed_by_outcome_horizon` (§19: e.g. completion before zone exit, or before the next Detection Line). The label itself is never returned by a live route and never accepted as a feature. `calibration` names the M11 method that produced the probability (`none | platt | isotonic`). Artifacts are checkpoint-specific (M10), so `model_version` differs per checkpoint.
+`p_pass_by_outcome_horizon` is a `Quantity` (§3.2), not a bare float. Principle 2
+requires the provenance to travel with the number, and this one is returned on
+its own with no enclosing block to carry a tag — so the tag, the model and the
+artifact that produced it ride inside it. The same quantity appears in 5.5 under
+`pass.checkpoints.<CHECKPOINT>` as a bare float; there it is covered by the
+block-level `pass.provenance` and the per-checkpoint `model_version` beside it,
+so both spellings are correct in their own place and a client reading both
+routes must handle both. The artifact identity inside the `Quantity` is what
+satisfies principle 7 here: it names the exact build
+(`v2/detection/lightgbm`), which a single `model_version` string did not.
+
+`outcome_horizon` names the fixed, versioned definition of the training label `passed_by_outcome_horizon` (§19: e.g. completion before zone exit, or before the next Detection Line). The label itself is never returned by a live route and never accepted as a feature.
+
+`calibration` names the M11 method that produced the probability and is exactly
+`uncalibrated | platt | isotonic` — the `METHODS` tuple in
+`src/trackshift/pass_model/calibration.py`. `uncalibrated` means no calibrator
+was applied and the number is the raw model score: nothing downstream may
+describe it as calibrated. A counted-frequency answer is `uncalibrated` too —
+there is no calibrator to name — and says who answered through `is_stub` and the
+`empirical` block instead.
+
+`features_supplied` / `features_missing` name, per the locked schema, what the
+prediction was actually built from. `evidence_grade` is the artifact's own grade
+from `manifest.run.evidence_grade`: every pass artifact is `INTERIM`, not `FULL`,
+because the opportunity table holds 2026 only and CP-14 could not run its
+documented 2022–24 / 2025 / 2026 split. The numbers are real and the split is
+leakage-safe; what they are not is a passed acceptance gate, and the UI shows the
+grade wherever it shows the probability. `is_stub: true` means the synthetic
+curve answered and the number is not a model output (§3.7).
+
+`empirical` is a **different quantity from the headline**: the counted 2026 pass
+rate in the request's gap bucket, with its Wilson interval and support. Its
+`interval` is the interval of that counted rate, never of the model's
+probability — rendering the model's `value` inside the rate table's band
+attaches a `DERIVED` uncertainty to an `INFERRED` number, which is the
+provenance failure principle 2 exists to prevent. Show them as two rows, each
+with its own tag, or show only the headline.
+
+*The service does not yet match on three points.* It omits `era` and
+`ensemble_spread` entirely rather than returning the latter as an absent
+quantity; and it spells `calibration` three ways — `uncalibrated` on the artifact
+branch, `"none"` on the counted-rate branch and `"synthetic-development"` on the
+stub branch. The last two are outside the enum above: both are `uncalibrated`,
+and which component answered is already carried by `empirical` and `is_stub`.
 
 ### 5.9 `POST /rival/state`
 
@@ -637,23 +822,62 @@ Uses only telemetry at or before `causal_cutoff_distance_m` (§12). These four a
 
 M22. λ_E along the lap for a given energy, gap, and eligibility — **the headline visual**: the same kJ has different value at different places.
 
-Query: `energy_kj`, `time_gap_s`, `eligibility` (`NOT_ARMED|ARMED`), optional `tyre_state`, `relative_speed_mps`, `gap_rate_s_per_s`, `rival_state`, and `lap_index` (0 or 1 within the two-lap horizon). Omitted state dimensions use the declared replay state or grid cell and are returned in the response metadata.
+Query: `energy_kj`, `time_gap_s`, `eligibility` (`NOT_ARMED|ARMED`), optional `tyre_state`, `relative_speed_mps`, `gap_rate_s_per_s`, `rival_state`, and `lap_index` (0 or 1 within the two-lap horizon). Omitted state dimensions use the declared replay state or grid cell and are returned under `resolved_state`.
+
+The profile comes straight from M22. **This is the response today**, and it is
+the correct one until the dynamic programme is built (CP-10):
 
 ```json
 {
   "event": "british_grand_prix", "energy_kj": 1420.0, "gap_s": 0.78, "eligibility": "NOT_ARMED",
-  "profile": [
-    { "segment_id": 1,  "lambda_s_per_kj": 0.0012 },
-    { "segment_id": 21, "lambda_s_per_kj": 0.0087, "note": "before DETECTION zone 1" },
-    "..."
-  ],
-  "spikes": [ { "segment_id": 21, "cause": "DETECTION_LINE", "zone": 1 } ],
-  "provenance": "DERIVED", "model_version": "dp-2026.01",
-  "grid": { "energy_kj": [0, 250, "...", 4000], "gap_s": [0.0, 0.25, "...", 3.0] }
+  "status": "UNAVAILABLE",
+  "reason": "M22's per-position dynamic programme (CP-10) is not built; the development DP returns one state-level marginal value, which is not a function of lap position",
+  "profile": [],
+  "spikes": null,
+  "spikes_reason": "a spike is a feature of the profile; with no profile there is nothing to locate",
+  "provenance": "DERIVED", "model_version": "m22_dp_development_v2",
+  "grid": { "energy_kj": [0, 100, "...", 4000], "gap_s": [-3.0, -2.9, "...", 3.0] },
+  "resolved_state": { "tyre_state": { "value": null, "reason": "the development DP does not condition on tyre state" }, "...": "..." }
 }
 ```
 
-`spikes` marks where λ_E jumps because of an upcoming Detection Line (§20). `grid` tells the UI the valid ranges for sliders.
+An empty `profile` with a `reason` is the honest answer and the required one. A
+single marginal value repeated once per segment is not a profile — it is flat by
+construction, which is the exact opposite of the claim this visual makes — and
+principle 5 forbids standing a pooled value in for a specific one.
+
+When CP-10 lands, each entry arrives in this shape, `status` becomes
+`"COMPLETE"` and `reason` becomes `null`:
+
+```json
+{ "segment_id": 21,
+  "lambda_s_per_kj": { "value": 0.0087, "unit": "s/kJ", "provenance": "DERIVED", "note": "before DETECTION zone 1" } }
+```
+
+`lambda_s_per_kj` in **s/kJ** is the contract quantity, and it is the same
+quantity 5.5 carries per step as `shadow_price_s_per_kj`. It is a `Quantity`
+(§3.2), so an unreachable cell of the value table is `value: null` plus a
+`reason` rather than a hole in the array or a zero.
+
+`spikes` marks where λ_E jumps because of an upcoming Detection Line (§20).
+`grid` tells the UI the valid ranges for sliders, in the same unit as the query
+parameter — the DP grids in MJ internally (0–4.0 MJ in 0.1 MJ steps, gap −3.0 to
+3.0 s in 0.1 s steps) and the route converts ×1000 so the slider cannot send
+4.0 where 4000 was meant. `resolved_state` reports every query dimension that
+was defaulted and to what, so an ignored dimension is visible instead of silent.
+
+*The service does not yet match.* It emits a `profile` of one repeated scalar
+under the key `lambda_utility_per_mj`, and no `spikes`, `grid`, `status` or
+`resolved_state` at the top level. That key is a **different quantity**, not a
+renamed one: the development DP's terminal utility is abstract, so the number is
+dimensionless utility per MJ, and the response says so itself
+(`marginal_value_units: "abstract_utility_per_mj"`, with
+`time_based_shadow_price: {"value": null, "unit": "s/MJ", "reason": "not emitted:
+development terminal utility is abstract and C4/C5 are not verified calibrated
+time inputs"}`). It may be returned under its own name in the development
+`shadow_price` block, labelled with its own unit; it must never be printed in a
+seconds slot, and no client may treat it as `lambda_s_per_kj` scaled by 1000 —
+the difference is a change of kind, not of prefix.
 
 ### 5.13 `POST /plan`
 
@@ -673,33 +897,74 @@ Response:
 
 ```json
 {
-  "plan": [
-    { "segment_id": 22, "action": { "deploy_level": 0.5, "lift_amount": 0.0, "label": "HOLD_FOR_DETECTION" },
-      "expected_gap_s": 0.71, "expected_energy_kj": 1330.0, "lambda_s_per_kj": 0.0031 },
+  "status": "COMPLETE", "reason": null, "provenance": "DERIVED",
+  "recommended_action": { "deploy_level": 1.0, "lift_amount": 0.0, "label": "HOLD_FOR_DETECTION",
+                          "applicable_mode": "normal", "cap_kw": 350.0, "delivered_power_kw": 350.0, "delta_e_mj": 0.63 },
+  "expected_value": { "value": -3.936, "provenance": "DERIVED", "unit": "abstract_utility" },
+  "plan": [],
+  "plan_reason": "the development planner returns one action for the current state; the horizon rollout is not emitted (M24)",
+  "p_ahead_at_horizon": { "mean": null, "low": null, "high": null, "provenance": "INFERRED", "reason": "not computed by the development planner (M24/M23)" },
+  "p_pass_now": { "value": null, "provenance": "INFERRED", "reason": "not computed; call 5.8 for a checkpoint probability" },
+  "p_repass_within_horizon": { "value": null, "provenance": "INFERRED", "reason": "not computed by the development planner (§23)" },
+  "final_energy_mj": { "mean": null, "low": null, "high": null, "provenance": "SIMULATED", "unit": "MJ", "reason": "no horizon rollout, so no terminal energy" },
+  "cvar_p_ahead": { "value": null, "provenance": "INFERRED", "reason": "the development DP optimises expected value only; CVaR is not computed" },
+  "risk": { "criterion": "expected_value", "cvar_alpha": 0.2, "applied": false,
+            "reason": "the development DP optimises expected value only" },
+  "rule_violations": 0,
+  "legal_actions": [ { "deploy_level": 0.0, "lift_amount": 0.0, "applicable_mode": "normal", "cap_kw": 350.0, "delivered_power_kw": 0.0 }, "..." ],
+  "excluded_actions": [],
+  "input_provenance": { "energy": "SIMULATED", "gap": "SIMULATED", "eligibility": "RULE" },
+  "latency_ms": 38,
+  "decision": { "dominant_mechanism": "ENERGY_POSITION_VALUE", "primary_constraint": "C3_LEGAL_ACTION_SET", "decision_stability": 1.0,
+                "alternatives": [{ "action": { "deploy_level": 0.75, "lift_amount": 0.0 }, "expected_value": -3.95, "regret": 0.02 }] },
+  "baselines": [
+    { "name": "greedy_attack", "actions": [ { "deploy_level": 1.0, "lift_amount": 0.0 }, "..." ],
+      "p_ahead_at_horizon": null, "final_energy_mj": null, "rule_violations": 0,
+      "reason": "M25 does not score the baselines yet; the action sequence each would take is real" },
     "..."
   ],
-  "p_ahead_at_horizon": { "mean": 0.63, "low": 0.51, "high": 0.74, "provenance": "INFERRED" },
-  "p_pass_now": { "value": 0.58, "provenance": "INFERRED" },
-  "p_repass_within_horizon": { "value": 0.21, "provenance": "INFERRED" },
-  "final_energy_kj": { "mean": 410.0, "low": 320.0, "high": 505.0, "provenance": "SIMULATED", "unit": "kJ" },
-  "cvar_p_ahead": 0.44,
-  "rule_violations": 0,
-  "latency_ms": 38,
-  "decision": { "dominant_mechanism": "ELIGIBILITY_UNLOCK", "primary_constraint": "NEXT_DETECTION_LINE", "decision_stability": 0.86,
-                "alternatives": [{ "action": { "deploy_level": 0.75, "lift_amount": 0.0 }, "expected_value": 0.59, "regret": 0.04 }] },
-  "baselines": [
-    { "name": "greedy_attack",       "p_ahead_at_horizon": 0.51, "final_energy_kj": 120.0, "rule_violations": 0 },
-    { "name": "longest_straight",    "p_ahead_at_horizon": 0.55, "final_energy_kj": 380.0, "rule_violations": 0 },
-    { "name": "lap_time_only",       "p_ahead_at_horizon": 0.48, "final_energy_kj": 290.0, "rule_violations": 0 },
-    { "name": "dp",                  "p_ahead_at_horizon": 0.61, "final_energy_kj": 400.0, "rule_violations": 0 },
-    { "name": "beam_dp",             "p_ahead_at_horizon": 0.63, "final_energy_kj": 410.0, "rule_violations": 0 },
-    { "name": "oracle_rival_state",  "p_ahead_at_horizon": 0.69, "final_energy_kj": 430.0, "rule_violations": 0 }
-  ],
-  "model_version": "beam-2026.01"
+  "rule_configuration_version": "rules-2026-common-v2-fia-iss08-iss20",
+  "model_version": "m24_beam_development_v1"
 }
 ```
 
-`rule_violations` must always be `0` for `plan`; it is reported so the UI can assert it (§31). `baselines` names match §33 exactly. `oracle_rival_state` is an upper bound, not a deployable policy — label it so.
+`rule_violations` must always be `0` for `plan`; it is reported so the UI can assert it (§31). `baselines` names match §33 exactly — `greedy_attack`, `longest_straight`, `lap_time_only`, `dp`, `beam_dp`, `oracle_rival_state`. `oracle_rival_state` is an upper bound, not a deployable policy — label it so.
+
+`status` is `COMPLETE` or `UNAVAILABLE`, and `reason` says which input was
+missing when it is `UNAVAILABLE`. Every field above appears on **both** paths: a
+refusal that simply omits the headline fields is indistinguishable from a
+success the UI failed to read, and `UNAVAILABLE` is the branch a
+contract-shaped request most often hits.
+
+The uncomputed quantities are `null` with a `reason`, not absent (principle 5), so the
+UI can render "unavailable, because —" rather than a blank. Three of them are
+not permanently absent: `latency_ms` is measurable today in the serving layer
+around the `plan(...)` call, `model_version` is known to the planner
+(`PLANNER_SCHEMA_VERSION`), and `rule_configuration_version` is known to the
+rule engine. None of those three may be emitted as `null`.
+
+`expected_value`, `decision.alternatives[].expected_value` and `regret` are in
+the development DP's **abstract utility**, not seconds and not a probability —
+the same abstract terminal utility 5.12 describes. They are ordering
+information: a comparison between actions is meaningful, the magnitude is not,
+and neither may be rendered in a unit slot. The entries under `decision` are
+bare floats because the block's own `provenance` and the unit named on
+`expected_value` cover them, the way `pass.provenance` covers 5.5's checkpoint
+ladder.
+
+`final_energy_mj` is in **MJ**: it is a stored-energy quantity, and §11 and 5.3
+put stored energy in MJ while per-segment deltas stay in kJ. It was
+`final_energy_kj` in earlier editions; the quantity is unchanged and the
+illustrative figures restate as 0.41 / 0.32 / 0.505 MJ.
+
+*The service does not yet match on four points.* It omits `plan`,
+`p_ahead_at_horizon`, `p_pass_now`, `p_repass_within_horizon`, `final_energy_mj`,
+`cvar_p_ahead` and `latency_ms` rather than returning them null-with-reason; it
+spells the version `model_versions` and returns it empty; it returns `baselines`
+as an object keyed by baseline name holding action lists, which is not the
+scored comparison §33 asks for; and it attaches the whole DP solve under `dp`
+(policy table, value table, grid). That `dp` block is a development diagnostic,
+not part of this contract, and no UI element may depend on it.
 
 ### 5.14 `POST /simulate`
 
@@ -718,17 +983,39 @@ Response:
 
 ```json
 {
-  "summary": { "p_ahead_at_horizon": 0.62, "mean_final_energy_kj": 405.0, "rule_violations": 0, "cvar_p_ahead": 0.43, "n_episodes": 200, "seed": 7 },
+  "status": "COMPLETE",
+  "summary": { "p_ahead_at_horizon": 0.62, "mean_final_energy_mj": 0.405, "rule_violations": 0, "n_episodes": 200, "seed": 7 },
   "episodes": [
-    { "episode": 0, "outcome": "AHEAD", "pass_lap": 31, "pass_segment_id": 27, "repassed": false,
-      "trace": [ { "segment_id": 22, "gap_s": 0.78, "energy_kj": 1420.0, "action": {"deploy_level": 0.5, "lift_amount": 0.0} }, "..." ] }
+    { "episode": 0, "outcome": "AHEAD", "pass_lap": 31, "pass_segment_id": 27, "repassed": false, "environment_seed": 647892279,
+      "trace": [ { "segment_id": 22, "gap_s": 0.78, "energy_mj": 1.42, "action": {"deploy_level": 0.5, "lift_amount": 0.0}, "provenance": "SIMULATED" }, "..." ] }
   ],
   "assumptions": [ "rival policy is a fixed explicit policy, not a learned agent", "energy is SIMULATED from public telemetry", "..." ],
-  "provenance": "SIMULATED", "model_version": "sim-2026.01"
+  "provenance": "SIMULATED", "model_version": "m26_simulator_development_v1"
 }
 ```
 
 `assumptions` is mandatory and must be shown in the UI (§56: "Its assumptions must be disclosed"). `episodes[].trace` may be truncated to the first N episodes in replay bundles.
+
+`mean_final_energy_mj` and `trace[].energy_mj` are in **MJ**. Both are the ERS
+store level, which §11 and 5.3 put in MJ — only per-segment deltas are in kJ —
+and the DP and simulator grid in MJ internally, so MJ is what the server has.
+They were `mean_final_energy_kj` and `energy_kj` in earlier editions; the
+quantities are unchanged and the illustrative figures restate as 0.405 MJ and
+1.42 MJ. The `_kj` spellings were the error, not the numbers.
+
+`cvar_p_ahead` is **not** a field of this response. CVaR over the per-episode
+ahead indicator is degenerate — the indicator is Bernoulli, so the worst-α tail
+mean collapses to 0 or 1 and carries no information about the risk the UI wants
+to show. It stays on 5.15, where it comes from an offline planner artifact over
+a continuous value distribution at a stated α, and on 5.13, where the request
+names the α. Restoring it here requires a written definition first, not an
+estimator.
+
+*The service does not yet match on two points.* `episodes[].pass_segment_id` is
+omitted although the simulator knows the segment when it sets `pass_lap`; and
+the version is spelled `model_versions`, an empty map, beside a
+`schema_version` — principle 7 wants the contributing model's version under
+`model_version`.
 
 ### 5.15 `GET /validation`
 
@@ -743,7 +1030,7 @@ Per-component metrics for a model-card panel (§55). Sample size is always prese
   "twin":    { "model_version": "twin-event-2026.01", "n_segments_test": 41200,
                "mae_s": 0.041, "rmse_s": 0.058, "by_speed_regime": { "low": 0.05, "mid": 0.04, "high": 0.03 }, "constraint_violations": 0 },
   "planner": { "model_version": "beam-2026.01", "n_episodes": 5000,
-               "p_ahead": 0.63, "final_energy_kj": 410.0, "decision_regret": 0.04, "decision_stability": 0.86, "rule_violations": 0, "cvar_p_ahead": 0.44, "latency_ms_p95": 61 },
+               "p_ahead": 0.63, "final_energy_mj": 0.41, "decision_regret": 0.04, "decision_stability": 0.86, "rule_violations": 0, "cvar_p_ahead": 0.44, "latency_ms_p95": 61 },
   "strategic_ablation": { "energy_state": "...", "tyre_state": "...", "gap_dynamics": "...", "rule_state": "...", "rival_belief": "...", "future_eligibility": "..." }
 }
 ```

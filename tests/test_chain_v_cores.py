@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from random import Random
 import sys
 import json
 
@@ -80,6 +81,55 @@ def test_policies_and_simulator_are_deterministic_and_ui_ready():
     second = simulate(STATE, SEGMENTS, RULES, our_policy="beam_dp", rival_policy="DEFEND_MIRROR", n_episodes=3, seed=17, transition_fn=transition, pass_fn=pass_fn, legal_actions_fn=legal_actions)
     assert first == second and first["provenance"] == "SIMULATED" and first["summary"]["rule_violations"] == 0
     assert simulate(STATE, SEGMENTS, RULES, transition_fn=None, pass_fn=None)["status"] == "STUB_RESPONSE"
+
+
+def test_simulated_episodes_are_trajectories_and_declare_when_they_are_not_a_distribution():
+    """The simulator used to copy the transition's flat keys onto a state read by the
+    nested path, so every segment re-ran from the initial energy and gap: the store
+    rose while deploying and the gap never moved. `transition` here subtracts a fixed
+    amount per segment, so a real trajectory can only read 1.95/1.90 MJ and 0.40/0.30 s.
+
+    The episode count is asserted alongside it because a set of identical rollouts is
+    not a sample: `p_ahead_at_horizon` over it would be a 0 or a 1 dressed as a
+    frequency over futures, so it is null with a reason until the supplied callbacks
+    actually respond to the per-episode environment.
+    """
+    run = simulate(STATE, SEGMENTS, RULES, our_policy="beam_dp", rival_policy="DEFEND_CONSERVE", n_episodes=3, seed=17, transition_fn=transition, pass_fn=pass_fn, legal_actions_fn=legal_actions)
+    trace = run["episodes"][0]["trace"]
+    assert [round(step["energy_mj"], 4) for step in trace] == [1.95, 1.90]
+    assert [round(step["gap_s"], 4) for step in trace] == [0.40, 0.30]
+    assert run["summary"]["n_distinct_episodes"] == 1
+    assert run["summary"]["p_ahead_at_horizon"] is None
+    assert "one deterministic rollout" in run["summary"]["p_ahead_at_horizon_reason"]
+
+    def environment_sensitive(state, action, segment, *extra):
+        moved = transition(state, action, segment)
+        moved["gap_s"] += Random(extra[0]["seed"]).uniform(-0.05, 0.05)
+        return moved
+
+    sampled = simulate(STATE, SEGMENTS, RULES, our_policy="beam_dp", rival_policy="DEFEND_CONSERVE", n_episodes=3, seed=17, transition_fn=environment_sensitive, pass_fn=pass_fn, legal_actions_fn=legal_actions)
+    assert sampled["summary"]["n_distinct_episodes"] == 3
+    assert isinstance(sampled["summary"]["p_ahead_at_horizon"], float)
+    assert "p_ahead_at_horizon_reason" not in sampled["summary"]
+    assert sampled == simulate(STATE, SEGMENTS, RULES, our_policy="beam_dp", rival_policy="DEFEND_CONSERVE", n_episodes=3, seed=17, transition_fn=environment_sensitive, pass_fn=pass_fn, legal_actions_fn=legal_actions)
+
+
+def test_an_our_policy_the_simulator_cannot_run_is_refused_not_substituted():
+    """An unrecognised our_policy used to fall through to the middle of the C3 legal
+    set, and the response never said so: the panel would report a different policy's
+    trajectory under the name that was asked for. DEFEND_MIRROR is recognised but
+    needs an opponent action that is only chosen after ours, so it is refused too.
+    """
+    refused = simulate(STATE, SEGMENTS, RULES, our_policy="NOPE", rival_policy="DEFEND_CONSERVE", n_episodes=2, seed=17, transition_fn=transition, pass_fn=pass_fn, legal_actions_fn=legal_actions)
+    assert refused["status"] == "UNAVAILABLE" and refused["our_policy"] == "NOPE" and "NOPE" in refused["reason"]
+    assert refused["episodes"] == []
+    mirror = simulate(STATE, SEGMENTS, RULES, our_policy="DEFEND_MIRROR", rival_policy="DEFEND_CONSERVE", n_episodes=2, seed=17, transition_fn=transition, pass_fn=pass_fn, legal_actions_fn=legal_actions)
+    assert mirror["status"] == "UNAVAILABLE" and "opponent action" in mirror["reason"]
+    fallback = simulate(STATE, SEGMENTS, RULES, our_policy="beam_dp", rival_policy="DEFEND_CONSERVE", n_episodes=1, seed=17, transition_fn=transition, pass_fn=pass_fn, legal_actions_fn=legal_actions)
+    assert fallback["our_policy"] == "beam_dp" and fallback["our_policy_resolved"] == "C3_MIDPOINT_FALLBACK"
+    assert any("beam_dp was not run" in note for note in fallback["assumptions"])
+    ran = simulate(STATE, SEGMENTS, RULES, our_policy="ATTACK_GREEDY", rival_policy="DEFEND_CONSERVE", n_episodes=1, seed=17, transition_fn=transition, pass_fn=pass_fn, legal_actions_fn=legal_actions)
+    assert ran["status"] == "COMPLETE" and ran["our_policy_resolved"] == "POLICY"
 
 
 @pytest.mark.parametrize("field", ["energy", "gap", "eligibility"])

@@ -29,24 +29,59 @@ export interface DataSource {
   mode: SourceMode;
   /** Human-readable origin, shown in the UI so it is always clear what was queried. */
   label: string;
+  /** Live base URL for this source. Ignored in replay mode. */
+  base: string;
 }
 
 /**
- * Default matches the command in the integration brief:
- *   PYTHONPATH=src .venv/bin/uvicorn trackshift.serve.app:app --host 127.0.0.1 --port 8000
- * Override with NEXT_PUBLIC_TRACKSHIFT_API_BASE when the port is taken.
+ * Where "live" points, in order of precedence:
+ *
+ *   1. a `base` passed to `makeSource`  — the console reads one from `?api=`
+ *   2. NEXT_PUBLIC_TRACKSHIFT_API_BASE  — baked in at build time
+ *   3. the same-origin proxy            — which forwards to TRACKSHIFT_API_ORIGIN,
+ *                                         defaulting to http://127.0.0.1:8000/api/v1,
+ *                                         the address in the integration brief
+ *
+ * The default is the proxy rather than the absolute URL so that the address of the backend
+ * is a SERVER-side setting. Baking it into the client bundle means it can only be changed by
+ * rebuilding, and it is exactly the sort of thing that differs between machines — 8000 is
+ * not reliably free. `?api=` remains for pointing one page somewhere else without touching
+ * configuration at all.
  */
 export const LIVE_BASE = (
-  process.env.NEXT_PUBLIC_TRACKSHIFT_API_BASE || "http://127.0.0.1:8000/api/v1"
+  process.env.NEXT_PUBLIC_TRACKSHIFT_API_BASE || "/api/live"
 ).replace(/\/+$/, "");
 
 /** Served by src/app/api/replay/[...path]/route.ts from TRACKSHIFT_REPLAY_DIR. */
 export const REPLAY_BASE = "/api/replay";
 
-export function makeSource(mode: SourceMode): DataSource {
+
+/**
+ * Same-origin proxy to the model service (src/app/api/live/[...path]/route.ts).
+ *
+ * The backend mounts no CORS middleware, so the browser cannot call it directly: the request
+ * is blocked before it leaves and surfaces as an unexplained network failure. Absolute live
+ * bases are therefore rewritten through this proxy, which runs server-side where the same
+ * origin policy does not apply. A base that is already a path is left alone — it is
+ * same-origin by definition.
+ */
+export const PROXY_BASE = "/api/live";
+
+function isAbsolute(base: string): boolean {
+  return /^https?:\/\//i.test(base);
+}
+
+export function makeSource(mode: SourceMode, base?: string): DataSource {
+  const resolved = (base || LIVE_BASE).replace(/\/+$/, "");
   return {
     mode,
-    label: mode === "live" ? LIVE_BASE : "replay bundle (TRACKSHIFT_REPLAY_DIR)",
+    base: resolved,
+    label:
+      mode === "replay"
+        ? "replay bundle (TRACKSHIFT_REPLAY_DIR)"
+        : resolved === PROXY_BASE
+          ? "TRACKSHIFT_API_ORIGIN via /api/live"
+          : resolved,
   };
 }
 
@@ -108,8 +143,16 @@ export function resolveUrl(source: DataSource, route: RouteResolution, query?: R
   if (source.mode === "replay") {
     return route.replayFile ? `${REPLAY_BASE}/${route.replayFile}.json` : null;
   }
-  const qs = query
-    ? `?${new URLSearchParams(Object.entries(query).map(([k, v]) => [k, String(v)])).toString()}`
-    : "";
-  return `${LIVE_BASE}${route.livePath}${qs}`;
+  const params = new URLSearchParams(
+    query ? Object.entries(query).map(([k, v]) => [k, String(v)]) : [],
+  );
+
+  if (isAbsolute(source.base)) {
+    // `__base` tells the proxy which loopback service to forward to; it validates the host.
+    params.set("__base", source.base);
+    return `${PROXY_BASE}${route.livePath}?${params.toString()}`;
+  }
+
+  const qs = params.toString();
+  return `${source.base}${route.livePath}${qs ? `?${qs}` : ""}`;
 }

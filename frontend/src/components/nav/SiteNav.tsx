@@ -35,6 +35,7 @@ const TOOL_ENTRIES: Entry[] = [
   { href: "/league", label: "League" },
   { href: "/lab", label: "Lab" },
   { href: "/config", label: "Config" },
+  { href: "/integration", label: "Model API" },
   { href: "/sim", label: "Simulator" },
 ];
 

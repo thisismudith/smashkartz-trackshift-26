@@ -284,6 +284,16 @@ export interface RaceTimeline {
   totalLaps: number | null;
   /** The session-time domain this timeline covers, seconds. */
   duration: number;
+  /**
+   * Seconds this timeline's clock is shifted from ABSOLUTE session time.
+   *
+   * A replay starts at 0, not at the feed's own timestamp, so `sampleAt(0)` is
+   * the race start and not second zero of the session. Anything carrying an
+   * absolute timestamp -- the evidence reel's overtake moments come straight out
+   * of the telemetry parquet, which is absolute -- must subtract this before
+   * seeking. A generated race has no shift and reports 0.
+   */
+  clockOffsetS?: number;
   sampleAt(sessionTime: number, withGaps?: boolean): Map<string, CarState>;
   events(): RaceEvent[];
   neutralisations(): NeutralisationInterval[];

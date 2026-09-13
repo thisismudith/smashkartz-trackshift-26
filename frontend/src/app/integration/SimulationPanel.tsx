@@ -62,8 +62,8 @@ export function SimulationPanel({
       aside={simulate?.ok ? <RuleViolations n={simulate.data.summary?.rule_violations} context="the simulator" /> : null}
     >
       <Callout tone="warn">
-        Everything in this panel is a <strong>simulated counterfactual</strong> — what the model
-        expects under an assumed rival policy. It is not what actually happened in any race.
+        A <strong>simulated counterfactual</strong> under an assumed rival policy — not what
+        happened in any race.
       </Callout>
 
       {policies === null ? <Loading what="the rival policy list" /> : null}
@@ -195,12 +195,8 @@ export function PassProbabilityPanel({
   return (
     <Panel id="pass" kicker="Area 6 · POST /pass/predict" title="Pass probability">
       <Callout>
-        <strong>
-          <code>p_pass_by_outcome_horizon</code> is the probability of the pass being complete by the
-          declared outcome horizon
-        </strong>{" "}
-        — a fixed, versioned definition of the training label. It is not the chance of getting by
-        right now, and it does not guarantee a pass at any moment.
+        <strong>Complete by the declared outcome horizon</strong> — the training label&apos;s own
+        definition, not the chance of getting by right now.
       </Callout>
 
       {pass === null ? <Loading what="a pass probability" /> : null}
@@ -222,9 +218,7 @@ export function PassProbabilityPanel({
             <dd className={s.data}>
               {pass.data.checkpoint ?? "Unavailable"}
               <span className={s.note}>
-                Each probability belongs to exactly one checkpoint and used only information
-                available at or before it. DETECTION, ACTIVATION and BRAKING are never merged into
-                one number.
+                One checkpoint, causal to it. DETECTION, ACTIVATION and BRAKING are never merged.
               </span>
             </dd>
           </div>

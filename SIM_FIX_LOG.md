@@ -12,6 +12,231 @@ root-caused) · `WON'T FIX` (traced to an honest data limit, not a bug).
 
 ## FIXED
 
+### 0e. The launch stagger never decayed, so the whole field ran lap 1 off the
+racing line
+**Reported as:** "the cars are sometimes going too much outside the track? is the
+track properly as per the track in the 3d model for the british gp?"
+
+**Is the track right?** Yes, and it is now measured end to end rather than argued.
+Every drawn car position across the whole 2026 British GP race (57,640 of them,
+sampled every 2 s, through the real ReplayTimeline, declutterLanes and carPlanPos)
+was raycast against the shipped Silverstone model: 93.6 % stand on `asphalt.001`,
+4.9 % + 1.0 % on `Curb_new.001` (a car on a kerb is racing, not a defect), and
+99.59 % on some drive surface. The ring fit itself is 100 % coverage at 0.051 m
+residual std. The circuit is aligned; what was off the road was the CARS.
+
+**Root cause -- a regression from 0d.** The launch blend eases the grid stagger into
+the feed's own lateral over the run to turn 1, and it decided "how far is this car
+from its box" with a SIGNED difference clamped at zero:
+
+    Math.max(0, (((stationM - box) % L) + L * 1.5) % L - L / 2)
+
+which maps every car more than half a lap from its box back onto "still in its box".
+So the blend never switched off. Measured at the 2026 British GP: at t = 60 s, with
+the field 2,800-3,500 m down lap 1, all 19 running cars were drawn 2.0-9.0 m off the
+racing line (mean 5.67 m) while the feed itself reported 0.03-0.15 m. It is a
+FORWARD distance, with only the centimetre-scale backwards jitter of a stationary car
+folded to zero (BOX_JITTER_M). After the fix the stagger decays 8.99 m -> 0.24 m by
+t = 9 s and the field holds the feed's own 0.04-0.15 m from there on.
+
+**...and the second cause, fixed with it.** `pin` is the LANE's timing point, not its
+entrance: measured over all 52 in-laps of the British race the car is already more
+than 15 m off the ring 3.0-4.9 s BEFORE its own `pin` (median 3.7 s), every lap
+without exception. For those seconds it was drawn at honest pit-lane coordinates
+while being called an on-circuit car -- taking the racing surface's elevation instead
+of the lane's, with declutterLanes free to shove it sideways. 127 of the 230 far-off
+on-track positions were within 20 m of the traced pit lane.
+
+`inPit` now asks `onPitRoad` as well as the clock, with two measured tests. The
+published `pitLane.entryStation` is one; the other is a lateral beyond
+`PIT_DIVERGENCE_M` (8 m), because the entry is a POINT and a car does not leave the
+track at a point -- the divergence begins 18 m BEFORE the published entry at Spa and
+4 m after it at Silverstone, so the station test alone misses the first seconds at
+some circuits. 8 m sits above every genuine on-circuit reading (99.84 % of
+status-"track" instants are within 3 m, p99.9 = 4.57 m) and below half the nearest
+part of any lane (19.3 m at Silverstone's exit, ~22 m at Spa's entry). Both tests are
+gated on the lap actually having a `pin`, so a car running wide on a normal lap is
+untouched.
+
+**Files:** `frontend/src/sim/replay/timeline.ts` (`launchBlend`, `BOX_JITTER_M`).
+
+**Verified:** sim suite 565/565, including two new real-data regressions -- the
+field's MEDIAN |lateral| must be under 1 m at t = 45/60/90/150 s on every shipped
+pack (it was 5.67 m at Silverstone), and the stagger must still be over 4 m at t = 0
+so the fix cannot be "switch the stagger off".
+
+### 0d. Grid calibrated against the model's painted boxes; the launch stops
+teleporting the field onto the racing line; /sim opens on the modelled circuit
+**Reported as:** "slightly left and increase gap between cars and get it back, 1st
+car is outside the starting line"; "when starting all cars go left and come in one
+line? why? why not from their position?"; "make default prix in /sim the british
+grand prix and ensure it loads the 3d model too, or shows on top loading 3d model
+in a like overlay".
+
+**Why the field slid left into one file.** THE FEED CARRIES NO LATERAL. Measured
+over the whole of lap 1 at the 2026 British GP: the standard deviation of every
+car's reported lateral is 0.03-0.16 m for the first 1200 m and the largest single
+reading is 0.72 m, on a road 15-18 m wide with a field that is genuinely two
+abreast off the line. Every car's x/y projects onto the reference line, so "their
+own position" and "one file on the racing line" are the same thing in this data.
+The grid stagger is a labelled RULE placement, and it was being dropped the instant
+telemetry took over -- so the whole field stepped sideways onto the ring at once.
+
+**Fix:** the stagger now DECAYS into the measured lateral over the circuit's own
+run from pole to the first corner (336.6 m at Silverstone, 318.9 m at Zandvoort,
+602.6 m at Monza) instead of being switched off. The station stays the measurement
+it always was; only the lateral is placed, and it is placed over exactly the
+stretch where the feed has nothing to place against. A signed-travel bug found
+while checking it -- an unsigned modulo read a car 5 cm short of its own box as
+5825.69 m past it -- made STR flicker onto the racing line for a frame at t=1-2 s.
+
+**Grid calibration.** With the field on its measured boxes, a top-down render at a
+known scale (helicopter camera, 23.479 px/m, so one pixel is 4.3 cm) put ANT 3.67 m
+and HAM 4.00 m IN FRONT of the box painted under them, and 0.54-0.80 m to the right
+of it. The forward error is half a car length, which is what a position reported at
+the front of the car rather than at its centre looks like; it is now carried as
+`CAR_REFERENCE_AHEAD_M` (half the car's TRUE length) and applied to the drawn body
+only, in carPlanPos. The lateral is carried as `GRID_COLUMN_CALIBRATION_M` (0.65 m
+left) on the road centre the edge walk computes, which corrects the centre without
+touching the stagger, and only where there is a measured road.
+
+**Car size.** A real grid is 8.0 m of pitch holding a 5.6 m car: 2.4 m of air, 43 %
+of a car length. Drawn at CAR_VISUAL_SCALE 1.3 the car was 7.28 m in that same 8.0 m
+box, leaving 0.72 m -- a solid queue of touching cars. The pitch cannot absorb it
+(8.0 m is where the boxes measurably are), so the scale goes back to 1.0 and the car
+is its true 5.6 x 2.0 m. Nothing can interpenetrate at the minima the simulation
+permits any more, which was not true at 1.3 (1.68 m of nose-to-tail overlap at the
+launch minimum gap). The three carGeometry tests that pinned the inflation now
+exercise it at an explicit 1.3 so they keep failing for whoever raises it again.
+
+**/sim opening state.** Defaults to `british-grand-prix` -- the one circuit with a
+real 3D model -- rather than the alphabetically first slug, which opened on
+Melbourne's procedural ribbon. And because NOTHING WAITS FOR THE MODEL (the race
+runs on the ribbon and the 126 MB asset is swapped in whenever it lands), a
+`ModelLoadOverlay` now says so while it is happening: downloading, with MB progress
+or an indeterminate sweep when the response carries no Content-Length. Not a modal --
+the ribbon underneath is live. It is silent on the twelve circuits that have no model,
+which is what lets "no news" mean "there is nothing to load", and SUCCESS IS NEVER
+DRAWN: the model appearing on the circuit is the notification, so a banner announcing
+it would only cover the thing it announces. A FAILURE does stay up (8 s), because
+nothing else ever reports it -- the circuit keeps the ribbon for the rest of the
+session and there is no later moment at which the viewer would find out why.
+
+**...and the overlay's own bug, found while verifying it.** `onEnvironmentLoad` was
+registered AFTER `renderer.setTrack(track)` -- and setTrack is what starts the
+download. The first report, the one that puts the overlay on screen, was therefore
+made while the callback was still null and dropped. It went unnoticed while the
+"loaded" state was still drawn (the later reports land fine, so the banner appeared
+at the end and looked correct); the moment success stopped being drawn, the overlay
+went completely silent for the whole 126 MB fetch and the model looked like it was
+not loading at all. Reported as "3d map not loading??" -- and it WAS loading, traced
+to a clean `RESP 200` with no console error. The callback is now registered before
+setTrack.
+
+**Files:** `frontend/src/sim/replay/timeline.ts`, `frontend/src/sim/render/scene.ts`,
+`frontend/src/sim/render/presentation.ts`, `frontend/src/sim/ui/SimCanvas.tsx`,
+`frontend/src/sim/ui/sim.module.css`, `frontend/src/sim/render/carGeometry.test.ts`.
+
+**Verified:** frontend 642/642, tsc clean, producer suites green. Live: /sim opens on
+British Grand Prix, the overlay reports the download and then clears itself, pole
+sits behind the painted start line, the field has visible gaps, and every car leaves
+its own box and converges onto the racing line over ~9 s instead of stepping sideways.
+
+### 0c. The whole starting grid 120 m behind its real boxes, and three defects
+in the pit-lane start
+**Reported as:** "why is it going so on left outside track ... pressing play why
+all cars come in one single line ahead, isn't the starting position already
+supposed to be that ... see image 2 for deviation of starting pos left/right and
+up/down ... also the car in the pit, why is it #1 and the car is floating on
+air" (British Grand Prix 2026, on the Silverstone GLB).
+
+**Root cause (grid position).** `grid.slots[].station` and the renderer both put
+pole ONE GRID PITCH BEHIND THE TIMING LINE. That is not where a grid is: the
+front box's distance past the line is measured per session and runs -53.3 m
+(Austria) to +288.1 m (Monza) across the 2026 packs. `scripts/simdata/track.py`
+already FITTED that anchor and wrote it to the artifact as `grid.anchorMetres`
+(+110.8 m at Silverstone, from a box lattice at coherence 0.514 against a 0.193
+floor) -- and then both producers ignored it. Measured against the pack: every
+one of the 21 cars' first lap-1 samples sits 109.5-122.6 m ahead of the slot it
+was drawn in. Silverstone's start straight only begins ~45 m before the line, so
+two thirds of the field was laid out around the 45 deg exit of Club -- the
+left/right AND up/down scatter in the screenshot -- and pressing play teleported
+the whole field ~120 m forward onto the racing line, which is the "single line
+ahead". The lateral break was a consequence: `columnLateral` centres the stagger
+on the road's measured midpoint, and around a corner exit that midpoint swings
+14 m over 160 m, so the drawn grid broke in half (P1-P10 at -4.7..-9.3 m, P11-P21
+at +3.0..+8.8 m).
+
+**Root cause (Belgium, found while fixing the above).** `grid()` took a car's
+box position from the first `speed == 0` ANYWHERE in lap 1. At Spa 2026 RUS's
+lap opens at 2 km/h -- a creep under a stationary car -- so the search ran 298
+samples down the road and returned a station 2357.8 m past the rest of the field.
+That one reading moved the fitted anchor 2353.5 m and made the lattice claim 290
+empty boxes; the artifact shipped `anchorMetres: 2455.38` against a real pole of
+101.9 m.
+
+**Root cause (pit lane), three separate defects.** (a) ALO's lap 1 is already
+rolling at t=0, so it took the MEASURED branch and its pit-lane station -- 351.2 m,
+a lane coordinate projected onto the racing ring -- outranked a whole field still
+standing on its boxes at 110.8 m and behind: the one car that had not started the
+race was shown as P1. `rank()` already refuses to compute a GAP from such a
+station; it was still ranking on it. (b) The pre-telemetry placement paired
+`pitLane.exitStation` with `pitLane.loopLateral` -- the BOX's offset at the
+EXIT's station -- putting the car 15.6 m beyond the pit road; the right field,
+`exitLateral` (-19.33 m), was not even parsed into `TrackModel`. (c) The lap-1
+stationary hold fired on any car below 1 km/h and indexed straight into
+`gridOrder`, which for a pit starter is a slot PAST the last published box: the
+moment ALO stopped at the pit-exit light it was teleported into a phantom 22nd
+grid box on the racing line and left there for the rest of the race.
+
+**Root cause (floating).** `carRenderPos` took a car's elevation from the RING at
+its station and applied lateral purely horizontally. That is right to within the
+road's camber for the +-3 m of lateral the feed ever reports on the circuit, and
+wrong by metres for a car 19-35 m away in the pit lane. Raycast against the
+shipped GLB: the pit road under the released car is 3.28 m BELOW the racing line
+at the same station -- exactly the float on screen. The drawn pit RIBBON had the
+same defect (`pitPathElevation` drapes it from the nearest racing surface),
+because no measurement of the lane's own height existed.
+
+**Fix.**
+- One shared derivation of a grid box's station, anchored on the measurement:
+  `grid_slot_station` (Python) and `gridSlotStation` (TS), both
+  `sf + anchor - slot * pitch`, falling back to the old rule only where the
+  session resolved no lattice (4 of 13 packs, which say so with a null anchor).
+  Used by the pre-launch grid, the lap-1 stationary hold and the parked queue.
+- `_grid_box_sample` restricts the stationary search to the leading,
+  not-yet-launched run (`GRID_LAUNCH_KPH = 10`), plus an independent credibility
+  guard that refuses a lattice claiming more empty boxes than it has cars.
+- `columnLateral` refuses an edge pair that cannot describe one road
+  (`MAX_MEASURED_ROAD_WIDTH_M = 25`; Silverstone's edge walk leaks onto asphalt
+  run-off at 23.3 % of stations, reaching 80 m), falling back to the single-sided
+  placement it already had.
+- A pit-lane starter ranks behind the last grid box until its own measured `pout`
+  releases it, while its DRAWN position stays the measurement throughout; the
+  stationary hold now applies only to a driver the producer actually placed in a
+  box; the pre-telemetry placement uses `exitLateral`.
+- New measurement: `bake_path_z` raycasts the circuit model under every pit-lane
+  vertex and the artifact carries it as `surfaceZCm` per segment. The ribbon and
+  any car in the lane are drawn on THAT (`pitLaneHeightAt`, `carPlanPos`, and an
+  elevation override on `carRenderPos`); a vertex the bake found nothing under
+  keeps the old drape.
+
+**Files:** `scripts/simdata/track.py`, `scripts/simdata/glb_surface.py`,
+`scripts/simdata/build_track.py`, `frontend/src/sim/contract/types.ts`,
+`frontend/src/sim/data/manifest.ts`, `frontend/src/sim/replay/timeline.ts`,
+`frontend/src/sim/render/trackMesh.ts`, `frontend/src/sim/render/scene.ts`.
+All 13 track artifacts rebuilt.
+
+**Verified:** producer suite 423/423, frontend suite 637/637, tsc clean. New
+real-data regression tests over every shipped pack: every anchored circuit now
+draws its boxes within 9.75 m of where those cars actually stood (was 109.5-122.6 m
+at Silverstone; the residual is the 8.0 m rule pitch against a fitted 7.6-8.2 m),
+no pit-lane starter is ever ranked ahead of a car still on the grid, and none is
+ever given a grid box. Spa's anchor comes out 102.1 m against a measured 101.9 m.
+Live in the browser: the grid stands on the Hamilton straight under the start
+gantry in two columns, ALO reads P22 PIT from t=0 and sits on the pit-lane tarmac
+inside the pit wall.
+
 ### 0b. API.md audit: one missing route, and four display obligations broken
 **Asked for as:** go through API.md and MODELS.md and make sure the UI displays
 everything properly across /sim, /decision and /lab; check every FastAPI
@@ -328,3 +553,147 @@ were code-read-only) and is why they went from "reported" to "root-caused
 and fixed" in one pass instead of staying speculative. Recommended for any
 future "it looks wrong on screen" report in this project: reproduce it live
 before proposing a fix, and re-verify live after.
+
+---
+
+# 13 Sep 2026 — the model was loading but starving
+
+Reported as "is the model even loading?". It was. `is_stub: false`,
+`provenance: INFERRED`, a real LightGBM artifact answering every request. It
+was also returning **0.231 for every battle on the grid**, which is what a
+model does when you ask it fifteen questions and answer none of them.
+
+Six defects, all confirmed against the running service before and after.
+
+### 1. `decision_checkpoint` was read as `checkpoint` — CRITICAL
+
+`app.py` read `payload.get("checkpoint")`. API.md §5.8 and every frontend
+caller send `decision_checkpoint`. So an ACTIVATION request was scored by the
+DETECTION model and then refused with `CHECKPOINT_VIOLATION` for carrying
+activation speed — a leakage refusal raised against a request that leaked
+nothing. Fixed; `checkpoint` still accepted as the older spelling. An unknown
+checkpoint is now a 422 rather than a silent fall-through to DETECTION.
+
+### 2. Zero of fifteen features reached the model — CRITICAL
+
+`features_supplied: []` on every live request. The sim sent `time_gap_s`; the
+locked schema wants `gap_at_checkpoint`. INTEGRATION.md §3 states the mapping
+requirement in as many words and nobody had implemented it. Added
+`FEATURE_ALIASES` in `pass_service.py` (renames only — never a unit change) and
+`normalise_features()`, which also accepts API.md §5.8's nested `features`
+block. The sim now supplies **14 of 15**.
+
+Measured: 0.2 s gap → 21.7%, 1.5 s → 7.5%. Before, every gap → 23.1%.
+
+`gap_rate_ahead_s_per_s` is deliberately NOT aliased to
+`closing_rate_s_per_s`. They are the same magnitude with opposite signs
+(`rules/eligibility.py`: positive when closing). Aliasing them would feed the
+model a car pulling away as one closing in, and no response could reveal it.
+
+### 3. The wrong artifact version was loading
+
+`load_predictor` and `available_checkpoints` each defaulted to `version="v1"`.
+INTEGRATION.md §2 and §8 both say prefer `v2`, and v2 was on disk, unused.
+One `DEFAULT_ARTIFACT_VERSION = "v2"` now, so the readiness report and the
+serving path cannot drift apart while each looks right alone.
+
+### 4. `/rules/eligibility` returned a constant — CRITICAL
+
+A 0.30 s gap and a 2.90 s gap returned **byte-identical bodies**. The handler
+read `gap_s` off the top level; the UI nests it under `state.gap.time_gap_s`,
+so it always used the 0.72 default. Now resolved through `_first_number()`
+across every documented spelling, and a request with no gap anywhere is
+**refused** rather than defaulted — a constant that looks like a projection is
+worse than no projection. Also emits `eligibility_margin_s` alongside
+`margin_s`; the panel read the first, the server sent only the second.
+
+### 5. `/track/{event}` ignored the real geometry
+
+`track_data.py` has read the real M03 segmentation from `config/geometry/`
+all along — 33 segments for Silverstone with real `corner_type`. The route
+returned synthetic points instead. Now wired: 14 circuits, `DERIVED`, with the
+rule lines merged in. This is the ONLY source of a `corner_type` that lands in
+a trained category — the server runs the same classifier the model was fitted
+with, so a browser-side curvature reimplementation would emit plausible labels
+the model has never seen.
+
+### 6. `pass_fallback` was disconnected
+
+The empirical season rate tables (23,591 opportunities, 2022-26, Wilson
+intervals) had zero references from the rewritten `app.py`. Reconnected — but
+**beside** the model rather than under it. "The model says 9% where 508
+comparable approaches produced 13%" is the comparison that says whether to
+believe the model; neither number alone carries it.
+
+### Also
+- `X-TrackShift-Stub` header was never set, so `api-contract/client.ts`'s
+  `stub` flag was permanently false and every stub rendered as real.
+- `/meta` returned a hard-coded `"stubs": []` while `stubs_used` accumulated
+  route names two lines away — the exact failure the field exists to detect.
+- No CORS. Browser calls failed at the preflight while curl to the same URL
+  succeeded, which sends a reader looking for a fault that is not there.
+
+## Sector: can be supplied, changes nothing
+
+`TrackModel.timingLines` gives the Detection Line's sector directly, so the sim
+*can* send it. It does not, because the artifact was fitted with `sector` null
+in every row and its only trained category is `__missing__`. Measured: with
+`sector: 2` the model returns 0.44982; without, 0.44980. Sending it would make
+the panel read "15 of 15" while the model ignored it — claiming more evidence
+than exists. The tooltip says so rather than leaving it looking like an
+oversight. Unlocking it is a retrain, not a UI change.
+
+## Two panel bugs found from a user screenshot
+
+**"Detection Line — not sourced" on every circuit.** The parser read
+`detection_line_m` at the top of the `overtake` block. The config carries one
+**per zone**: Silverstone has four, at 5789.3 / 1338.2 / — / 4104.6 m. Four
+measured, sourced lines were being reported as absent.
+
+**Zones read "not sourced" while showing "measured in telemetry".** The panel
+required both `activationM` and `endM`; `zone_end_m` is null and `UNVERIFIED`
+on every 2026 event, so an absence in one field erased a sourced value in
+another. Now the activation line shows with "end unsourced" beside it. Zone
+labels are the config's own "A1".."A4" again rather than renumbered 1..n.
+
+**"scoring…" forever.** The scoring effect re-runs on every 10 Hz gap change
+and its cleanup set `disposed = true`, cancelling the one run that had passed
+the 1.5 s throttle — while every later run returned early on that same
+throttle without starting another. The result was never applied and the
+throttle guaranteed it never would be. Replaced with a run id plus a mount
+flag, so a re-render that started no run cannot cancel one.
+
+# Model evidence reel
+
+New: `scripts/features/export_rivalry_showcase.py` scores every 2026
+Detection-Line opportunity with the real v2 artifact against the telemetry's
+own outcome label, and exports the approaches it called correctly and
+confidently — interleaved between both directions, because a reel of twelve
+"it predicted a pass and one came" is weaker evidence than one that also shows
+the model correctly ruling passes out.
+
+**The threshold is the base rate, not 0.5.** Passes are ~10% of opportunities,
+so a 0.5 cut would collapse "agreement" into the trivial statement that most
+approaches produce no overtake. A true positive is an approach that converted
+AND was rated in the top decile; a true negative the mirror.
+
+**Selecting the hits IS cherry-picking unless the population is on screen.** So
+each event carries its opportunity count, pass count, base rate and ROC AUC
+over *all* of them, and `ShowcasePanel` renders that line above the reel where
+it cannot be collapsed away.
+
+| circuit | shown | of | passes | base | AUC |
+|---|---|---|---|---|---|
+| Australian | 12 | 762 | 129 | 16.9% | 0.80 |
+| Italian | 12 | 754 | 204 | 27.1% | 0.82 |
+| Canadian | 12 | 1228 | 160 | 13.0% | 0.77 |
+| Miami | 12 | 870 | 104 | 11.9% | 0.74 |
+| Japanese | 12 | 362 | 63 | 17.4% | 0.74 |
+| British | 12 | 412 | 43 | 10.4% | 0.68 |
+| Barcelona | 12 | 324 | 33 | 10.2% | 0.65 |
+| Monaco | 8 | 61 | 1 | 1.6% | 0.89 |
+
+The reel filters to the session on screen — a weekend produces Race and Sprint
+opportunities and lap 3 of one is not lap 3 of the other. Entering it hides the
+rail, board and feed and dims every car but the two, because the whole point is
+two cars and one claim about them.

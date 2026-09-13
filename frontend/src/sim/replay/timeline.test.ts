@@ -1505,6 +1505,100 @@ describe.skipIf(allPacks.length === 0)("the drawn grid is the grid the cars were
     expect(anchored).toBeGreaterThanOrEqual(8);
   }, 120_000);
 
+  it("hands the lateral back to the feed once the field is past the first corner", () => {
+    // THE REGRESSION THIS EXISTS FOR. The launch stagger is eased out over the run to
+    // turn 1; the arithmetic that decided "how far is this car from its box" was a SIGNED
+    // difference clamped at zero, which maps every car more than half a lap from its box
+    // back onto "still in its box". So the blend never switched off: measured at the 2026
+    // British GP, the whole field was drawn 2.0-9.0 m off the racing line for the WHOLE of
+    // lap 1 (mean 5.67 m at t=60 s) while the feed itself was reporting 0.03-0.15 m.
+    //
+    // The check is deliberately about the FIELD, not one car: a stagger that has failed to
+    // decay moves everybody, and a single car legitimately running wide does not.
+    // The MEDIAN, not the mean or the max: a stagger that has failed to decay moves every
+    // car at once, so it moves the median. One car legitimately tens of metres off the
+    // racing line does not -- and there are such cars, because a car driving down the pit
+    // ENTRY road before its own recorded `pin` timestamp is still status "track" while its
+    // station/lateral are honest pit-lane coordinates. That is a separate, pre-existing
+    // defect; this test must fail for the stagger and not for that.
+    let checked = 0;
+    for (const pack of allPacks) {
+      const tl = new ReplayTimeline(pack.manifest, pack.track, pack.bin);
+      for (const t of [45, 60, 90, 150]) {
+        if (t > tl.duration) continue;
+        const running = [...tl.sampleAt(t, false).values()].filter((c) => c.status === "track");
+        if (running.length < 5) continue;
+        checked++;
+        const abs = running.map((c) => Math.abs(c.lateralM))
+          .filter(Number.isFinite).sort((a, b) => a - b);
+        const median = abs[abs.length >> 1];
+        // measured at the 2026 British GP: 5.67 m with the stagger stuck on, 0.06 m without
+        expect(median, `${pack.slug}/${pack.session} median |lateral| at t=${t}`)
+          .toBeLessThan(1);
+      }
+    }
+    expect(checked).toBeGreaterThan(10);
+  }, 120_000);
+
+  it("still staggers the field at the moment it launches", () => {
+    // the other half: the fix above must not simply switch the stagger off. At t=0 the
+    // cars are in their boxes and the columns are metres apart.
+    const pack = allPacks.find((p) => p.slug === "british-grand-prix" && p.session === "Race");
+    if (!pack) return;
+    const tl = new ReplayTimeline(pack.manifest, pack.track, pack.bin);
+    const at = (t: number) => [...tl.sampleAt(t, false).values()]
+      .filter((c) => c.status === "grid" || c.status === "track")
+      .map((c) => Math.abs(c.lateralM));
+    const start = at(0);
+    expect(Math.max(...start)).toBeGreaterThan(4);
+    const later = at(60);
+    expect(Math.max(...later)).toBeLessThan(1);
+  }, 120_000);
+
+  it("calls a car in the pit lane a pit car, from the entry and not from the clock", () => {
+    // `pin` is the LANE's timing point, not its entrance. Measured over all 52 in-laps of
+    // the 2026 British GP race: the car is already more than 15 m off the ring 3.0-4.9 s
+    // BEFORE its own `pin` (median 3.7 s), at station 5326-5336 against a published pit
+    // entry of 5322.1 -- every lap, no exceptions. For those seconds it was drawn at
+    // honest pit-lane coordinates while being called an on-circuit car: it took the racing
+    // surface's elevation instead of the lane's, declutterLanes was free to shove it
+    // sideways, and it read as a car that had left the track.
+    //
+    // Asserted where the defect lives -- the seconds before `pin` on a lap that pits --
+    // rather than as a global outlier bound, so a circuit whose position feed is corrupt
+    // elsewhere (Hungary's stale hold, Monaco's sentinel) cannot mask or fake it.
+    let windows = 0, offLine = 0;
+    for (const pack of allPacks) {
+      if (pack.track.pitLane.entryStation === null) continue;
+      const tl = new ReplayTimeline(pack.manifest, pack.track, pack.bin);
+      const base = Math.min(...pack.manifest.drivers.flatMap(
+        (d) => d.laps.map((l) => (l.lST === null ? Infinity : l.lST))));
+      for (const d of pack.manifest.drivers) {
+        for (const lap of d.laps) {
+          if (lap.pin === null) continue;
+          const pin = lap.pin - base;
+          windows++;
+          for (let t = pin - 4; t <= pin; t += 0.5) {
+            if (t < 0 || t > tl.duration) continue;
+            const car = tl.sampleAt(t, false).get(d.driver);
+            if (!car || !Number.isFinite(car.lateralM)) continue;
+            // more than 15 m off the racing line is not a place a car on the circuit is;
+            // the lane is 19.3-35.0 m off at Silverstone
+            if (Math.abs(car.lateralM) > 15) {
+              offLine++;
+              expect(car.status, `${pack.slug}/${pack.session} ${d.driver} lap ${lap.lap}`
+                + ` at t=${t.toFixed(1)} is ${Math.abs(car.lateralM).toFixed(1)} m off the line`)
+                .toBe("pit");
+            }
+          }
+        }
+      }
+    }
+    // the window has to actually contain the case, or this asserts nothing
+    expect(windows).toBeGreaterThan(100);
+    expect(offLine).toBeGreaterThan(50);
+  }, 300_000);
+
   it("never leaves a pit-lane starter leading the race it has not started", () => {
     // ALO at the 2026 British GP: its lap 1 is already rolling at t=0, so it took the
     // measured branch and its pit-lane station (351 m, projected onto the racing ring)

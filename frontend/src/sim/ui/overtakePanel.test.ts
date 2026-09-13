@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { DashboardRow, DashboardSnapshot } from "../contract/types";
-import { battlesToShow, closestBattle, driverBattles, intervalSeconds, readableError, rulesEventKey } from "./OvertakePanel";
+import {
+  battlesToShow, closestBattle, driverBattles, intervalSeconds, provenanceMeaning,
+  readQuantity, readServiceCode, readableError, refusalHeadline, rulesEventKey,
+} from "./OvertakePanel";
 
 function row(driver: string, interval: string, status: DashboardRow["status"] = "track"): DashboardRow {
   return {
@@ -84,12 +87,134 @@ describe("readableError", () => {
     expect(readableError(body)).toBe("no rule config for 'x'");
   });
 
+  it("pulls the message out of the UNWRAPPED envelope the service actually raises", () => {
+    // The live service answers `{detail: {code, message}}`; only the older shape
+    // nests under `detail.error`. Reading just the nested one is why a 422
+    // reached the panel as its own raw JSON.
+    const body = JSON.stringify({
+      detail: { code: "ILLEGAL_STATE", message: "no time gap in the request. Send state.gap" },
+    });
+    expect(readableError(body)).toBe("no time gap in the request");
+  });
+
   it("falls back to the raw text when it is not the service's envelope", () => {
     expect(readableError("connection refused")).toBe("connection refused");
   });
 
   it("has something to say when there is no error text at all", () => {
     expect(readableError(undefined)).toContain("unreachable");
+  });
+});
+
+describe("readServiceCode", () => {
+  it("reads code and message from both envelope nestings", () => {
+    expect(readServiceCode(JSON.stringify({
+      detail: { code: "NOT_MODEL_ELIGIBLE", message: "the pass model is fitted on green-flag rows" },
+    }))).toEqual({
+      code: "NOT_MODEL_ELIGIBLE", message: "the pass model is fitted on green-flag rows",
+    });
+    expect(readServiceCode(JSON.stringify({
+      detail: { error: { code: "UNKNOWN_EVENT", message: "rule file not found" } },
+    }))).toEqual({ code: "UNKNOWN_EVENT", message: "rule file not found" });
+  });
+
+  it("is null for anything that is not a coded body, including bad JSON", () => {
+    expect(readServiceCode(undefined)).toBeNull();
+    expect(readServiceCode("connection refused")).toBeNull();
+    expect(readServiceCode(JSON.stringify({ detail: "plain string detail" }))).toBeNull();
+    expect(readServiceCode(JSON.stringify({ detail: {} }))).toBeNull();
+  });
+});
+
+describe("refusalHeadline", () => {
+  it("names the two 422s that are answers rather than failures", () => {
+    // INTEGRATION.md section 4: both render as an explanatory state. The sim
+    // meets NOT_MODEL_ELIGIBLE on every Safety Car, VSC and pit sequence.
+    expect(refusalHeadline("NOT_MODEL_ELIGIBLE")).toBe("the model is not defined here");
+    expect(refusalHeadline("CHECKPOINT_VIOLATION")).toContain("DETECTION checkpoint cannot have");
+  });
+
+  it("returns null for a genuine failure, so it keeps the failure path", () => {
+    for (const code of ["ILLEGAL_STATE", "UNKNOWN_EVENT", "", "500"]) {
+      expect(refusalHeadline(code), code).toBeNull();
+    }
+  });
+});
+
+describe("readQuantity", () => {
+  it("reads the Quantity's value AND the provenance tag beside it", () => {
+    expect(readQuantity({ value: 0.6, unit: "s", provenance: "SIMULATED" }))
+      .toEqual({ value: 0.6, provenance: "SIMULATED" });
+  });
+
+  it("keeps the tag when the value is absent — absence is still attributable", () => {
+    expect(readQuantity({ value: null, provenance: "DERIVED", reason: "not published" }))
+      .toEqual({ value: null, provenance: "DERIVED" });
+  });
+
+  it("reads the bare-float shape without inventing a tag for it", () => {
+    expect(readQuantity(0.42)).toEqual({ value: 0.42, provenance: null });
+  });
+
+  it("rejects a non-finite number rather than rendering NaN%", () => {
+    expect(readQuantity(Number.NaN)).toEqual({ value: null, provenance: null });
+    expect(readQuantity({ value: Number.POSITIVE_INFINITY, provenance: "SIMULATED" }))
+      .toEqual({ value: null, provenance: "SIMULATED" });
+    expect(readQuantity(undefined)).toEqual({ value: null, provenance: null });
+  });
+});
+
+describe("the bodies the live service actually returns", () => {
+  // Captured verbatim from the running dev service (POST /api/v1/rules/eligibility
+  // and POST /api/v1/pass/predict). Pinned as bytes because every bug this block
+  // covers was a shape mismatch that typechecked perfectly.
+  const ELIGIBILITY = '{"p_eligible":{"value":1.0,"provenance":"SIMULATED"},'
+    + '"eligibility_margin_s":{"value":0.6,"unit":"s","provenance":"SIMULATED"},'
+    + '"margin_s":{"value":0.6,"unit":"s","provenance":"SIMULATED"},'
+    + '"gap_s":{"value":0.4,"unit":"s","provenance":"DERIVED"}}';
+  const NOT_ELIGIBLE = '{"detail":{"code":"NOT_MODEL_ELIGIBLE","message":'
+    + '"normal_race_model_eligible is false. The pass model is fitted on green-flag '
+    + 'normal-race rows only (CP-13), so under a Safety Car, VSC or pit sequence its '
+    + 'output would be an extrapolation, not a prediction."}}';
+  const VIOLATION = '{"detail":{"code":"CHECKPOINT_VIOLATION","message":'
+    + '"[\'gap_at_activation_s\'] cannot be known at DETECTION."}}';
+
+  it("carries the SIMULATED tag off both eligibility numbers", () => {
+    const body = JSON.parse(ELIGIBILITY) as Record<string, unknown>;
+    expect(readQuantity(body.eligibility_margin_s ?? body.margin_s))
+      .toEqual({ value: 0.6, provenance: "SIMULATED" });
+    expect(readQuantity(body.p_eligible)).toEqual({ value: 1, provenance: "SIMULATED" });
+  });
+
+  it("routes both 422s to the explanatory state, never to the failure path", () => {
+    for (const body of [NOT_ELIGIBLE, VIOLATION]) {
+      const coded = readServiceCode(body);
+      expect(coded).not.toBeNull();
+      expect(refusalHeadline(coded!.code)).not.toBeNull();
+      expect(coded!.message).not.toBe("");
+    }
+  });
+});
+
+describe("provenanceMeaning", () => {
+  it("says what SIMULATED means for a number on this panel", () => {
+    // P(eligible) is the arming rule run forward over a projected gap. A bare
+    // "97%" reads as a measurement of the race, which API.md section 2 forbids.
+    expect(provenanceMeaning(["SIMULATED"]))
+      .toBe("simulated — produced by a model of the race, not measured in it");
+  });
+
+  it("collapses a repeated tag but keeps two different ones separable", () => {
+    expect(provenanceMeaning(["SIMULATED", "SIMULATED"]).split(" · ")).toHaveLength(1);
+    const both = provenanceMeaning(["SIMULATED", "DERIVED"]);
+    expect(both).toContain("simulated —");
+    expect(both).toContain("derived —");
+  });
+
+  it("names an untagged or unknown tag instead of explaining one it does not define", () => {
+    expect(provenanceMeaning([null])).toContain("without a provenance");
+    expect(provenanceMeaning(["DERIVED_TELEMETRY"]))
+      .toBe("derived_telemetry — vocabulary this panel does not define");
   });
 });
 

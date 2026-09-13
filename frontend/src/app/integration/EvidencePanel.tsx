@@ -119,8 +119,7 @@ export function EvidencePanel({
           <div className={s.tableWrap}>
             <table className={s.table}>
               <caption className={s.caption}>
-                Sample size is shown with every component. There is deliberately no single overall
-                accuracy figure — one number across components would hide which of them is weak.
+                Sample size per component. No single overall figure — it would hide the weak one.
               </caption>
               <thead>
                 <tr>

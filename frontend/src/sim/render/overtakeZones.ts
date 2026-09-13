@@ -31,9 +31,19 @@ import { toRenderFrame } from "./trackMesh";
 /** One activation zone as the rules config carries it. */
 export interface OvertakeZone {
   zone: number;
+  /** The config's own label for this zone -- "A1", not 1. The 2026 notes number
+   * them that way and renumbering them 1..n makes the panel disagree with the
+   * document it is quoting. */
+  label: string;
+  /** This zone's OWN Detection Line, metres. The config carries one per zone,
+   * not one per lap: a circuit with four zones has four detection lines. */
+  detectionM: number | null;
+  detectionSource: string | null;
   /** Metres along the lap where the zone opens. Null when unsourced. */
   activationM: number | null;
-  /** Metres along the lap where it closes. Null when unsourced. */
+  /** Metres along the lap where it closes. Null when unsourced -- which is the
+   * case for every 2026 event today, `zone_end_m` being UNVERIFIED throughout.
+   * A null end must not suppress a sourced activation line. */
   endM: number | null;
   /** The config's own `value_source` for this zone, shown as-is. */
   source: string | null;
@@ -258,23 +268,37 @@ export function overtakeGeometryFromRules(body: unknown): OvertakeGeometry | nul
     return { value: null, source: null };
   };
 
-  const detection = read((overtake as { detection_line_m?: unknown }).detection_line_m);
+  // The Detection Line is carried PER ZONE by config/rules/2026/*.yaml, not once
+  // at the top of the overtake block. Reading it at the top level found nothing
+  // on every circuit, and the panel reported "not sourced" for four lines that
+  // are sourced, measured and in the file. The top-level read is kept only as a
+  // fallback for a config that does hoist it.
+  const topDetection = read((overtake as { detection_line_m?: unknown }).detection_line_m);
   const rawZones = (overtake as { zones?: unknown }).zones;
   const zones: OvertakeZone[] = [];
   if (Array.isArray(rawZones)) {
     for (const entry of rawZones) {
       if (!entry || typeof entry !== "object") continue;
+      const detection = read((entry as { detection_line_m?: unknown }).detection_line_m);
       const activation = read((entry as { activation_line_m?: unknown }).activation_line_m);
       const end = read((entry as { zone_end_m?: unknown }).zone_end_m);
       const zoneNumber = (entry as { zone?: unknown }).zone;
       zones.push({
         zone: typeof zoneNumber === "number" ? zoneNumber : zones.length + 1,
+        label: typeof zoneNumber === "string" && zoneNumber
+          ? zoneNumber : String(zones.length + 1),
+        detectionM: detection.value ?? topDetection.value,
+        detectionSource: detection.source ?? topDetection.source,
         activationM: activation.value,
         endM: end.value,
         source: activation.source,
       });
     }
   }
-  if (detection.value === null && zones.every((z) => z.activationM === null)) return null;
-  return { detectionM: detection.value, detectionSource: detection.source, zones };
+  // The first sourced detection line, for the consumers that draw a single one.
+  const firstDetection = zones.find((z) => z.detectionM !== null) ?? null;
+  const detectionM = firstDetection?.detectionM ?? topDetection.value;
+  const detectionSource = firstDetection?.detectionSource ?? topDetection.source;
+  if (detectionM === null && zones.every((z) => z.activationM === null)) return null;
+  return { detectionM, detectionSource, zones };
 }

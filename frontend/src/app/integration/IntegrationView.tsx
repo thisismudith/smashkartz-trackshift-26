@@ -21,7 +21,8 @@
  */
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { ProvenanceLegend } from "@/components/provenance/Provenance";
 import {
   fetchBattles,
@@ -73,7 +74,22 @@ function currentOr<T>(keyed: Keyed<T>, id: string | null): Result<T> | null {
 }
 
 export default function IntegrationView() {
+  return (
+    <Suspense fallback={null}>
+      <IntegrationShell />
+    </Suspense>
+  );
+}
+
+function IntegrationShell() {
   const [mode, setMode] = useState<SourceMode>("live");
+  /**
+   * `?api=http://127.0.0.1:8010/api/v1` points the live mode somewhere other than the
+   * default. Useful when 8000 is taken, and it makes the console self-describing: the URL
+   * says which backend produced what is on screen.
+   */
+  const apiOverride = useSearchParams().get("api") ?? undefined;
+  const live = makeSource("live", apiOverride);
 
   return (
     <main className={s.main}>
@@ -83,11 +99,8 @@ export default function IntegrationView() {
           One schema, <em>two</em> delivery modes
         </h1>
         <p className={s.lede}>
-          Every route the UI consumes, read through a single source toggle. The replay bundle and the
-          live service return the same bodies, so the panels below are written once and rendered from
-          whichever is selected. Nothing on this page fabricates a value: a field the backend does not
-          return reads <em>Unavailable</em> with the reason, and a response this build cannot render
-          becomes a visible error rather than a blank panel.
+          Every route the UI consumes, through one source toggle. Same panels either way — a missing
+          field reads <em>Unavailable</em> with its reason, never a zero.
         </p>
 
         <div className={s.sourceToggle} role="radiogroup" aria-label="Data source">
@@ -103,7 +116,7 @@ export default function IntegrationView() {
               />
               <span className={s.sourceName}>{m === "live" ? "Live service" : "Replay bundle"}</span>
               <span className={s.sourceWhere}>
-                {m === "live" ? makeSource("live").label : "TRACKSHIFT_REPLAY_DIR"}
+                {m === "live" ? live.label : "TRACKSHIFT_REPLAY_DIR"}
               </span>
             </label>
           ))}
@@ -111,12 +124,12 @@ export default function IntegrationView() {
       </header>
 
       {/* Remounting on `mode` is the reset: a new source gets a new component instance. */}
-      <IntegrationContent key={mode} mode={mode} />
+      <IntegrationContent key={`${mode}:${live.base}`} mode={mode} base={apiOverride} />
     </main>
   );
 }
 
-function IntegrationContent({ mode }: { mode: SourceMode }) {
+function IntegrationContent({ mode, base }: { mode: SourceMode; base?: string }) {
   const [meta, setMeta] = useState<Result<MetaResponse> | null>(null);
   const [validation, setValidation] = useState<Result<ValidationResponse> | null>(null);
   const [battles, setBattles] = useState<Result<BattlesResponse> | null>(null);
@@ -139,7 +152,7 @@ function IntegrationContent({ mode }: { mode: SourceMode }) {
   // Steps 1-3 of the brief, plus the routes that need no battle id. Independent, so together.
   useEffect(() => {
     let alive = true;
-    const src = makeSource(mode);
+    const src = makeSource(mode, base);
     const guard = <T,>(f: (r: Result<T>) => void) => (r: Result<T>) => { if (alive) f(r); };
 
     fetchMeta(src).then(guard(setMeta));
@@ -154,7 +167,7 @@ function IntegrationContent({ mode }: { mode: SourceMode }) {
     postPassPredict(src, { gap_s: 0.72, deploy_level: 0.5, checkpoint: "DETECTION" }).then(guard(setPass));
 
     return () => { alive = false; };
-  }, [mode]);
+  }, [mode, base]);
 
   // Derived, not stored: the id comes from /battles unless the reader picked another.
   const listed = battles?.ok ? battles.data.battles : [];
@@ -165,24 +178,24 @@ function IntegrationContent({ mode }: { mode: SourceMode }) {
   useEffect(() => {
     if (!battleId) return;
     let alive = true;
-    fetchTimeline(makeSource(mode), battleId).then((r) => {
+    fetchTimeline(makeSource(mode, base), battleId).then((r) => {
       if (alive) setTimeline({ forId: battleId, result: r });
     });
     return () => { alive = false; };
-  }, [battleId, mode]);
+  }, [battleId, mode, base]);
 
   useEffect(() => {
     let alive = true;
-    const src = makeSource(mode);
+    const src = makeSource(mode, base);
     fetchTrack(src, event).then((r) => { if (alive) setTrack({ forId: event, result: r }); });
     fetchRules(src, event).then((r) => { if (alive) setRules({ forId: event, result: r }); });
     fetchPowerEnvelope(src, event).then((r) => { if (alive) setEnvelope({ forId: event, result: r }); });
     return () => { alive = false; };
-  }, [event, mode]);
+  }, [event, mode, base]);
 
   const runSimulation = useCallback(async () => {
     setRunning(true);
-    const r = await postSimulate(makeSource(mode), {
+    const r = await postSimulate(makeSource(mode, base), {
       n_episodes: 8,
       seed,
       rival_policy: policy,
@@ -190,7 +203,7 @@ function IntegrationContent({ mode }: { mode: SourceMode }) {
     });
     setSimulate(r);
     setRunning(false);
-  }, [mode, policy, seed]);
+  }, [mode, base, policy, seed]);
 
   const evidence = assessEvidence(validation?.ok ? validation.data : null);
 

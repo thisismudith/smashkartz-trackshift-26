@@ -29,6 +29,23 @@ describe("route resolution", () => {
     const url = resolveUrl(live, ROUTES.timeline("a b/c"));
     expect(url).toContain("/battles/a%20b%2Fc/timeline");
   });
+
+  it("routes an absolute live base through the same-origin proxy (the backend sets no CORS)", () => {
+    const url = resolveUrl(makeSource("live", "http://127.0.0.1:8010/api/v1"), ROUTES.meta());
+    expect(url).toBe("/api/live/meta?__base=http%3A%2F%2F127.0.0.1%3A8010%2Fapi%2Fv1");
+  });
+
+  it("leaves an already same-origin base alone", () => {
+    const url = resolveUrl(makeSource("live", "/api/live"), ROUTES.meta());
+    expect(url).toBe("/api/live/meta");
+  });
+
+  it("carries route query params through the proxy alongside __base", () => {
+    const url = resolveUrl(makeSource("live", "http://127.0.0.1:8010/api/v1"), ROUTES.powerEnvelope("e"), { mode: "both", step_kmh: 5 });
+    expect(url).toContain("mode=both");
+    expect(url).toContain("step_kmh=5");
+    expect(url).toContain("__base=");
+  });
 });
 
 describe("failure taxonomy", () => {
@@ -62,6 +79,26 @@ describe("failure taxonomy", () => {
     expect(r.kind).toBe("malformed");
     expect(r.message).toContain("`segments`");
     expect(r.message).toContain("object{battle_id, steps}");
+  });
+
+  it("calls a proxy 502 a dead backend, not a refusal", async () => {
+    // The same-origin proxy answers 502 UPSTREAM_UNREACHABLE when the model service is not
+    // running. Reporting that as "the service refused the request" sends the reader looking
+    // for an error code that does not exist.
+    mockFetch(() =>
+      json({ detail: { code: "UPSTREAM_UNREACHABLE", message: "Could not reach the model service" } }, 502));
+    const r = await fetchBattles(live);
+    expect(r.ok).toBe(false);
+    if (r.ok) throw new Error("unreachable");
+    expect(r.kind).toBe("network");
+    expect(r.code).toBe("UPSTREAM_UNREACHABLE");
+  });
+
+  it("still reports a genuine upstream refusal as http", async () => {
+    mockFetch(() => json({ detail: { code: "UNKNOWN_EVENT", message: "no such event" } }, 404));
+    const r = await fetchBattles(live);
+    if (r.ok) throw new Error("unreachable");
+    expect(r.kind).toBe("http");
   });
 
   it("reports HTML served in place of JSON as malformed", async () => {

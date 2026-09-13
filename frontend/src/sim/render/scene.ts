@@ -7,7 +7,8 @@ import { HAAS } from "@/lib/palette";
 import { halfWidthAt, surfaceAt } from "../data/manifest";
 import { POSE_FLOATS_PER_CAR, POSE_STATUS } from "../worker/protocol";
 import {
-  carInstanceY, FOCUS_OUTLINE_SCALE, focusGhostY, PRESENTATION_SCALE,
+  CAR_REFERENCE_AHEAD_M, carInstanceY, FOCUS_OUTLINE_SCALE, focusGhostY,
+  PRESENTATION_SCALE,
 } from "./presentation";
 import { buildF1CarGeometry } from "./carGeometry";
 import { buildDriverLabels, type DriverLabels } from "./driverLabels";
@@ -32,6 +33,27 @@ export interface GpuInfo {
   isSoftware: boolean;
   isIntegrated: boolean;
   maxTextureSize: number;
+}
+
+/**
+ * What the circuit model's download is doing, for a UI that wants to say so.
+ *
+ * The model is 126 MB at Silverstone and arrives long after the race is already
+ * running: the renderer deliberately does not wait for it (setEnvironment), so without
+ * this the viewer watches the procedural ribbon for tens of seconds with no way to tell
+ * "this circuit has no model" from "the model is still coming".
+ *
+ * `totalBytes` is 0 until the server's first progress event carries a length, and stays
+ * 0 for a response with no Content-Length -- a caller must show an indeterminate state
+ * then rather than divide by it.
+ */
+export interface EnvironmentLoad {
+  url: string;
+  /** the circuit whose model this is, for a label */
+  event: string;
+  loadedBytes: number;
+  totalBytes: number;
+  status: "loading" | "ready" | "failed";
 }
 
 export interface PerfStats {
@@ -367,8 +389,12 @@ export function carPlanPos(
   // lateral is scaled with the road (presentation.ts), so a car sitting halfway to the
   // kerb in the data still sits halfway to the kerb on the widened ribbon
   const lat = lateralM * PRESENTATION_SCALE;
-  out.x = cx + nx * lat;
-  out.y = cy + ny * lat;
+  // ...and the body is drawn BEHIND the feed's point, which sits ahead of the car's
+  // centre (CAR_REFERENCE_AHEAD_M, measured against the model's painted grid boxes).
+  // Station is untouched: this moves the picture, never the number.
+  const back = CAR_REFERENCE_AHEAD_M;
+  out.x = cx + nx * lat - Math.cos(out.heading) * back;
+  out.y = cy + ny * lat - Math.sin(out.heading) * back;
   return out;
 }
 
@@ -959,6 +985,8 @@ export function setRibbonOverEnvironment(layers: TrackLayers, over: boolean): vo
  * life -- but the failure is only logged once per URL, which is the "log once" rule.
  */
 const GLB_CACHE = new Map<string, Promise<THREE.Group>>();
+/** Progress listeners per in-flight URL. See loadEnvironmentGlb. */
+const GLB_PROGRESS = new Map<string, Set<(loaded: number, total: number) => void>>();
 const GLB_LOGGED_FAILURES = new Set<string>();
 
 /** Whether this URL's model is already loaded or in flight. Diagnostics and tests: the
@@ -978,12 +1006,25 @@ export function environmentGlbCached(url: string): boolean {
 export function loadEnvironmentGlb(
   url: string, onProgress?: (loaded: number, total: number) => void,
 ): Promise<THREE.Group> {
+  // EVERY caller's progress callback, not just the first one's. A second call for a URL
+  // already in flight gets the cached promise, and attaching its onProgress to a
+  // GLTFLoader that has already started would do nothing -- so the listeners live beside
+  // the promise and the one real load notifies all of them. React's development double
+  // effect makes this the ORDINARY case rather than a corner: the second setEnvironment
+  // is the one the UI is listening to, and without this it received no progress at all
+  // and the download reported an unknown size for its whole 126 MB.
+  if (onProgress) {
+    let subs = GLB_PROGRESS.get(url);
+    if (!subs) GLB_PROGRESS.set(url, subs = new Set());
+    subs.add(onProgress);
+  }
   const hit = GLB_CACHE.get(url);
   if (hit) return hit;
   const pending = (async () => {
     const { GLTFLoader } = await import("three/addons/loaders/GLTFLoader.js");
     const gltf = await new GLTFLoader().loadAsync(url, (e) => {
-      if (onProgress && e.total > 0) onProgress(e.loaded, e.total);
+      if (e.total <= 0) return;   // no Content-Length: an unknown size, not a zero one
+      for (const cb of GLB_PROGRESS.get(url) ?? []) cb(e.loaded, e.total);
     });
     return gltf.scene;
   })().catch((err) => {
@@ -998,6 +1039,9 @@ export function loadEnvironmentGlb(
     throw err;
   });
   GLB_CACHE.set(url, pending);
+  // the load is over either way; nothing may hold a listener for a URL that will never
+  // report again
+  void pending.finally(() => GLB_PROGRESS.delete(url)).catch(() => {});
   return pending;
 }
 
@@ -1107,6 +1151,7 @@ export class SimRenderer {
   private groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
   private fpsEma = 60;
   private onPerfSample: ((p: PerfStats) => void) | null = null;
+  private onEnvLoad: ((s: EnvironmentLoad) => void) | null = null;
   private perfSampleAcc = 0;
   private stationScratch: Float32Array | null = null;
   private lateralScratch: Float32Array | null = null;
@@ -1138,6 +1183,8 @@ export class SimRenderer {
    * do. Blending toward the background is visually the same against this dark track,
    * costs one buffer upload when the focus changes, and keeps the single draw call. */
   private dimUnfocused = false;
+  /** Extra cars kept bright while the field is dimmed; see setHighlightIndices. */
+  private highlight: Set<number> | null = null;
   /** Focus index the current instanceColor buffer was written for; -2 forces a rewrite. */
   private dimAppliedFocus = -2;
   private dimAppliedOn = false;
@@ -1277,12 +1324,30 @@ export class SimRenderer {
     this.applyRibbonForEnvironment();
     if (!env) return;
 
-    void loadEnvironmentGlb(env.assetUrl).then((root) => {
+    const report = (status: EnvironmentLoad["status"], loaded: number, total: number) => {
+      // a stale load must not narrate over the circuit the user has since moved to
+      if (!this.alive || token !== this.envToken || !this.onEnvLoad) return;
+      this.onEnvLoad({
+        url: env.assetUrl, event: env.def.event,
+        loadedBytes: loaded, totalBytes: total, status,
+      });
+    };
+    let seenTotal = 0;
+    // A model already in the module cache is attached on the next microtask, so
+    // announcing a download would flash a progress overlay over a circuit that is
+    // about to appear anyway. Switching session back and forth is exactly that case.
+    if (!environmentGlbCached(env.assetUrl)) report("loading", 0, 0);
+    void loadEnvironmentGlb(env.assetUrl, (loaded, total) => {
+      seenTotal = total;
+      report("loading", loaded, total);
+    }).then((root) => {
       // discarded if the renderer is gone, or the user moved on while this was in
       // flight; the model itself stays in the module cache either way
       if (!this.alive || token !== this.envToken) return;
       this.attachEnvironment(root, env);
+      report("ready", seenTotal, seenTotal);
     }).catch(() => {
+      report("failed", 0, seenTotal);
       // already logged once by loadEnvironmentGlb. The ribbon is still there: this is
       // the third of the three fallbacks (no entry / failed gate / failed fetch), and
       // all three have to leave the circuit byte-for-byte as it is without a model.
@@ -1475,6 +1540,29 @@ export class SimRenderer {
     this.applyDim(this.lastFocusIdx);
   }
 
+  /**
+   * Cars that stay at full strength while the rest of the field is dimmed.
+   *
+   * Dimming keyed on the single focused car is wrong for a battle: the evidence
+   * reel dims the field to isolate ONE FIGHT, and with only the attacker spared
+   * the defender was dimmed to near-invisibility 20 m in front of it. The car the
+   * overtake is *of* vanished from the shot that exists to show the overtake.
+   *
+   * Pass null to go back to focus-only.
+   */
+  setHighlightIndices(indices: readonly number[] | null) {
+    this.highlight = indices && indices.length ? new Set(indices) : null;
+    // Force the memo below to recompute: the focus and the toggle are both
+    // unchanged on this path, so without this the repaint is skipped.
+    this.dimAppliedFocus = -2;
+    this.applyDim(this.lastFocusIdx);
+  }
+
+  /** True when `i` must stay bright: it is the focused car, or in the battle. */
+  private isBright(i: number, focus: number): boolean {
+    return i === focus || (this.highlight !== null && this.highlight.has(i));
+  }
+
   /** Rewrites instanceColor only when the toggle or the focused car actually changes,
    * so the common case costs nothing. `focus` is the resolved index, which moves on its
    * own in auto-follow mode as the lead changes. */
@@ -1486,7 +1574,7 @@ export class SimRenderer {
     const bg = new THREE.Color(HAAS.black);
     const arr = mesh.instanceColor.array as Float32Array;
     for (let i = 0; i < this.driverCount; i++) {
-      const dim = this.dimUnfocused && i !== focus;
+      const dim = this.dimUnfocused && !this.isBright(i, focus);
       const k = dim ? DIM_MIX : 1;
       arr[i * 3] = bg.r + (base[i * 3] - bg.r) * k;
       arr[i * 3 + 1] = bg.g + (base[i * 3 + 1] - bg.g) * k;
@@ -1499,7 +1587,7 @@ export class SimRenderer {
     if (this.labels) {
       for (let i = 0; i < this.labels.sprites.length; i++) {
         const mat = this.labels.sprites[i].material as THREE.SpriteMaterial;
-        mat.opacity = this.dimUnfocused && i !== focus ? DIM_MIX : 1;
+        mat.opacity = this.dimUnfocused && !this.isBright(i, focus) ? DIM_MIX : 1;
       }
     }
   }
@@ -1745,6 +1833,15 @@ export class SimRenderer {
 
   isCameraLocked() { return this.cameraLocked; }
   onCameraLockChange(cb: (locked: boolean) => void) { this.onLockChange = cb; }
+
+  /**
+   * Told about the circuit model's download: once per progress event, then once more
+   * with "ready" or "failed".
+   *
+   * Never called at all for a circuit with no model (12 of 13), which is what lets a UI
+   * distinguish that from a download in flight: no news is "there is nothing to load".
+   */
+  onEnvironmentLoad(cb: (state: EnvironmentLoad) => void) { this.onEnvLoad = cb; }
 
   /**
    * Puts the camera on screen back where it started: the shipped rig for a chase mode,

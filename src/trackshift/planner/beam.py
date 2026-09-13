@@ -30,6 +30,17 @@ class RiskSpec:
             raise ValueError("cvar_alpha must be in (0, 1]")
 
 
+def _action_identity(action: Mapping[str, Any]) -> tuple[Any, Any, Any]:
+    """What makes two actions the same action.
+
+    Deploy level, lift and the mode they apply under. Everything else on an
+    action dict is a consequence of the state it was evaluated at (the cap moves
+    with speed, the energy delta with the segment), so including it would make
+    an action unequal to itself across two call sites.
+    """
+    return (action.get("deploy_level"), action.get("lift_amount"), action.get("applicable_mode"))
+
+
 def _state_key(dp: DPResult, state: Mapping[str, Any], segment: Mapping[str, Any]) -> str | None:
     inputs = required_state_inputs(state)
     if not inputs["ok"]:
@@ -113,8 +124,29 @@ def plan(
         "decision_stability": 1.0,
         "alternatives": [],
     }
+    # Every legal first action gets the value the DP actually computed for it:
+    # its own one-segment cost plus the optimal continuation from where it lands.
+    # The recursion evaluates all of them to pick a best, so these are the DP's
+    # own numbers, not a second scoring pass. Regret is the gap to the best.
+    #
+    # Two things this fixes. Actions are matched on IDENTITY, not whole-dict
+    # equality -- the DP's stored action carries a resolved `delta_e_mj` for the
+    # segment it was solved on and the C3 candidate of the same action does not,
+    # so comparing every field matched nothing and left even the recommended row
+    # scoreless. And an action the DP could not score (its C5 transition failed)
+    # still reports null rather than a zero, because "not evaluated" and "worth
+    # nothing" are different claims.
+    scored = {_action_identity(entry["action"]): entry["value"]
+              for entry in dp_result.action_values.get(key or "", [])
+              if isinstance(entry.get("action"), Mapping)}
+    best = max(scored.values(), default=None)
     for action in legal:
-        response["decision"]["alternatives"].append({"action": action, "expected_value": dp_result.value if action == chosen else None, "regret": 0.0 if action == chosen else None})
+        value = scored.get(_action_identity(action))
+        response["decision"]["alternatives"].append({
+            "action": action,
+            "expected_value": value,
+            "regret": None if value is None or best is None else best - value,
+        })
     response["alternatives"] = response["decision"]["alternatives"]
     return response
 

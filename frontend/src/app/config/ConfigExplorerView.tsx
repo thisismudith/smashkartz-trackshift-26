@@ -18,14 +18,32 @@ import { ChartFrame, Plot, Grid, XAxis, BandLabels, HBars, niceTicks } from "@/s
 import { fetchConfigVariables, fetchConfigEvents } from "@/api-contract/client";
 import s from "./config.module.css";
 
-const SOURCE_BADGE: Record<ValueSource, { label: string; tone: "ok" | "warn" | "risk" | "muted" }> = {
-  RULE_FIA: { label: "RULE_FIA", tone: "ok" },
-  OBSERVED_RCM: { label: "OBSERVED_RCM", tone: "ok" },
-  OBSERVED: { label: "OBSERVED", tone: "ok" },
-  DERIVED_TELEMETRY: { label: "DERIVED_TELEMETRY", tone: "ok" },
-  UNVERIFIED: { label: "UNVERIFIED", tone: "warn" },
-  PROXY_HISTORICAL_DRS: { label: "PROXY (historical DRS)", tone: "risk" },
-  DEVELOPMENT_ONLY: { label: "DEVELOPMENT ONLY", tone: "muted" },
+/**
+ * How each value got here, in the reader's words rather than the config file's.
+ *
+ * The tone is about how far the value can be TRUSTED, not how finished it looks.
+ * `UNVERIFIED` used to sit in the same warning yellow as a historical-DRS proxy, which
+ * read as "this is broken" — it is not. It means the number is the reported figure and
+ * is fine to model against; what is missing is the FIA article to cite for it. That is a
+ * sourcing task, not a defect, so it gets its own neutral tone and a title that says so.
+ * The tag itself is never softened: `strict_mode` refuses to run against these, and a
+ * demo may not claim legality by construction while any remain (API.md 20.1, 57).
+ */
+const SOURCE_BADGE: Record<ValueSource, { label: string; tone: "ok" | "warn" | "risk" | "muted" | "pending"; title: string }> = {
+  RULE_FIA: { label: "FIA cited", tone: "ok", title: "Traced to an FIA 2026 regulation article. The citation is in the source field below." },
+  OBSERVED_RCM: { label: "Race control", tone: "ok", title: "Read from Race Control messages for this event — observed, not assumed." },
+  OBSERVED: { label: "Observed", tone: "ok", title: "Measured directly from the circuit data in this repository." },
+  DERIVED_TELEMETRY: { label: "From telemetry", tone: "ok", title: "Computed from 2026 session telemetry — measured, not assumed." },
+  UNVERIFIED: {
+    label: "Awaiting citation",
+    tone: "pending",
+    title:
+      "The reported figure, usable for modelling, with no FIA article cited for it yet. " +
+      "Sourcing task, not a defect — but strict_mode refuses to run against it, and no demo " +
+      "may claim legality by construction while it stands (API.md 20.1, 57).",
+  },
+  PROXY_HISTORICAL_DRS: { label: "Proxy (historical DRS)", tone: "risk", title: "Stood in from the pre-2026 DRS era. A DRS zone is not an Overtake fact — do not present anything built on this as a 2026 regulation." },
+  DEVELOPMENT_ONLY: { label: "Development only", tone: "muted", title: "Exists to make the development build run. Not a regulation and not a measurement." },
 };
 
 type Overrides = Record<string, ConfigVariable["value"]>;
@@ -148,7 +166,7 @@ function VariableRow({
     <div className={s.row} data-changed={changed}>
       <div className={s.rowHead}>
         <span className={s.rowLabel}>{variable.label}</span>
-        <span className={s.badge} data-tone={badge.tone}>
+        <span className={s.badge} data-tone={badge.tone} title={badge.title}>
           {badge.label}
         </span>
         {changed ? (
@@ -492,6 +510,14 @@ export default function ConfigExplorerView() {
           cross-referenced against <code>TrackShift AGENTS.md</code>, <code>MODELS.md</code>, and{" "}
           <code>API.md</code>. Editing here changes only what this page shows — there is no route in{" "}
           <code>API.md</code> yet for writing config back, so nothing is silently saved.
+        </p>
+        <p className={s.sourceLegend}>
+          Each value carries how it got here. <strong>FIA cited</strong>, <strong>Observed</strong>,{" "}
+          <strong>Race control</strong> and <strong>From telemetry</strong> are sourced.{" "}
+          <strong>Awaiting citation</strong> is the reported figure with no FIA article recorded for
+          it yet — usable for modelling, not yet quotable as regulation.{" "}
+          <strong>Proxy (historical DRS)</strong> is the one to distrust: it is borrowed from the
+          pre-2026 era. Hover any badge for what it means.
         </p>
         <p className={s.statusLine} data-source={dataSource}>
           {dataSource === "loading" ? (

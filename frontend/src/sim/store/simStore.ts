@@ -22,6 +22,9 @@ export interface SimStoreState {
   driverList: string[];
   totalLaps: number | null;
   duration: number;
+  /** Seconds the replay clock is shifted from absolute session time. Anything
+   * holding an absolute timestamp must subtract this before seeking. */
+  clockOffsetS: number;
   error: string | null;
   playing: boolean;
   atEnd: boolean;
@@ -37,7 +40,7 @@ export class SimStore {
   private worker: Worker | null = null;
   private listeners = new Set<() => void>();
   private state: SimStoreState = {
-    ready: false, driverList: [], totalLaps: null, duration: 0, error: null,
+    ready: false, driverList: [], totalLaps: null, duration: 0, clockOffsetS: 0, error: null,
     playing: false, atEnd: false,
   };
   private dashboard: DashboardSnapshot | null = null;
@@ -62,7 +65,7 @@ export class SimStore {
   startGenerated(request: GeneratedRaceRequest) {
     this.ensureWorker();
     this.state = {
-      ready: false, driverList: [], totalLaps: null, duration: 0, error: null,
+      ready: false, driverList: [], totalLaps: null, duration: 0, clockOffsetS: 0, error: null,
       playing: false, atEnd: false,
     };
     this.dashboard = null;
@@ -92,7 +95,7 @@ export class SimStore {
         this.state = {
           ...this.state,
           ready: true, driverList: msg.driverList, totalLaps: msg.totalLaps,
-          duration: msg.duration, error: null,
+          duration: msg.duration, clockOffsetS: msg.clockOffsetS ?? 0, error: null,
         };
         this.emit();
         break;

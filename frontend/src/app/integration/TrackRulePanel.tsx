@@ -132,11 +132,8 @@ export function TrackRulePanel({
       title="Track and rule panel"
     >
       <Callout tone="warn">
-        <strong>No DRS is rendered here as an Overtake state.</strong> Overtake state for 2026 comes
-        only from the rule engine. Raw <code>drs</code>, <code>historical_drs_*</code> and{" "}
-        <code>PROXY_HISTORICAL_DRS</code> are refused on the way out of this UI and by the backend.
-        An all-zero 2026 DRS channel means the channel is <em>unavailable</em>, not that anything is
-        &ldquo;closed&rdquo;.
+        <strong>No DRS is rendered as an Overtake state.</strong> 2026 Overtake comes only from the
+        rule engine; <code>drs</code> and <code>historical_drs_*</code> are refused both ways.
       </Callout>
 
       {track === null ? <Loading what="track geometry" /> : null}
@@ -151,8 +148,7 @@ export function TrackRulePanel({
             <div className={s.tableWrap}>
               <table className={s.table}>
                 <caption className={s.caption}>
-                  Each landmark is shown with the provenance the rule engine returned for it, and its
-                  own citation on hover. They are not all the same kind of claim.
+                  Provenance per landmark, citation on hover — they are not the same kind of claim.
                 </caption>
                 <thead>
                   <tr>
@@ -275,10 +271,8 @@ export function TrackRulePanel({
           {fallback && (fallback.normal.length > 0 || fallback.override.length > 0) ? (
             <>
               <Callout>
-                Drawn instead from the <strong>rule breakpoints</strong> in{" "}
-                <code>/rules/{"{event}"}</code>. A piecewise-linear curve is fully determined by its
-                breakpoints, so this is the same shape — but it is not the sampled route, and the
-                sampling step and separation speed are not shown.
+                Drawn from the <strong>rule breakpoints</strong> in <code>/rules/{"{event}"}</code>:
+                the same shape, but not the sampled route.
               </Callout>
               <EnvelopePlot curves={fallback} />
             </>
@@ -289,8 +283,8 @@ export function TrackRulePanel({
         <>
           <EnvelopePlot curves={sampled} />
           <p className={s.meta}>
-            Sampled by the one C3 evaluator the DP and simulator use, so the plotted line is the line
-            the optimiser saw. <ProvenanceBadge tag={envelope.data.provenance} />
+            Sampled by the C3 evaluator the DP uses — the line the optimiser saw.{" "}
+            <ProvenanceBadge tag={envelope.data.provenance} />
             {envelope.data.rule_configuration_version ? <code className={s.inlineCode}>{envelope.data.rule_configuration_version}</code> : null}
           </p>
         </>

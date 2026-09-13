@@ -51,10 +51,10 @@ function ActionRow({ a, alt }: { a: PlanAction; alt?: PlanAlternative }) {
         <Value d={formatNumber(a.delivered_power_kw, { unit: "kW", digits: 0, provenance: "DERIVED" })} />
       </td>
       <td>
-        <Value d={formatNumber(alt?.expected_value ?? null, { digits: 3, provenance: "DERIVED", fallbackReason: "the planner returned no expected value for this action" })} />
+        <Value d={formatNumber(alt?.expected_value ?? null, { digits: 3, provenance: "DERIVED", fallbackReason: "the DP could not evaluate this action — its segment transition did not complete. Not the same as scoring zero." })} />
       </td>
       <td>
-        <Value d={formatNumber(alt?.regret ?? null, { digits: 3, provenance: "DERIVED", fallbackReason: "the planner returned no regret for this action" })} />
+        <Value d={formatNumber(alt?.regret ?? null, { digits: 3, provenance: "DERIVED", fallbackReason: "no expected value for this action, so there is no gap to the best one to report" })} />
       </td>
     </tr>
   );
@@ -155,8 +155,10 @@ export function PlanPanel({ plan }: { plan: Result<PlanResponse> | null }) {
 
       <h3 className={s.subhead}>Legal actions ({legal.length})</h3>
       <Callout>
-        These are the actions the rule engine permitted at this state. Illegal actions are not in
-        this table at any score — they are listed separately below, with the rule that removed them.
+        What the rule engine permitted here. <strong>Expected value</strong> is the DP&apos;s value
+        for taking that action now and continuing optimally; <strong>regret</strong> is what it
+        costs against the best one. Illegal actions carry no score at all — they are below, with the
+        rule that removed them.
       </Callout>
       <div className={s.tableWrap}>
         <table className={s.table}>
