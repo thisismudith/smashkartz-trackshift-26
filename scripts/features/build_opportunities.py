@@ -33,6 +33,17 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 
+from trackshift.features.battle_join import (  # noqa: E402
+    BattleIndex,
+    build_number_to_code,
+    load_episodes,
+)
+from trackshift.features.opportunity_context import (  # noqa: E402
+    build_lap_context,
+    build_segment_geometry,
+    coerce_context_dtypes,
+    pair_context,
+)
 from trackshift.features.opportunities import (  # noqa: E402
     CHECKPOINTS,
     LABEL_DEFINITION,
@@ -44,6 +55,8 @@ from trackshift.rules.config import RuleConfigError  # noqa: E402
 
 SEGMENTS = ROOT / "data" / "processed" / "segments"
 LAKE = ROOT / "data" / "processed" / "telemetry_20m"
+BATTLES = ROOT / "data" / "processed" / "battle_episodes"
+WEATHER = ROOT / "data" / "processed" / "weather_overlay"
 OUT = ROOT / "data" / "processed" / "overtake_opportunities"
 
 LAKE_COLUMNS = [
@@ -213,6 +226,42 @@ def plan_event(event: str, year: str) -> dict[str, Any]:
     }
 
 
+def _circuit_key(event: str) -> str:
+    """C1 partitions by circuit; the rules config keys by event."""
+    return event.removesuffix("_grand_prix")
+
+
+def _event_overlay(root: Path, filename: str, event: str, year: str, sessions: set[str],
+                   columns: list[str] | None = None):
+    """One circuit partition, filtered to this year and the sessions in play.
+
+    Returns ``None`` rather than raising when the overlay has not been built:
+    a missing CP-06 partition costs the weather features for that event and
+    nothing else, and the coverage is reported per event so the hole is visible.
+    """
+    import pandas as pd
+
+    path = root / f"circuit={_circuit_key(event)}" / filename
+    if not path.exists():
+        return None
+    if columns:
+        # Overlay partitions do not all carry the same columns -- an event whose
+        # weather join found no samples writes a narrower file. Ask only for
+        # what this partition actually has, so one thin circuit costs its own
+        # features rather than failing the whole build.
+        import pyarrow.parquet as pq
+
+        available = set(pq.ParquetFile(path).schema.names)
+        columns = [c for c in columns if c in available]
+        if "year" not in columns:
+            return None
+    frame = pd.read_parquet(path, columns=columns or None)
+    frame = frame[frame["year"].astype(str) == str(year)]
+    if "session" in frame.columns and sessions:
+        frame = frame[frame["session"].astype(str).isin(sessions)]
+    return frame if len(frame) else None
+
+
 def build_event(event: str, year: str, output_root: Path) -> dict[str, Any]:
     """Build one event. Module-level so it pickles into the process pool."""
     plan = plan_event(event, year)
@@ -270,6 +319,36 @@ def build_event(event: str, year: str, output_root: Path) -> dict[str, Any]:
         (session, lap, str(number)): group
         for (session, lap, number), group in frame.groupby(["session", "lap", "driver_number"], sort=False)
     }
+
+    # A2: the causal C8 join. C8 names both cars by code; the telemetry knows the
+    # defender only by number, so the map comes from the lake, which has both.
+    # Built per session because car numbers are reused between seasons.
+    # Segment rows carry each episode's within-lap extent. Without them a pair
+    # with two episodes on one lap is unresolvable, which is 28% of 2026.
+    battle_index = BattleIndex(load_episodes(
+        BATTLES / "battle_episodes.jsonl",
+        segment_rows=BATTLES / "battle_segment_rows.jsonl"))
+    number_to_code = build_number_to_code(
+        frame[["year", "event", "session", "driver", "driver_number"]]
+        .drop_duplicates().to_dict("records"))
+    join_counts: dict[str, int] = {}
+
+    # CP-13 feature groups. The data was never missing -- it is keyed on exactly
+    # the (year, event, session, driver, lap) this builder already has, and was
+    # simply never joined, which left CP-14 fitting on three features.
+    sessions_in_play = {str(v) for v in frame["session"].unique()}
+    segments_frame = _event_overlay(
+        SEGMENTS, "segments.parquet", event, year, sessions_in_play,
+        columns=["year", "event", "session", "driver", "lap", "segment_id",
+                 "start_distance_m", "end_distance_m", "corner_type", "sector",
+                 "tyre_compound", "tyre_life_laps", "team"])
+    weather_frame = _event_overlay(
+        WEATHER, "weather_overlay.parquet", event, year, sessions_in_play,
+        columns=["year", "event", "session", "driver", "lap",
+                 "wind_head_component_mps", "wind_cross_component_mps",
+                 "track_temperature_c", "wet_track_flag"])
+    lap_context = build_lap_context(segments_frame, weather_frame)
+    segment_geometry = build_segment_geometry(segments_frame)
 
     rows_out: list[dict[str, Any]] = []
     opportunities = 0
@@ -351,11 +430,41 @@ def build_event(event: str, year: str, output_root: Path) -> dict[str, Any]:
                             "activation_offset_m": activation_offset,
                             "brake_offset_m": brake_offset,
                             "zone_end_offset_m": zone_end_offset}
+                # Resolve the C8 episode this opportunity belongs to. A miss
+                # leaves battle_id null and records why; it is never invented,
+                # because a fabricated id would put unrelated opportunities into
+                # one split group and silently defeat CP-14's leakage guarantee.
+                defender_code = number_to_code.get(
+                    (str(entry.get("year") or year), str(entry.get("event") or event),
+                     str(session), str(int(defender))))
+                battle_id, join_status = battle_index.resolve(
+                    year=entry.get("year") or year, event=entry.get("event") or event,
+                    session=session, attacker=driver,
+                    defender_code=defender_code, lap=int(lap),
+                    # Anchored at the Detection Line, where the opportunity is
+                    # defined. The opportunity runs on into the next lap, but the
+                    # episode it belongs to is the one it starts inside.
+                    distance_m=detection,
+                )
+                join_counts[join_status] = join_counts.get(join_status, 0) + 1
+
+                context_row = pair_context(
+                    lap_context, session=session, lap=int(lap),
+                    attacker=driver, defender_code=defender_code)
+                # Geometry belongs at the checkpoint's own distance, not the
+                # lap's: resolving it per lap would attach a straight's geometry
+                # to a corner's opportunity.
+                context_row.update(segment_geometry.at(session, driver, int(lap), detection))
+
                 context = OpportunityContext(
                     opportunity_id=opportunity_id(year, event, session, lap, zone["zone"], driver, int(defender)),
                     year=year, event=event, session=session, lap=int(lap), zone=zone["zone"],
                     attacker=driver, defender=str(int(defender)),
-                    attacker_team=entry.get("team"), regulation_era="2026",
+                    battle_id=battle_id, battle_join_status=join_status,
+                    attacker_team=entry.get("team"),
+                    defender_team=context_row.pop("defender_team", None),
+                    regulation_era="2026",
+                    context_features=context_row,
                 )
                 offsets = {"DETECTION": 0.0, "ACTIVATION": activation_offset, "BRAKING": brake_offset}
                 rows_out.extend(build_opportunity_rows(
@@ -377,10 +486,38 @@ def build_event(event: str, year: str, output_root: Path) -> dict[str, Any]:
         target = output_root / f"event={event}"
         target.mkdir(parents=True, exist_ok=True)
         destination = target / "opportunities.parquet"
-        pd.DataFrame(rows_out).to_parquet(destination, index=False)
+        coerce_context_dtypes(pd.DataFrame(rows_out)).to_parquet(destination, index=False)
         written = str(destination.resolve().relative_to(ROOT.resolve()))
 
-    return {**plan, "opportunities": opportunities, "rows": len(rows_out), "written": written}
+    joined = join_counts.get("JOINED", 0)
+    return {**plan, "opportunities": opportunities, "rows": len(rows_out),
+            "written": written,
+            "battle_join": {
+                "counts": dict(sorted(join_counts.items())),
+                "joined": joined,
+                "coverage": round(joined / opportunities, 6) if opportunities else None,
+            }}
+
+
+def _battle_join_summary(results: list[dict[str, Any]]) -> dict[str, Any]:
+    """Aggregate the per-event A2 join counts into one coverage figure."""
+    counts: dict[str, int] = {}
+    for result in results:
+        for status, value in (result.get("battle_join") or {}).get("counts", {}).items():
+            counts[status] = counts.get(status, 0) + int(value)
+    total = sum(counts.values())
+    joined = counts.get("JOINED", 0)
+    return {
+        "counts": dict(sorted(counts.items())),
+        "opportunities_with_battle_id": joined,
+        "opportunities_total": total,
+        "coverage": round(joined / total, 6) if total else None,
+        "note": (
+            "Unjoined opportunities keep a null battle_id and a battle_join_status "
+            "naming the reason. None is invented: a fabricated id would place "
+            "unrelated opportunities in one C9 split group. CP-14 excludes them."
+        ),
+    }
 
 
 def main() -> int:
@@ -450,6 +587,10 @@ def main() -> int:
         "built": results,
         "opportunities": sum(int(r.get("opportunities") or 0) for r in results),
         "rows": sum(int(r.get("rows") or 0) for r in results),
+        # A2 join coverage belongs in the artifact, not only in the table. CP-14
+        # refuses a partially populated split unit, so the share of rows without
+        # a battle_id is the number that decides whether the benchmark can run.
+        "battle_join": _battle_join_summary(results),
     }
     args.output_root.mkdir(parents=True, exist_ok=True)
     (args.output_root / "run_manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")

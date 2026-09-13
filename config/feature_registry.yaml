@@ -1935,6 +1935,111 @@ features:
     availability_scope: partial
     interaction_group: [tyre, relative]
 
+  # ------------------------------------- M07 / CP-13 opportunity pair context
+  # Joined onto every opportunity row from C1 segments and the CP-06 weather
+  # overlay by scripts/features/build_opportunities.py. Checkpoint-independent:
+  # all of it is knowable at the Detection Line, so decision_checkpoint is null
+  # and the CP-13 leakage test still passes for DETECTION rows.
+  - name: attacker_tyre_compound
+    definition: Compound fitted to the attacker for the opportunity's lap.
+    unit: null
+    source: C1 segments tyre_compound at lap entry
+    derivation: scripts/features/build_opportunities.py
+    allowed_sessions: [Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: OBSERVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [tyre, attacker]
+    consuming_models: [M07, M10]
+
+  - name: defender_tyre_compound
+    definition: Compound fitted to the defender for the contemporaneous lap.
+    unit: null
+    source: C1 segments tyre_compound at lap entry
+    derivation: scripts/features/build_opportunities.py
+    allowed_sessions: [Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: OBSERVED
+    availability_scope: partial
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [tyre, defender]
+    consuming_models: [M07, M10]
+
+  - name: attacker_team
+    definition: Attacker's team for the session. Identity, not performance.
+    unit: null
+    source: C1 segments team
+    derivation: scripts/features/build_opportunities.py
+    allowed_sessions: [Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: OBSERVED
+    availability_scope: all
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [identity, team_identity, attacker]
+    consuming_models: [M07, M10]
+
+  - name: defender_team
+    definition: Defender's team for the session. Identity, not performance.
+    unit: null
+    source: C1 segments team
+    derivation: scripts/features/build_opportunities.py
+    allowed_sessions: [Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: OBSERVED
+    availability_scope: partial
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [identity, team_identity, defender]
+    consuming_models: [M07, M10]
+
+  - name: track_temperature
+    definition: Track surface temperature at the opportunity's lap, averaged over the lap's weather-aligned segments.
+    unit: degC
+    source: CP-06 weather overlay track_temperature_c
+    derivation: scripts/features/build_opportunities.py
+    allowed_sessions: [Practice 1, Qualifying, Sprint Qualifying, Sprint Shootout, Sprint, Race]
+    supported_years: [2022, 2023, 2024, 2025, 2026]
+    live_safe: true
+    provenance: OBSERVED
+    availability_scope: partial
+    source_gated: false
+    decision_checkpoint: null
+    uncertainty_field: null
+    causal_status: CAUSAL
+    counterfactual_safe: true
+    regulation_version: null
+    regulation_source: null
+    interaction_group: [weather]
+    consuming_models: [M07, M10, M15]
+
   - <<: *pairwise_feature_defaults
     name: relative_speed_to_ahead_trailing_mean_3_mps
     definition: Mean of current and at most two preceding same-battle relative-speed observations.

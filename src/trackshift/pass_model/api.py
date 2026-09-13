@@ -2,7 +2,7 @@
 
 Consumers import from here, never from the implementation modules directly, so
 the internals can move without breaking CP-15 (calibration), CP-16 (ensemble
-spread), CP-17 (era handling), CP-23 (ablation) and the CP-24 service routes,
+spread), CP-17 (fine-tuning), CP-23 (ablation) and the CP-24 service routes,
 all of which build on this surface.
 """
 from .artifacts import (
@@ -90,6 +90,12 @@ from .folds import (
     Fold,
     SplitPlan,
     SplitPlanError,
+    MIN_FOLD_POSITIVES,
+    EVIDENCE_FULL,
+    EVIDENCE_INTERIM,
+    EVIDENCE_REDUCED,
+    grade_evidence,
+    load_assignments,
     assert_disjoint,
     plan_splits,
     resolve_unit,
@@ -143,6 +149,12 @@ __all__ = [
     "STRUCTURAL_COLUMNS",
     "SplitPlan",
     "SplitPlanError",
+    "MIN_FOLD_POSITIVES",
+    "EVIDENCE_FULL",
+    "EVIDENCE_INTERIM",
+    "EVIDENCE_REDUCED",
+    "grade_evidence",
+    "load_assignments",
     "VariantResult",
     "aggregate",
     "aggregate_variants",

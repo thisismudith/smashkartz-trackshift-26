@@ -209,6 +209,7 @@ class PassModel:
         seed: int = DEFAULT_SEED,
         threads: int = 1,
         deterministic: bool = True,
+        overrides: Mapping[str, Any] | None = None,
     ) -> None:
         if family not in CANDIDATES:
             raise ValueError(f"unknown family {family!r}; expected one of {FAMILIES}")
@@ -220,6 +221,19 @@ class PassModel:
         self.deterministic = bool(deterministic)
         self.params = _params(family, seed=self.seed, threads=self.threads,
                               deterministic=self.deterministic)
+        # CP-17 hyperparameter search. Applied on top of CP-14's block rather
+        # than replacing it, so a search that tunes three knobs leaves the other
+        # settings -- and the seed and thread count -- exactly as the benchmark
+        # had them, and the difference measured is the knobs.
+        self.overrides = dict(overrides or {})
+        if self.overrides:
+            unknown = set(self.overrides) - set(self.params)
+            if unknown:
+                raise ValueError(
+                    f"{family}: unknown hyperparameter(s) {sorted(unknown)}; expected a "
+                    f"subset of {sorted(self.params)}. A typo here would silently "
+                    "tune nothing and report the untuned model as the winner.")
+            self.params.update(self.overrides)
         self._model: Any = None
         self._categories: dict[str, list[str]] = {}
         self._best_iteration: int | None = None
@@ -290,7 +304,14 @@ class PassModel:
         from catboost import CatBoostClassifier
         return CatBoostClassifier(**self.params)
 
-    def fit(self, X_train, y_train, X_val=None, y_val=None) -> "PassModel":
+    def fit(self, X_train, y_train, X_val=None, y_val=None,
+            sample_weight=None) -> "PassModel":
+        """Fit the family. ``sample_weight`` carries the section 41 domain weighting.
+
+        Every family here accepts per-row weights, so the weighting strategy is
+        a parameter rather than a fifth code path. Passing None is identical to
+        the unweighted fit.
+        """
         self._learn_categories(X_train)
         self._model = self._build()
         has_val = X_val is not None and y_val is not None and len(y_val) > 0
@@ -298,8 +319,17 @@ class PassModel:
         # undefined and the learner stops on the first round.
         usable_val = bool(has_val) and len(set(map(int, y_val))) > 1
 
+        weights = {} if sample_weight is None else {"sample_weight": sample_weight}
         if self.family in ("logistic", "mlp"):
-            self._model.fit(X_train, y_train)
+            if self.family == "mlp" and weights:
+                # MLPClassifier has no sample_weight. Refusing is better than
+                # silently dropping the weighting and reporting the result as a
+                # weighted fit.
+                raise ValueError(
+                    "the mlp family does not support sample_weight; the section 41 domain "
+                    "weighting cannot be applied to it. Run that strategy on the "
+                    "other families and record the omission.")
+            self._model.fit(X_train, y_train, **weights)
         elif self.family == "lightgbm":
             import inspect
 
@@ -318,25 +348,27 @@ class PassModel:
                     kwargs["eval_set"] = [(self._apply_categories(X_val), y_val)]
                 kwargs["eval_metric"] = "binary_logloss"
                 kwargs["callbacks"] = [early_stopping(100, verbose=False), log_evaluation(0)]
-            self._model.fit(self._apply_categories(X_train), y_train, **kwargs)
+            self._model.fit(self._apply_categories(X_train), y_train, **kwargs, **weights)
             self._best_iteration = getattr(self._model, "best_iteration_", None)
         elif self.family == "xgboost":
             if usable_val:
                 self._model.fit(
                     self._apply_categories(X_train), y_train,
                     eval_set=[(self._apply_categories(X_val), y_val)], verbose=False,
+                    **weights,
                 )
             else:
                 # early_stopping_rounds with no eval_set raises in XGBoost 2+.
                 self._model.set_params(early_stopping_rounds=None)
-                self._model.fit(self._apply_categories(X_train), y_train, verbose=False)
+                self._model.fit(self._apply_categories(X_train), y_train, verbose=False,
+                                **weights)
             self._best_iteration = getattr(self._model, "best_iteration", None)
         else:
             fit_kwargs: dict[str, Any] = {"cat_features": self.categorical}
             if usable_val:
                 fit_kwargs["eval_set"] = (X_val, y_val)
                 fit_kwargs["use_best_model"] = True
-            self._model.fit(X_train, y_train, **fit_kwargs)
+            self._model.fit(X_train, y_train, **fit_kwargs, **weights)
             best = getattr(self._model, "get_best_iteration", None)
             self._best_iteration = best() if callable(best) else None
         return self

@@ -57,8 +57,8 @@ Only the status values in this table are valid for this run.
 |---|---|---|
 | Run | IN_PROGRESS | Branch and exact fetched base established. |
 | A1 historical spine validation and scale | IN_PROGRESS | Audit and both smoke reruns passed. The requested full-scale run was interrupted during 2025 for account handoff; 2022-2024 lake stages completed, but aggregate C1/C7 and the terminal manifest did not. |
-| A2 M07-to-C8 `battle_id` and C9 repair | NOT_STARTED | Requires inspection/materialisation evidence from A1. |
-| A3 Tanveer CP-14 benchmark | BLOCKED_EVIDENCE | Requires historical M07 for 2022-2024 and 2025, non-British 2026 M07, exact C8 `battle_id`, persistent battle-level C9, M07 v2 audit, and British exclusion evidence. |
+| A2 M07-to-C8 `battle_id` and C9 repair | IN_PROGRESS | Causal distance-anchored join implemented and measured at 92.5% against the real C8; persistent battle-level C9 assignment script added; CP-14 fails closed without both. M07 v2 rebuild not yet run. |
+| A3 Tanveer CP-14 benchmark | BLOCKED_EVIDENCE | Blocked for the FULL acceptance run, which still requires historical M07 for 2022-2024 and 2025. An INTERIM 2026-only run is runnable now (unit `battle_id`, design `leave_one_event_out`) and is not a pass. `grade_evidence()` classifies every run and `--require-documented-split` refuses anything below FULL. |
 | A4 Tanveer CP-15 calibration/public C4 | BLOCKED_EVIDENCE | Requires a genuine CP-14 pass. |
 | B1 CP-20 full-scale revalidation | READY | Current year-partitioned store and 2026 rules must be used; absent controls remain absent. |
 | B2 CP-21/CP-22/CP-18b downstream validation | BLOCKED_EVIDENCE | Runs only if CP-20 produces a usable fit. |
@@ -186,32 +186,46 @@ Exact outputs and local artifact paths are appended per iteration below.
   `CHECKPOINTS_RISHABH.md`. Generated data, models, caches, manifests, and
   `/tmp` evidence are not staged.
 
-### Regulation-era boundary closure — 2026-09-13
+### A2 — causal C8 battle join, persistent C9, CP-14 fail-closed — 2026-09-13 (Tanveer)
 
-- Registry/final-boundary source: `src/trackshift/data/registry.py`,
-  `src/trackshift/rules/config.py`, `src/trackshift/rules/engine.py`, and
-  `config/feature_registry.yaml`. Historical DRS is accepted only for named
-  2022–2025 audit/prior consumers; it cannot enter 2026 strategy, planner,
-  simulator, API, replay, calibration, or release paths. 2026 all-zero DRS is
-  unavailable. `PROXY_HISTORICAL_DRS` is development-fixture-only.
-- Official rule source artifact: `config/rules/sources_2026.yaml`; rule config
-  version `rules-2026-common-v2-fia-iss08-iss20`. Sourced values include the
-  FIA speed-dependent normal/Overtake-active ERS-K curves and British A1–A4
-  line landmarks. Unresolved final inputs remain explicitly `UNVERIFIED` with
-  official references and block final mode: Detection Gap, generic deployment
-  budget, physical store capacity, and event-specific recharge/zone-end data.
-- Focused command:
-  `.venv/bin/python -m pytest -q tests/test_strategic_state.py
-  tests/test_registry.py tests/test_rules_config.py tests/test_rules.py
-  tests/test_pass_model.py tests/test_ensemble.py tests/test_rival_chain.py
-  tests/test_rival_cp07.py tests/test_twin.py` → `309 passed in 5.14s`.
-- No generated artifacts were staged. No C6/M07 rebuild, C4 retrain, C5
-  acceptance, final CP-10–CP-16 run, route, or replay bundle was performed
-  because the final gates are not met. Existing development-only artifact:
-  `/tmp/trackshift-chain-v-smoke.json` (p95 `3.350438 ms`, zero rule
-  violations, `final_mode_permitted: false`).
-- Status remains `BLOCKED_FINAL_MODE`; British Grand Prix remains excluded from
-  all training/calibration and reserved for held-out replay/demo/final use.
+- Scope: Track A item A2 only. The historical C1/C7 spine was not rerun or modified. CP-20, CP-21 and CP-22 were not rerun and their caveats stand unchanged.
+- **Finding that shaped the design.** C8 emits mostly single-lap episodes (25,462 of 25,877 Race/Sprint) and several per pair per lap, so a `(pair, lap)` join left 28.4% of 2026 opportunities ambiguous. `battle_segment_rows.jsonl` carries each episode's within-lap extent, and all 5,745 multi-episode `(pair, lap)` cells have **disjoint** distance spans (zero overlaps). Anchoring at the Detection Line distance resolves each opportunity to exactly one episode.
+- Measured join against the real C8 and the existing 2026 M07 table (4,970 DETECTION opportunities): `JOINED` 4,598 (92.5%), `NO_EPISODE_FOR_LAP` 335 (6.7%), `NO_EPISODE_FOR_PAIR` 37 (0.7%), `AMBIGUOUS_EPISODE` 0. Pre-distance baseline for comparison: 68.4% / 28.4% ambiguous.
+- No `battle_id` is fabricated. Unjoined rows carry `battle_join_status` and are excluded from training by the trainer, with the count and reasons recorded in the run manifest.
+- Persistent battle-level C9 assignment added (`scripts/features/build_split_assignments.py`), hashed and read back rather than re-derived. CP-14 refuses a missing assignment, one over the wrong unit, and a stale one that predates an M07 rebuild.
+- CP-14 fails closed on its split unit: `resolve_unit(require="battle_id")` refuses a missing or partially populated column instead of falling back to event. Verified against the real tree — refused with "no persistent C9 assignment ... build it with build_split_assignments.py". The event fallback survives only behind `--allow-event-split`, which stamps `REDUCED` on the manifest and report.
+- Evidence grading added: `FULL` / `INTERIM` / `REDUCED`. Only `FULL` may be quoted as a CP-14 pass. `--require-documented-split` refuses to start below `FULL`, so a run intended as the acceptance gate cannot quietly degrade when an upstream partition is missing.
+- DRS removed from modelling on owner instruction: refused by interaction group and by name token independently of the registry's `metadata_only` tag, with the pre-training audit as backstop. DRS is 2022-2025 only and has no 2026 counterpart, so it cannot transfer.
+- Pre-existing defect fixed: `load_opportunities` crashed when `--opportunities-root` pointed outside the repository.
+- On-disk M07 remains **v1** (`m07_overtake_opportunities_v1`); the code requires v2. The rebuild has not been run, so no CP-14 numbers exist yet and none are claimed.
+- Tests: 27 new across `tests/test_battle_join.py` (13) and `tests/test_cp14_split_strictness.py` (20, including grading and DRS). 93 passed across the pass-model, join and strictness modules; 142 passed across all affected files including contracts. A full `pytest -q` run was deferred at the owner's request.
+- Commands prepared, not yet run: see "A2 rebuild and CP-14 INTERIM" below.
+- Tracked changes: source, tests and documentation only. No generated data, models or artifacts staged.
+
+### A2 rebuild and CP-14 INTERIM — commands
+
+```bash
+.venv/Scripts/python.exe scripts/features/build_opportunities.py --year 2026 --jobs 10
+.venv/Scripts/python.exe scripts/features/build_split_assignments.py
+.venv/Scripts/python.exe scripts/train/train_pass_model.py --dry-run
+.venv/Scripts/python.exe scripts/train/train_pass_model.py --jobs 10 --identity-ablation
+```
+
+Expected: `battle_join.coverage` ~0.925 after step 1; `unit_coverage` ~0.925 and `status: OK` after step 2; evidence grade `INTERIM` on steps 3-4. Once 2022-2025 opportunities exist, re-run step 4 with `--require-documented-split` for the FULL acceptance run.
+
+### CP-17 rescope, CP-23 ablation — 2026-09-13 (Tanveer)
+
+- **CP-17 rescoped** from the section 41 regulation-era comparison to pass-model fine-tuning, on the owner's instruction. The era comparison needs two eras and the opportunity table holds one, so it was unrunnable as a checkpoint.
+- The era implementation is kept, not deleted: `src/trackshift/pass_model/era.py` and `scripts/train/compare_eras.py` remain as a deferred section 41 follow-up, tested, and report five of six strategies blocked with reasons. Pick it up when 2022-2025 opportunities exist.
+- CP-17 now searches hyperparameters for the family CP-14 ranked first on Brier, over the same C9 battle_id splits. Three guards: the test split is never used for selection (validation only, winner scored on test once afterwards); a gain inside the baseline's own fold-to-fold spread is reported as `KEEP_BASELINE`; and a calibration regression is flagged whatever the objective.
+- First measured CP-17 run (DETECTION, LightGBM, 12 trials, 6 folds, `--objective roc_auc`): verdict `KEEP_BASELINE`. ROC-AUC 0.72716 -> 0.73818 (+0.011 against a 0.041 fold spread, so not distinguishable from noise) while Brier went 0.13266 -> 0.14156, log loss 0.62747 -> 0.98993 and ECE 0.10655 -> 0.11932. Section 26's argument as a measurement: tuning for ranking bought an unmeasurable ordering gain and paid for it in the probabilities the planner reads.
+- **CP-23 implemented and run**: `src/trackshift/eval/ablation.py`, `scripts/evaluate/run_ablation.py`. Leave-one-group-out and add-one-in over repeated seeds, groups read from the registry, deltas reported with intervals against a seed-to-seed noise floor, decisions kept per checkpoint.
+- First measured CP-23 run (DETECTION, LightGBM, 2 seeds, 6 folds, 96/96 cells): noise floor 0.00525 Brier; `geometry` +0.00011, `tyre` +0.00217, `weather` -0.00295 — every delta inside the floor, so the new CP-13 feature groups are not yet measurably earning their place on this INTERIM split.
+- **CP-15 and CP-16 repaired**: both existed but called `plan_splits` with no `require_unit`, no persisted C9 assignment and no evidence grading, so both would have silently split on `event` rather than `battle_id`. Both now use CP-14's contract; dry runs confirm `split_unit: battle_id`, 6 folds, grade INTERIM.
+- **M07 feature groups joined (CP-13 completion)**: tyre, weather and geometry were specified by CP-13 and never joined; the builder read 14 lake columns only. The matrix went 3/4/5 -> 15/16/17 features. Registry entries added for `attacker_tyre_compound`, `defender_tyre_compound`, `attacker_team`, `defender_team`, `track_temperature`.
+- DRS excluded from modelling on owner instruction, independently of the registry's `metadata_only` tag.
+- Tests: 19 new for CP-17 tuning, 23 for section 41 era + CP-23 ablation, 12 for the M07 context join. No generated data, models or artifacts staged.
+- CP-24 (service routes and replay bundle) remains unimplemented.
 
 ## Terminal status
 

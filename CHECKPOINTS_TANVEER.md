@@ -1678,6 +1678,53 @@ Quantities and the pre-training audit rejects recurrence. CP-13 and CP-14
 remain unchecked for completion until the rebuilt non-British dataset passes
 the repaired contract.
 
+### A2 — the causal C8 `battle_id` join
+
+M07 previously wrote `battle_id=None` on every row, which left CP-14 with no
+split unit. The join is now made in `trackshift.features.battle_join`, and the
+part worth recording is why matching on the lap is not enough.
+
+C8 emits mostly **single-lap** episodes — 25,462 of 25,877 Race/Sprint episodes
+— and routinely emits *several* for one pair on one lap, because it closes an
+episode when the pair separates and opens a new one when it re-forms. Matching
+on `(pair, lap)` alone therefore left **28.4%** of 2026 opportunities ambiguous:
+
+| Key | JOINED | AMBIGUOUS | No episode |
+|---|---|---|---|
+| pair + lap | 68.4% | 28.4% | 3.2% |
+| pair + lap + **distance** | **92.5%** | **0%** | 7.4% |
+
+The disambiguator is distance. `battle_segment_rows.jsonl` carries each
+episode's within-lap extent, and on the real 2026 data **all 5,745
+multi-episode (pair, lap) cells have disjoint distance spans — zero overlaps**.
+An opportunity anchored at its Detection Line distance therefore resolves to
+exactly one episode, exactly, with no grouping and no guessing.
+
+Two rules hold the join honest:
+
+- **No `battle_id` is ever invented.** Every opportunity resolves to one episode
+  or records why it did not (`battle_join_status`: `NO_EPISODE_FOR_LAP`,
+  `NO_EPISODE_FOR_PAIR`, `NO_DEFENDER_CODE`, `AMBIGUOUS_EPISODE`). A fabricated
+  id would place unrelated opportunities in one C9 split group, which is the
+  precise leak the unit exists to prevent.
+- **Unjoined rows are excluded from training, never relabelled.** The ~7.5%
+  with no C8 episode are dropped by the trainer with their count and reasons
+  recorded in the manifest. C9 refuses a partially populated unit outright, so
+  the alternatives were to drop them or to lower the unit, and lowering the unit
+  is what CP-14 forbids.
+
+C8 names both cars by driver code; M07 knows its defender only by car number,
+because that is what the telemetry reports. The number-to-code map is built per
+`(year, event, session)` from the lake, which carries both — per session because
+car numbers are reused between seasons, and a cross-season map would attach an
+opportunity to another year's driver.
+
+**The persistent C9 assignment** is built once by
+`scripts/features/build_split_assignments.py`, hashed, and read back by CP-14
+rather than re-derived per run. Two runs that re-derive can disagree with
+nothing in the artifacts to say why. The planner refuses a missing assignment,
+one built over the wrong unit, and a stale one that predates an M07 rebuild.
+
 The base rate is the gate that carries information. A definition that counted
 hopeless approaches would sit near 2%, and one that only counted completed
 passes near 70%. Landing mid-band is what says the opportunity is being defined
@@ -1808,12 +1855,86 @@ PR-AUC           <- matters, the classes are imbalanced
 | ROC-AUC > 0.95 | Leakage — almost certainly a post-outcome feature | Check the CP-13 leakage test; check `pass_attempted` and `outcome_distance_m` are excluded; check the split is by `battle_id` |
 | All models ≈ base rate | Features carry no signal, or the label is noise | Verify the label by hand on 20 opportunities. Then check `gap_at_checkpoint` alone — it should have real signal on its own. |
 | Trees hugely beat logistic | Strong non-linearity, or one dominant feature | Inspect feature importance; if one feature dominates, confirm it is legitimately available at that checkpoint |
-| Validation good, 2026 test poor | Regulation-era shift — this is exactly what §41 predicts | This is CP-17's job, not a bug. Record the gap; it motivates era handling. |
+| Validation good, 2026 test poor | Regulation-era shift — this is exactly what §41 predicts | Not a bug. Record the gap; it motivates the deferred §41 era handling in `pass_model/era.py`. |
 | Calibration poor but AUC fine | Tree probabilities are typically miscalibrated | Expected — that is what CP-15 exists for. Do not tune it away here. |
 
 ### Deliverables
 
 `src/trackshift/pass_model/candidates.py`, `scripts/train/train_pass_model.py`, `artifacts/models/pass/<version>/` per checkpoint with `feature_schema.json` and `manifest.json`, `artifacts/validation/pass_model_report.md`.
+
+### Split methodology and evidence grades
+
+CP-14's acceptance gate is not "a benchmark ran". It is a benchmark run on the
+documented split. Three conditions must hold, and they fail **independently**:
+
+1. the split unit is `battle_id`,
+2. the design is the `year_table`,
+3. the years that table names are actually present.
+
+A run can be perfectly leakage-safe and still not be a CP-14 pass, because the
+historical seasons do not exist yet. Conflating those two states is the failure
+this section exists to prevent, so `grade_evidence()` classifies every run and
+the grade travels into the manifest, the gate list and the report header:
+
+| Grade | Condition | May be quoted as a CP-14 pass |
+|---|---|---|
+| `FULL` | Documented split: `battle_id` unit, `year_table` design, all of 2022–2025 present | **Yes** |
+| `INTERIM` | `battle_id` unit, but the year table was unavailable (or missing training years) | No |
+| `REDUCED` | Split unit coarser than `battle_id` (`--allow-event-split`) | No |
+
+An `INTERIM` run is worth doing — it exercises the whole pipeline before the
+historical lake lands, and its numbers are real measurements on a leakage-safe
+split. What it does not do is answer CP-14's question about generalising across
+regulation eras, because with one season there is no era axis to generalise
+over.
+
+**Two-stage plan, and the second stage is gated on Owner A's C1/C7 spine:**
+
+*Stage 1 — now (2026 only).* Design resolves to `leave_one_event_out`, unit
+stays `battle_id`. Grades `INTERIM`. Records the pipeline, the feature audit,
+the identity ablation and the per-event variance.
+
+*Stage 2 — once 2022–2025 opportunities exist.* Re-run with
+`--require-documented-split`, which refuses to start unless the run would grade
+`FULL`. That flag exists so a run intended as the acceptance gate cannot quietly
+degrade to `INTERIM` when an upstream partition is missing, which is exactly how
+a blocked checkpoint gets written up as a passing one.
+
+**The split unit never degrades.** `--allow-event-split` exists for callers who
+genuinely want the coarser unit, and stamps `REDUCED` on everything it touches.
+CP-14 itself always runs with `require_unit="battle_id"` against a *persisted*
+C9 assignment, so two runs cannot silently disagree about which battle went
+where.
+
+### Minimum fold support
+
+An event needs at least `MIN_FOLD_POSITIVES` (10) positive labels before it may
+serve as a test or validation fold. Below that it is **kept in training** and
+excluded from the fold rotation, with the exclusion recorded in the plan notes.
+
+This is not a tuning knob, it is a correctness guard, and the real data shows
+why. Monaco 2026 yields **63 opportunities with 1 positive**. Scored as a test
+fold it produces a ROC-AUC and a PR-AUC computed against a single positive —
+noise presented as measurement. Used as a validation fold, it early-stops
+LightGBM and XGBoost against one positive, which halts essentially at random.
+Either would then feed CP-14's "Brier std across folds < 0.05" gate, letting one
+unmeasurable fold decide whether the model looks like it memorised circuits.
+
+Keeping the thin event in training rather than dropping it is the deliberate
+half: its rows are perfectly good training data, and only its *metrics* are
+meaningless. On the 2026 data this takes the rotation from 7 folds to 6.
+
+If fewer than three scorable events remain, the design raises rather than
+building a rotation whose numbers could not be read.
+
+### DRS is not a modelling parameter
+
+`historical_drs_*` are refused from every feature matrix, independently of the
+registry's `metadata_only` tag, by interaction group and by name token, with the
+pre-training audit as a backstop. DRS exists only in 2022–2025 and has no 2026
+counterpart; the 2026 Overtake mechanism it would stand in for works
+differently. A model that leans on it learns the DRS era and then carries that
+lesson into a season where the mechanism does not exist.
 
 ---
 
@@ -1899,43 +2020,97 @@ Keep members in the artifact so the API can recompute; they are small.
 
 ---
 
-# CP-17 — Regulation-era handling (M13, pass side)
+# CP-17 — Pass-model fine-tuning (M13)
 
-**Goal:** decide, by evaluation, how 2022–2025 DRS-era data should inform the 2026 pass model (§41).
+**Goal:** take whichever model CP-14/CP-15/CP-16 selected and tune it on the
+2026 dataset, then report honestly whether the tuning bought anything.
 
-**Depends on:** CP-14, CP-15.
+**Depends on:** CP-14, and CP-15/CP-16 where a calibrated or ensembled form is
+the one being tuned.
 
-### The five strategies to compare (§41)
+> **Scope change.** CP-17 previously specified the §41 regulation-era
+> comparison — five strategies for making 2022–2025 DRS-era data inform the
+> 2026 model. That comparison needs two eras and the opportunity table holds
+> one, so it was unrunnable and is deferred as a §41 follow-up rather than a
+> checkpoint. The implementation survives in
+> `src/trackshift/pass_model/era.py` and `scripts/train/compare_eras.py`, which
+> report five of six strategies blocked with reasons; pick it up when the
+> historical seasons land.
 
-Regulation-version drift is evaluated separately from the 2022 to 2025 versus 2026 era shift. Never mix rows encoded under different 2026 rule snapshots without their configuration version.
+### The search
 
-| Strategy | Implementation |
+One family per checkpoint, chosen from CP-14's benchmark on Brier (§26) unless
+`--family` overrides it. Grids are deliberately small — a few thousand
+opportunities over six folds gives a per-configuration standard error
+comparable to the gap between neighbouring settings, so a large grid mostly
+selects noise and reports it as a discovery.
+
+| Family | Tuned |
 |---|---|
-| A. Era feature | One model, `regulation_era` as a categorical feature |
-| B. Historical pretraining | Fit on 2022–2025, then continue training on 2026 |
-| C. 2026 recalibration | Historical model, calibrator refit on 2026 only |
-| D. Domain weighting | Sample weights: 2026 rows weighted 3–5×, historical 1× |
-| E. Separate models | Independent historical and 2026 models, compared |
+| LightGBM | `num_leaves`, `learning_rate`, `min_child_samples`, `reg_lambda` |
+| XGBoost | `max_depth`, `learning_rate`, `min_child_weight`, `reg_lambda` |
+| CatBoost | `depth`, `learning_rate`, `l2_leaf_reg` |
+| Logistic | `C` |
+| MLP | `hidden_layer_sizes`, `alpha`, `learning_rate_init` |
 
-Evaluate all five on 2026-excluding-BGP with the same splits and metrics.
+Trial 0 is always CP-14's untuned block, so every search has a floor to beat.
+
+### Three rules that keep the result honest
+
+**The test split is never tuned on.** 2026-excluding-BGP is CP-14's test set.
+Selecting hyperparameters against it turns the reported test score into a
+training score. Selection happens on each fold's *validation* split; the
+baseline and the winner are scored on the test split exactly once, afterwards.
+
+**A gain inside fold-to-fold noise is not a gain.** A search over two dozen
+configurations always produces a leader. Whether that leader is distinguishable
+from the untuned model is a separate question, so the winner must beat the
+baseline by more than the baseline's own fold-to-fold standard deviation before
+the verdict is `ADOPT_TUNED` rather than `KEEP_BASELINE`.
+
+**ROC-AUC does not select alone.** §26 is explicit: the DP consumes
+probabilities, not classifications, so a model with slightly lower ROC-AUC and
+materially better calibration wins. `--objective` defaults to `roc_auc` because
+that is often what is asked for, but every metric travels with every result and
+a calibration regression is flagged in the report.
 
 ### ✅ Check
 
-- All five are actually run and reported — §34 forbids picking on sophistication
-- The winner is selected on **calibration first** (§26)
-- The 2026-only model is included as a baseline: if it beats everything, historical data is not helping and you should say so plainly
-- Sample-size honesty: 2026-only training data is much smaller. Report N for each strategy.
+- Trial 0 (CP-14's parameters) is present in every ranking
+- The winner's test score is computed once, after selection, never during it
+- `gain_is_real` is reported against the baseline's fold spread, not asserted
+- Every objective's value is shown for baseline and winner, not just the tuned one
+- A calibration regression under a ranking objective raises a visible warning
+- Reruns with the same seed reproduce the same trials
 
 ### ⚠️ If output is bad
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| Historical data always hurts | The eras genuinely differ — DRS ≠ Overtake, exactly as §41 warns | A legitimate finding. Use 2026-only, and record it in the report. Do not force historical data in. |
-| Era feature does nothing | Trees already split on year-correlated features | Check for a proxy leak (a feature that encodes the year, like a circuit only raced in one era) |
+| Every verdict is `KEEP_BASELINE` | CP-14's block is already reasonable for a small tabular problem, which is the common case | A legitimate finding. Record it; do not widen the grid until it finds something. |
+| ROC-AUC rises, Brier and log loss worsen | Chasing ranking at the cost of probability quality — exactly what §26 warns about | The planner reads probabilities. Re-run with `--objective brier` and compare. |
+| Winner differs on every rerun | The gains are inside noise and the search is selecting variance | Raise the fold count or accept the baseline |
+
+### Measured on the first INTERIM run
+
+DETECTION, LightGBM, 12 trials over 6 folds, `--objective roc_auc`:
+
+| | ROC-AUC | PR-AUC | Brier | Log loss | ECE |
+|---|---:|---:|---:|---:|---:|
+| baseline | 0.72716 | 0.36686 | **0.13266** | **0.62747** | **0.10655** |
+| best | **0.73818** | **0.39273** | 0.14156 | 0.98993 | 0.11932 |
+
+Verdict `KEEP_BASELINE`: ROC-AUC rose by 0.011 against a fold-to-fold spread of
+0.041, so the gain is not distinguishable from noise — while log loss worsened
+by 58% and Brier and ECE both regressed. This is §26's argument as a
+measurement rather than a principle: tuning for ranking bought an unmeasurable
+ordering gain and paid for it in the probabilities the planner actually reads.
 
 ### Deliverables
 
-`src/trackshift/pass_model/era.py`, comparison table in `artifacts/validation/pass_model_report.md`, selected strategy recorded in the manifest.
+`src/trackshift/pass_model/tuning.py`, `scripts/train/tune_pass_model.py`,
+`artifacts/validation/tuning_report.md`, selected configuration recorded in the
+manifest.
 
 ---
 
