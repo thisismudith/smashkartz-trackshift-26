@@ -514,7 +514,7 @@ throttle_pct
 brake_on
 
 aero_or_drs_raw
-drs_open_observed
+historical_drs_open              # 2022–2025 only; never a 2026 Overtake input
 
 x_m
 y_m
@@ -555,7 +555,12 @@ wind_direction_deg
 
 Use `pit_state` rather than only a Boolean. Its normalized values are `ON_TRACK`, `PIT_IN`, `PIT_LANE`, `PIT_OUT`, and `UNKNOWN`. `pit_stop_duration_s_offline` is retained for retrospective analysis and labels only.
 
-`drs_open_observed` may be populated only after the source-specific meaning of the raw DRS/aero channel has been verified. It must otherwise remain unavailable.
+`aero_or_drs_raw` is retained as an observed source-audit field, not a
+strategy feature. `historical_drs_open` may be populated only for 2022–2025
+after its source-specific meaning has been verified. For 2026 it is always
+null/unavailable: an all-zero raw channel does not mean Overtake is inactive.
+No raw DRS field may select a 2026 envelope, arm Overtake, define a legal
+action, or appear in a 2026 live feature vector.
 
 Fuel and ERS state are high-value context, but are not public observations in the current sources. The lake may contain the following estimates only after the energy twin has produced them:
 
@@ -732,6 +737,11 @@ ers_harvest_power_est_kw
 ```
 
 For 2022 to 2025, DRS values are historical covariates only. For 2026, derive `overtake_eligible` and `overtake_state` exclusively through the rule engine and FIA event configuration, never from a raw DRS channel. Fuel and ERS estimates must be causal, uncertainty-aware, and tagged `INFERRED` or `SIMULATED`.
+
+`PROXY_HISTORICAL_DRS` may exist only as a versioned development-fixture
+provenance for tentative geometry. It must be rejected by final C3/C4/C5,
+M22/M24/M26, route, and replay paths; it can never be silently promoted to a
+2026 rule, Overtake feature, or active-aero observation.
 
 Do not assume raw `x`, `y`, or `z` coordinates generalize across circuits. Prefer geometry and track-relative quantities derived from them. A candidate feature group earns inclusion only through leakage-safe, held-out-event ablation with the same availability it will have at deployment.
 
@@ -1179,6 +1189,11 @@ Historical 2022 to 2025 opportunities are DRS-era priors.
 2026 opportunities are the current-regulation calibration domain.
 
 Do not claim historical DRS equals 2026 Overtake.
+
+Do not feed `historical_drs_*`, a raw `drs` value, or a
+`PROXY_HISTORICAL_DRS` zone flag into a 2026 opportunity model. The only
+permitted cross-era use is an explicitly evaluated historical prior or
+pretraining strategy with a 2026-only held-out evaluation and recalibration.
 
 ---
 
@@ -2135,6 +2150,9 @@ Potential approaches include:
 - 2026 recalibration,
 - domain weighting,
 - separate historical and 2026 models followed by comparison.
+
+The default safe choice is the 2026-only model whenever that comparison is not
+available. A historical DRS proxy is not missing-data imputation for 2026.
 
 ---
 

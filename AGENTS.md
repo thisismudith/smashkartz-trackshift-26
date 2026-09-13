@@ -370,7 +370,10 @@ Notes:
 - `speed` is km/h.
 - `throttle` is percentage-like 0 to 100 telemetry.
 - `brake` is effectively binary in this dataset.
-- `drs` is a historical/public channel. Do not automatically equate it to the 2026 active-aero system.
+- `drs` is a raw historical/public channel. Retain it for 2022–2025 audit and
+  explicitly named historical covariates only; it is not a 2026 strategic,
+  legality, active-aero, or deployment signal. The observed all-zero 2026
+  channel must remain unavailable rather than being interpreted as "closed".
 - `DriverAhead` identifies the car ahead where available.
 - `DistanceToDriverAhead` is a spatial gap, not automatically the official eligibility time gap.
 - `acc_x`, `acc_y`, `acc_z` are derived channels in the TracingInsights extraction pipeline, not necessarily raw IMU values.
@@ -568,7 +571,7 @@ engine_rpm
 gear
 throttle_pct
 brake_on
-drs_open
+historical_drs_open  # 2022–2025 only; never populated for 2026
 x_m
 y_m
 z_m
@@ -1027,7 +1030,8 @@ full_throttle_return_distance_m
 mean_gradient
 elevation_change_m
 
-drs_or_aero_fraction
+historical_drs_fraction  # 2022–2025 observed-only
+aero_state_fraction      # 2026 only when derived from the rule engine; otherwise unavailable
 ```
 
 Additional physics-model parameters later include:
@@ -1188,6 +1192,11 @@ Use 2022 to 2025 DRS-era overtaking data as a historical prior.
 Do not claim those years are physically identical to 2026.
 
 The system must say explicitly that the prior is DRS-era.
+
+Historical DRS values, including any DRS-zone proxy, must not be supplied to
+a 2026 pass feature vector, Overtake state, power-envelope selection, or
+legality mask. A proxy may support a labelled development fixture only and
+must block final calibration, replay, and release claims.
 
 ## 17.2 2026 calibration
 
@@ -1653,6 +1662,10 @@ Attach year/regime context to extracted examples.
 
 Historical data can provide priors, but it is not ground truth for 2026 energy-system physics.
 
+The raw DRS channel stays in the lake for auditability; deleting it would make
+the era distinction impossible to verify. Its use is intentionally confined to
+the historical domain and must be visible in artifact manifests and UI labels.
+
 ---
 
 # 30. ACCEPTANCE TARGETS
@@ -1772,7 +1785,10 @@ Do not assume "4 MJ" means battery capacity or per-lap energy without source ver
 
 Public telemetry may continue to expose a field named `drs`.
 
-Do not interpret its name as proof that it semantically represents every aspect of the 2026 active-aero system.
+Do not interpret its name as proof that it semantically represents every aspect of the 2026 active-aero system. In particular, an all-zero 2026 field is
+unavailable, not evidence that the car is in a non-Overtake mode. Do not use a
+historical DRS activation zone as a 2026 final configuration; only a sourced
+2026 event rule may define Detection/Activation geometry in final mode.
 
 ## 34.3 Detection / eligibility lines
 

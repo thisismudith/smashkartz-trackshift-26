@@ -401,6 +401,9 @@ data.
 ### Acceptance gates
 
 - Historical DRS is never supplied as 2026 Overtake state.
+- A raw DRS value, `historical_drs_*`, or `PROXY_HISTORICAL_DRS` geometry
+  marker is never admitted to a 2026 C10 feature vector, Chain V state, or
+  final-mode planner/simulator/replay path.
 - Results report N and rule configuration by evaluation split.
 - If 2026-only wins, retain it and state that history did not help.
 
@@ -415,6 +418,10 @@ and reports N and rule-configuration fields by strategy. The current CP-05
 corpus supplies 104,263 non-British 2026 M08 rows, but no historical M08
 partitions for 2022–2025 are materialised. CP-08 therefore remains unchecked;
 no regulation-era comparison is claimed from 2026-only data.
+
+The safe interim policy is 2026-only C10 inference. Historical DRS remains in
+the historical audit domain and cannot be used to fill a missing 2026 tactical
+state or rule field.
 
 ---
 
