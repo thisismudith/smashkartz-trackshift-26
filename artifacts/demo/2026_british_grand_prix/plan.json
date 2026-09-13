@@ -1,0 +1,885 @@
+{
+  "alternatives": [
+    {
+      "action": {
+        "applicable_mode": "normal",
+        "cap_kw": 350.0,
+        "delivered_power_kw": 0.0,
+        "delta_e_mj": null,
+        "deploy_level": 0.0,
+        "lift_amount": 0.0
+      },
+      "expected_value": null,
+      "regret": null
+    },
+    {
+      "action": {
+        "applicable_mode": "normal",
+        "cap_kw": 350.0,
+        "delivered_power_kw": 0.0,
+        "delta_e_mj": null,
+        "deploy_level": 0.0,
+        "lift_amount": 0.25
+      },
+      "expected_value": null,
+      "regret": null
+    },
+    {
+      "action": {
+        "applicable_mode": "normal",
+        "cap_kw": 350.0,
+        "delivered_power_kw": 0.0,
+        "delta_e_mj": null,
+        "deploy_level": 0.0,
+        "lift_amount": 0.5
+      },
+      "expected_value": null,
+      "regret": null
+    },
+    {
+      "action": {
+        "applicable_mode": "normal",
+        "cap_kw": 350.0,
+        "delivered_power_kw": 87.5,
+        "delta_e_mj": null,
+        "deploy_level": 0.25,
+        "lift_amount": 0.0
+      },
+      "expected_value": null,
+      "regret": null
+    },
+    {
+      "action": {
+        "applicable_mode": "normal",
+        "cap_kw": 350.0,
+        "delivered_power_kw": 87.5,
+        "delta_e_mj": null,
+        "deploy_level": 0.25,
+        "lift_amount": 0.25
+      },
+      "expected_value": null,
+      "regret": null
+    },
+    {
+      "action": {
+        "applicable_mode": "normal",
+        "cap_kw": 350.0,
+        "delivered_power_kw": 87.5,
+        "delta_e_mj": null,
+        "deploy_level": 0.25,
+        "lift_amount": 0.5
+      },
+      "expected_value": null,
+      "regret": null
+    },
+    {
+      "action": {
+        "applicable_mode": "normal",
+        "cap_kw": 350.0,
+        "delivered_power_kw": 175.0,
+        "delta_e_mj": null,
+        "deploy_level": 0.5,
+        "lift_amount": 0.0
+      },
+      "expected_value": null,
+      "regret": null
+    },
+    {
+      "action": {
+        "applicable_mode": "normal",
+        "cap_kw": 350.0,
+        "delivered_power_kw": 175.0,
+        "delta_e_mj": null,
+        "deploy_level": 0.5,
+        "lift_amount": 0.25
+      },
+      "expected_value": null,
+      "regret": null
+    },
+    {
+      "action": {
+        "applicable_mode": "normal",
+        "cap_kw": 350.0,
+        "delivered_power_kw": 175.0,
+        "delta_e_mj": null,
+        "deploy_level": 0.5,
+        "lift_amount": 0.5
+      },
+      "expected_value": null,
+      "regret": null
+    },
+    {
+      "action": {
+        "applicable_mode": "normal",
+        "cap_kw": 350.0,
+        "delivered_power_kw": 262.5,
+        "delta_e_mj": null,
+        "deploy_level": 0.75,
+        "lift_amount": 0.0
+      },
+      "expected_value": null,
+      "regret": null
+    },
+    {
+      "action": {
+        "applicable_mode": "normal",
+        "cap_kw": 350.0,
+        "delivered_power_kw": 262.5,
+        "delta_e_mj": null,
+        "deploy_level": 0.75,
+        "lift_amount": 0.25
+      },
+      "expected_value": null,
+      "regret": null
+    },
+    {
+      "action": {
+        "applicable_mode": "normal",
+        "cap_kw": 350.0,
+        "delivered_power_kw": 262.5,
+        "delta_e_mj": null,
+        "deploy_level": 0.75,
+        "lift_amount": 0.5
+      },
+      "expected_value": null,
+      "regret": null
+    },
+    {
+      "action": {
+        "applicable_mode": "normal",
+        "cap_kw": 350.0,
+        "delivered_power_kw": 350.0,
+        "delta_e_mj": null,
+        "deploy_level": 1.0,
+        "lift_amount": 0.0
+      },
+      "expected_value": null,
+      "regret": null
+    },
+    {
+      "action": {
+        "applicable_mode": "normal",
+        "cap_kw": 350.0,
+        "delivered_power_kw": 350.0,
+        "delta_e_mj": null,
+        "deploy_level": 1.0,
+        "lift_amount": 0.25
+      },
+      "expected_value": null,
+      "regret": null
+    },
+    {
+      "action": {
+        "applicable_mode": "normal",
+        "cap_kw": 350.0,
+        "delivered_power_kw": 350.0,
+        "delta_e_mj": null,
+        "deploy_level": 1.0,
+        "lift_amount": 0.5
+      },
+      "expected_value": null,
+      "regret": null
+    }
+  ],
+  "baselines": {
+    "baselines": {
+      "beam_dp": [
+        {
+          "applicable_mode": "normal",
+          "cap_kw": 350.0,
+          "delivered_power_kw": 175.0,
+          "delta_e_mj": null,
+          "deploy_level": 0.5,
+          "lift_amount": 0.25
+        },
+        {
+          "applicable_mode": "normal",
+          "cap_kw": 200.0,
+          "delivered_power_kw": 100.0,
+          "delta_e_mj": null,
+          "deploy_level": 0.5,
+          "lift_amount": 0.25
+        }
+      ],
+      "dp": [
+        {
+          "applicable_mode": "normal",
+          "cap_kw": 350.0,
+          "delivered_power_kw": 175.0,
+          "delta_e_mj": null,
+          "deploy_level": 0.5,
+          "lift_amount": 0.25
+        },
+        {
+          "applicable_mode": "normal",
+          "cap_kw": 200.0,
+          "delivered_power_kw": 100.0,
+          "delta_e_mj": null,
+          "deploy_level": 0.5,
+          "lift_amount": 0.25
+        }
+      ],
+      "greedy_attack": [
+        {
+          "applicable_mode": "normal",
+          "cap_kw": 350.0,
+          "delivered_power_kw": 350.0,
+          "delta_e_mj": null,
+          "deploy_level": 1.0,
+          "lift_amount": 0.0
+        },
+        {
+          "applicable_mode": "normal",
+          "cap_kw": 200.0,
+          "delivered_power_kw": 200.0,
+          "delta_e_mj": null,
+          "deploy_level": 1.0,
+          "lift_amount": 0.0
+        }
+      ],
+      "lap_time_only": [
+        {
+          "applicable_mode": "normal",
+          "cap_kw": 350.0,
+          "delivered_power_kw": 350.0,
+          "delta_e_mj": null,
+          "deploy_level": 1.0,
+          "lift_amount": 0.0
+        },
+        {
+          "applicable_mode": "normal",
+          "cap_kw": 200.0,
+          "delivered_power_kw": 200.0,
+          "delta_e_mj": null,
+          "deploy_level": 1.0,
+          "lift_amount": 0.0
+        }
+      ],
+      "longest_straight": [
+        {
+          "applicable_mode": "normal",
+          "cap_kw": 350.0,
+          "delivered_power_kw": 350.0,
+          "delta_e_mj": null,
+          "deploy_level": 1.0,
+          "lift_amount": 0.0
+        },
+        {
+          "applicable_mode": "normal",
+          "cap_kw": 200.0,
+          "delivered_power_kw": 0.0,
+          "delta_e_mj": null,
+          "deploy_level": 0.0,
+          "lift_amount": 0.0
+        }
+      ],
+      "oracle_rival_state": [
+        {
+          "applicable_mode": "normal",
+          "cap_kw": 350.0,
+          "delivered_power_kw": 350.0,
+          "delta_e_mj": null,
+          "deploy_level": 1.0,
+          "deployable": false,
+          "lift_amount": 0.0,
+          "upper_bound_only": true
+        },
+        {
+          "applicable_mode": "normal",
+          "cap_kw": 200.0,
+          "delivered_power_kw": 200.0,
+          "delta_e_mj": null,
+          "deploy_level": 1.0,
+          "deployable": false,
+          "lift_amount": 0.0,
+          "upper_bound_only": true
+        }
+      ]
+    },
+    "excluded_actions": {
+      "0": [],
+      "1": []
+    },
+    "names": [
+      "greedy_attack",
+      "longest_straight",
+      "lap_time_only",
+      "dp",
+      "beam_dp",
+      "oracle_rival_state"
+    ],
+    "oracle_note": "oracle_rival_state is an upper bound and is never deployable",
+    "provenance": "RULE",
+    "rule_violations": 0,
+    "status": "COMPLETE"
+  },
+  "decision": {
+    "alternatives": [
+      {
+        "action": {
+          "applicable_mode": "normal",
+          "cap_kw": 350.0,
+          "delivered_power_kw": 0.0,
+          "delta_e_mj": null,
+          "deploy_level": 0.0,
+          "lift_amount": 0.0
+        },
+        "expected_value": null,
+        "regret": null
+      },
+      {
+        "action": {
+          "applicable_mode": "normal",
+          "cap_kw": 350.0,
+          "delivered_power_kw": 0.0,
+          "delta_e_mj": null,
+          "deploy_level": 0.0,
+          "lift_amount": 0.25
+        },
+        "expected_value": null,
+        "regret": null
+      },
+      {
+        "action": {
+          "applicable_mode": "normal",
+          "cap_kw": 350.0,
+          "delivered_power_kw": 0.0,
+          "delta_e_mj": null,
+          "deploy_level": 0.0,
+          "lift_amount": 0.5
+        },
+        "expected_value": null,
+        "regret": null
+      },
+      {
+        "action": {
+          "applicable_mode": "normal",
+          "cap_kw": 350.0,
+          "delivered_power_kw": 87.5,
+          "delta_e_mj": null,
+          "deploy_level": 0.25,
+          "lift_amount": 0.0
+        },
+        "expected_value": null,
+        "regret": null
+      },
+      {
+        "action": {
+          "applicable_mode": "normal",
+          "cap_kw": 350.0,
+          "delivered_power_kw": 87.5,
+          "delta_e_mj": null,
+          "deploy_level": 0.25,
+          "lift_amount": 0.25
+        },
+        "expected_value": null,
+        "regret": null
+      },
+      {
+        "action": {
+          "applicable_mode": "normal",
+          "cap_kw": 350.0,
+          "delivered_power_kw": 87.5,
+          "delta_e_mj": null,
+          "deploy_level": 0.25,
+          "lift_amount": 0.5
+        },
+        "expected_value": null,
+        "regret": null
+      },
+      {
+        "action": {
+          "applicable_mode": "normal",
+          "cap_kw": 350.0,
+          "delivered_power_kw": 175.0,
+          "delta_e_mj": null,
+          "deploy_level": 0.5,
+          "lift_amount": 0.0
+        },
+        "expected_value": null,
+        "regret": null
+      },
+      {
+        "action": {
+          "applicable_mode": "normal",
+          "cap_kw": 350.0,
+          "delivered_power_kw": 175.0,
+          "delta_e_mj": null,
+          "deploy_level": 0.5,
+          "lift_amount": 0.25
+        },
+        "expected_value": null,
+        "regret": null
+      },
+      {
+        "action": {
+          "applicable_mode": "normal",
+          "cap_kw": 350.0,
+          "delivered_power_kw": 175.0,
+          "delta_e_mj": null,
+          "deploy_level": 0.5,
+          "lift_amount": 0.5
+        },
+        "expected_value": null,
+        "regret": null
+      },
+      {
+        "action": {
+          "applicable_mode": "normal",
+          "cap_kw": 350.0,
+          "delivered_power_kw": 262.5,
+          "delta_e_mj": null,
+          "deploy_level": 0.75,
+          "lift_amount": 0.0
+        },
+        "expected_value": null,
+        "regret": null
+      },
+      {
+        "action": {
+          "applicable_mode": "normal",
+          "cap_kw": 350.0,
+          "delivered_power_kw": 262.5,
+          "delta_e_mj": null,
+          "deploy_level": 0.75,
+          "lift_amount": 0.25
+        },
+        "expected_value": null,
+        "regret": null
+      },
+      {
+        "action": {
+          "applicable_mode": "normal",
+          "cap_kw": 350.0,
+          "delivered_power_kw": 262.5,
+          "delta_e_mj": null,
+          "deploy_level": 0.75,
+          "lift_amount": 0.5
+        },
+        "expected_value": null,
+        "regret": null
+      },
+      {
+        "action": {
+          "applicable_mode": "normal",
+          "cap_kw": 350.0,
+          "delivered_power_kw": 350.0,
+          "delta_e_mj": null,
+          "deploy_level": 1.0,
+          "lift_amount": 0.0
+        },
+        "expected_value": null,
+        "regret": null
+      },
+      {
+        "action": {
+          "applicable_mode": "normal",
+          "cap_kw": 350.0,
+          "delivered_power_kw": 350.0,
+          "delta_e_mj": null,
+          "deploy_level": 1.0,
+          "lift_amount": 0.25
+        },
+        "expected_value": null,
+        "regret": null
+      },
+      {
+        "action": {
+          "applicable_mode": "normal",
+          "cap_kw": 350.0,
+          "delivered_power_kw": 350.0,
+          "delta_e_mj": null,
+          "deploy_level": 1.0,
+          "lift_amount": 0.5
+        },
+        "expected_value": null,
+        "regret": null
+      }
+    ],
+    "decision_stability": 1.0,
+    "dominant_mechanism": "ENERGY_POSITION_VALUE",
+    "primary_constraint": "C3_LEGAL_ACTION_SET"
+  },
+  "dp": {
+    "excluded_actions": {
+      "0:2.400:0.700:0": [],
+      "1:1.800:0.700:0": [],
+      "1:1.900:0.700:0": [],
+      "1:2.100:0.700:0": [],
+      "1:2.200:0.700:0": [],
+      "1:2.300:0.700:0": [],
+      "1:2.400:0.700:0": []
+    },
+    "metadata": {
+      "c3_public_boundary": true,
+      "config_path": "C:\\Trackshift\\config\\value\\dp_development.yaml",
+      "config_version": "m22_dp_development_config_v1",
+      "dependencies": {
+        "C3": "PUBLIC",
+        "C4": "STUB_RESPONSE",
+        "C5": "PUBLIC_TRANSITION"
+      },
+      "development_only": true,
+      "excluded_actions_are_audit_only": true,
+      "grid": {
+        "eligibility": [
+          0,
+          1
+        ],
+        "energy_mj": [
+          0.0,
+          0.1,
+          0.2,
+          0.3,
+          0.4,
+          0.5,
+          0.6,
+          0.7,
+          0.8,
+          0.9,
+          1.0,
+          1.1,
+          1.2,
+          1.3,
+          1.4,
+          1.5,
+          1.6,
+          1.7,
+          1.8,
+          1.9,
+          2.0,
+          2.1,
+          2.2,
+          2.3,
+          2.4,
+          2.5,
+          2.6,
+          2.7,
+          2.8,
+          2.9,
+          3.0,
+          3.1,
+          3.2,
+          3.3,
+          3.4,
+          3.5,
+          3.6,
+          3.7,
+          3.8,
+          3.9,
+          4.0
+        ],
+        "gap_s": [
+          -3.0,
+          -2.9,
+          -2.8,
+          -2.7,
+          -2.6,
+          -2.5,
+          -2.4,
+          -2.3,
+          -2.2,
+          -2.1,
+          -2.0,
+          -1.9,
+          -1.8,
+          -1.7,
+          -1.6,
+          -1.5,
+          -1.4,
+          -1.3,
+          -1.2,
+          -1.1,
+          -1.0,
+          -0.9,
+          -0.8,
+          -0.7,
+          -0.6,
+          -0.5,
+          -0.4,
+          -0.3,
+          -0.2,
+          -0.1,
+          0.0,
+          0.1,
+          0.2,
+          0.3,
+          0.4,
+          0.5,
+          0.6,
+          0.7,
+          0.8,
+          0.9,
+          1.0,
+          1.1,
+          1.2,
+          1.3,
+          1.4,
+          1.5,
+          1.6,
+          1.7,
+          1.8,
+          1.9,
+          2.0,
+          2.1,
+          2.2,
+          2.3,
+          2.4,
+          2.5,
+          2.6,
+          2.7,
+          2.8,
+          2.9,
+          3.0
+        ]
+      },
+      "horizon_segments": 2,
+      "input_provenance": {
+        "eligibility": "RULE",
+        "energy": "SIMULATED",
+        "gap": "SIMULATED"
+      },
+      "model_versions": {},
+      "rule_configuration_version": "rules-2026-common-v2-fia-iss08-iss20",
+      "seed": 20260913,
+      "split_version": "not_applicable",
+      "terminal_utility": {
+        "ahead_value": 1.0,
+        "residual_energy_value_per_mj": 0.01,
+        "units": "abstract_utility"
+      }
+    },
+    "policy": {
+      "0:2.400:0.700:0": {
+        "applicable_mode": "normal",
+        "cap_kw": 350.0,
+        "delivered_power_kw": 350.0,
+        "delta_e_mj": 0.63,
+        "deploy_level": 1.0,
+        "lift_amount": 0.0
+      },
+      "1:1.800:0.700:0": {
+        "applicable_mode": "normal",
+        "cap_kw": 200.0,
+        "delivered_power_kw": 200.0,
+        "delta_e_mj": 0.44000000000000006,
+        "deploy_level": 1.0,
+        "lift_amount": 0.0
+      },
+      "1:1.900:0.700:0": {
+        "applicable_mode": "normal",
+        "cap_kw": 200.0,
+        "delivered_power_kw": 200.0,
+        "delta_e_mj": 0.44000000000000006,
+        "deploy_level": 1.0,
+        "lift_amount": 0.0
+      },
+      "1:2.100:0.700:0": {
+        "applicable_mode": "normal",
+        "cap_kw": 200.0,
+        "delivered_power_kw": 200.0,
+        "delta_e_mj": 0.44000000000000006,
+        "deploy_level": 1.0,
+        "lift_amount": 0.0
+      },
+      "1:2.200:0.700:0": {
+        "applicable_mode": "normal",
+        "cap_kw": 200.0,
+        "delivered_power_kw": 200.0,
+        "delta_e_mj": 0.44000000000000006,
+        "deploy_level": 1.0,
+        "lift_amount": 0.0
+      },
+      "1:2.300:0.700:0": {
+        "applicable_mode": "normal",
+        "cap_kw": 200.0,
+        "delivered_power_kw": 200.0,
+        "delta_e_mj": 0.44000000000000006,
+        "deploy_level": 1.0,
+        "lift_amount": 0.0
+      },
+      "1:2.400:0.700:0": {
+        "applicable_mode": "normal",
+        "cap_kw": 200.0,
+        "delivered_power_kw": 200.0,
+        "delta_e_mj": 0.44000000000000006,
+        "deploy_level": 1.0,
+        "lift_amount": 0.0
+      }
+    },
+    "provenance": "DERIVED",
+    "reason": null,
+    "schema_version": "m22_dp_development_v2",
+    "status": "COMPLETE",
+    "value": -3.936000000000001,
+    "value_table": {
+      "0:2.400:0.700:0": -3.936000000000001,
+      "1:1.800:0.700:0": -2.1610000000000005,
+      "1:1.900:0.700:0": -2.16,
+      "1:2.100:0.700:0": -2.1580000000000004,
+      "1:2.200:0.700:0": -2.1570000000000005,
+      "1:2.300:0.700:0": -2.156,
+      "1:2.400:0.700:0": -2.1550000000000002
+    }
+  },
+  "excluded_actions": [],
+  "expected_value": -3.936000000000001,
+  "input_provenance": {
+    "eligibility": "RULE",
+    "energy": "SIMULATED",
+    "gap": "SIMULATED"
+  },
+  "legal_actions": [
+    {
+      "applicable_mode": "normal",
+      "cap_kw": 350.0,
+      "delivered_power_kw": 0.0,
+      "delta_e_mj": null,
+      "deploy_level": 0.0,
+      "lift_amount": 0.0
+    },
+    {
+      "applicable_mode": "normal",
+      "cap_kw": 350.0,
+      "delivered_power_kw": 0.0,
+      "delta_e_mj": null,
+      "deploy_level": 0.0,
+      "lift_amount": 0.25
+    },
+    {
+      "applicable_mode": "normal",
+      "cap_kw": 350.0,
+      "delivered_power_kw": 0.0,
+      "delta_e_mj": null,
+      "deploy_level": 0.0,
+      "lift_amount": 0.5
+    },
+    {
+      "applicable_mode": "normal",
+      "cap_kw": 350.0,
+      "delivered_power_kw": 87.5,
+      "delta_e_mj": null,
+      "deploy_level": 0.25,
+      "lift_amount": 0.0
+    },
+    {
+      "applicable_mode": "normal",
+      "cap_kw": 350.0,
+      "delivered_power_kw": 87.5,
+      "delta_e_mj": null,
+      "deploy_level": 0.25,
+      "lift_amount": 0.25
+    },
+    {
+      "applicable_mode": "normal",
+      "cap_kw": 350.0,
+      "delivered_power_kw": 87.5,
+      "delta_e_mj": null,
+      "deploy_level": 0.25,
+      "lift_amount": 0.5
+    },
+    {
+      "applicable_mode": "normal",
+      "cap_kw": 350.0,
+      "delivered_power_kw": 175.0,
+      "delta_e_mj": null,
+      "deploy_level": 0.5,
+      "lift_amount": 0.0
+    },
+    {
+      "applicable_mode": "normal",
+      "cap_kw": 350.0,
+      "delivered_power_kw": 175.0,
+      "delta_e_mj": null,
+      "deploy_level": 0.5,
+      "lift_amount": 0.25
+    },
+    {
+      "applicable_mode": "normal",
+      "cap_kw": 350.0,
+      "delivered_power_kw": 175.0,
+      "delta_e_mj": null,
+      "deploy_level": 0.5,
+      "lift_amount": 0.5
+    },
+    {
+      "applicable_mode": "normal",
+      "cap_kw": 350.0,
+      "delivered_power_kw": 262.5,
+      "delta_e_mj": null,
+      "deploy_level": 0.75,
+      "lift_amount": 0.0
+    },
+    {
+      "applicable_mode": "normal",
+      "cap_kw": 350.0,
+      "delivered_power_kw": 262.5,
+      "delta_e_mj": null,
+      "deploy_level": 0.75,
+      "lift_amount": 0.25
+    },
+    {
+      "applicable_mode": "normal",
+      "cap_kw": 350.0,
+      "delivered_power_kw": 262.5,
+      "delta_e_mj": null,
+      "deploy_level": 0.75,
+      "lift_amount": 0.5
+    },
+    {
+      "applicable_mode": "normal",
+      "cap_kw": 350.0,
+      "delivered_power_kw": 350.0,
+      "delta_e_mj": null,
+      "deploy_level": 1.0,
+      "lift_amount": 0.0
+    },
+    {
+      "applicable_mode": "normal",
+      "cap_kw": 350.0,
+      "delivered_power_kw": 350.0,
+      "delta_e_mj": null,
+      "deploy_level": 1.0,
+      "lift_amount": 0.25
+    },
+    {
+      "applicable_mode": "normal",
+      "cap_kw": 350.0,
+      "delivered_power_kw": 350.0,
+      "delta_e_mj": null,
+      "deploy_level": 1.0,
+      "lift_amount": 0.5
+    }
+  ],
+  "model_versions": {},
+  "provenance": "DERIVED",
+  "reason": null,
+  "recommended_action": {
+    "applicable_mode": "normal",
+    "cap_kw": 350.0,
+    "delivered_power_kw": 350.0,
+    "delta_e_mj": 0.63,
+    "deploy_level": 1.0,
+    "lift_amount": 0.0
+  },
+  "risk": {
+    "criterion": "expected_value",
+    "cvar_alpha": 0.2
+  },
+  "rule_configuration_version": "rules-2026-common-v2-fia-iss08-iss20",
+  "rule_violations": 0,
+  "schema_version": "m24_beam_development_v1",
+  "status": "COMPLETE",
+  "versions": {
+    "api_version": "1.0.0",
+    "git_commit": "synthetic-development",
+    "models": {
+      "planner": "m24_beam_development_v1",
+      "policies": "m27_rival_policies_v1",
+      "rival": "m09_rival_benchmark_v2",
+      "rules": "rules-2026-common-v2-fia-iss08-iss20",
+      "simulator": "m26_simulator_development_v1",
+      "value": "m22_dp_development_v2"
+    }
+  }
+}

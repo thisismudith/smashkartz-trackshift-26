@@ -1,0 +1,274 @@
+{
+  "circuit": "british",
+  "complete_in_mirror": true,
+  "config_version": "rules-2026-common-v2-fia-iss08-iss20",
+  "energy": {
+    "accounting_window": "lap",
+    "deploy_limit_per_lap_mj": {
+      "source": "UNRESOLVED: FIA Section C Technical Issue 20 Articles C5.2.7-C5.2.10 specify instantaneous power, ES SOC excursion and Recharge limits, not a generic per-lap deployment budget; no substitute may be invented",
+      "value": null,
+      "value_source": "UNVERIFIED"
+    },
+    "harvest_limit_per_lap_mj": {
+      "note": "Base Recharge limit. Article C5.2.10 and Sporting Article B7.2.1 allow competition-specific reductions/additional conditions; the event-specific value remains a required final input.",
+      "source": "FIA Section C Technical Issue 20 Article C5.2.10, p. 63, https://www.fia.com/system/files/documents/fia_2026_f1_regulations_-_section_c_technical_-_iss_20_-_2026-08-05.pdf",
+      "value": 8.5,
+      "value_source": "RULE_FIA"
+    },
+    "store_capacity_mj": {
+      "note": "The physical bound on ers_soc_est_mj, a different constraint from the per-lap flow limits above. A car can be short of deploy budget with a full store, or the reverse; conflating them produces a twin that is right about total energy and wrong about what the car may legally do next (section 28).",
+      "source": "UNRESOLVED: FIA Section C Technical Issue 20 Article C5.2.9, p. 63, https://www.fia.com/system/files/documents/fia_2026_f1_regulations_-_section_c_technical_-_iss_20_-_2026-08-05.pdf; the rule gives a 4MJ maximum SOC excursion, not the physical ES capacity",
+      "value": null,
+      "value_source": "UNVERIFIED"
+    }
+  },
+  "event": "british_grand_prix",
+  "event_display": "British Grand Prix",
+  "geometry": {
+    "corner_count": 18,
+    "corner_distances_m": [
+      463.1,
+      588.7,
+      863.3,
+      1034.7,
+      1223.2,
+      1955.6,
+      2175.9,
+      2534.8,
+      3030.1,
+      3589.5,
+      3691.6,
+      3837.7,
+      3979.6,
+      4123.2,
+      4991.7,
+      5430.7,
+      5519.5,
+      5674.3
+    ],
+    "rotation_deg": 92.0,
+    "source": "data/raw/tracinginsights/2026/British Grand Prix/Race/corners.json",
+    "value_source": "OBSERVED"
+  },
+  "lap_length_m": {
+    "delta_vs_published_m": -80.0,
+    "delta_vs_published_pct": -1.36,
+    "note": "Telemetry distance is integrated along the path the car actually drove, so it reads shorter than the homologated circuit length: straight-line integration between samples undershoots the arc through a corner. The shortfall tracks corner density, from -0.61% at Monza to -2.58% at the Hungaroring. USE THE MEASURED VALUE. CP-05 segments on telemetry distance, so segment boundaries must live in the same coordinate system; the published figure is a sanity cross-check only, and is not interchangeable with it.",
+    "published_circuit_length_m": 5891,
+    "source": "median max(distance) over 30 sampled Race laps, lap 1 excluded",
+    "value": 5811.0,
+    "value_source": "DERIVED_TELEMETRY"
+  },
+  "overrides": {},
+  "overtake": {
+    "detection_gap_s": {
+      "note": "Gap threshold at the Detection Line for Overtake to arm. 1.0 s is the long-standing DRS threshold and is a plausible starting point, but it is a carried-over assumption, not a 2026 citation.",
+      "source": "UNRESOLVED: FIA Section B Sporting Issue 08, Article B7.2.1b(vii), https://www.fia.com/system/files/documents/fia_2026_f1_regulations_-_section_b_sporting_-_iss_08_-_2026-08-05_7.pdf; the public regulation requires a competition-provided Detection Gap but does not state its event value here",
+      "value": 1.0,
+      "value_source": "UNVERIFIED"
+    },
+    "enabled": true,
+    "zones": [
+      {
+        "activation_line_m": {
+          "landmark": "65m after T18",
+          "source": "Aligned to official FIA 2026 British Grand Prix circuit map, Document 6, p. 2, OVERTAKE ACTIVATION 65m after T18, https://www.fia.com/system/files/decision-document/2026_british_grand_prix_-_competition_notes_-_circuit_map_pit_lane_drawing_emergency_exits_map_and_red_zone.pdf; T18 observed corner distance 5674.3m from geometry.corner_distances_m",
+          "value": 5739.3,
+          "value_source": "DERIVED_TELEMETRY"
+        },
+        "detection_line_m": {
+          "landmark": "115m after T18",
+          "source": "Aligned to official FIA 2026 British Grand Prix circuit map, Document 6, p. 2, OVERTAKE DETECTION 115m after T18, https://www.fia.com/system/files/decision-document/2026_british_grand_prix_-_competition_notes_-_circuit_map_pit_lane_drawing_emergency_exits_map_and_red_zone.pdf; T18 observed corner distance 5674.3m from geometry.corner_distances_m",
+          "value": 5789.3,
+          "value_source": "DERIVED_TELEMETRY"
+        },
+        "name": "Overtake A1",
+        "zone": "A1",
+        "zone_end_m": {
+          "source": "UNRESOLVED: official FIA 2026 British Grand Prix circuit map identifies the Overtake Activation Line but does not publish an Overtake zone-end line",
+          "value": null,
+          "value_source": "UNVERIFIED"
+        }
+      },
+      {
+        "activation_line_m": {
+          "landmark": "55m after T5",
+          "source": "Aligned to official FIA 2026 British Grand Prix circuit map, Document 6, p. 2, OVERTAKE ACTIVATION 55m after T5, https://www.fia.com/system/files/decision-document/2026_british_grand_prix_-_competition_notes_-_circuit_map_pit_lane_drawing_emergency_exits_map_and_red_zone.pdf; T5 observed corner distance 1223.2m from geometry.corner_distances_m",
+          "value": 1278.2,
+          "value_source": "DERIVED_TELEMETRY"
+        },
+        "detection_line_m": {
+          "landmark": "115m after T5",
+          "source": "Aligned to official FIA 2026 British Grand Prix circuit map, Document 6, p. 2, OVERTAKE DETECTION 115m after T5, https://www.fia.com/system/files/decision-document/2026_british_grand_prix_-_competition_notes_-_circuit_map_pit_lane_drawing_emergency_exits_map_and_red_zone.pdf; T5 observed corner distance 1223.2m from geometry.corner_distances_m",
+          "value": 1338.2,
+          "value_source": "DERIVED_TELEMETRY"
+        },
+        "name": "Overtake A2",
+        "wraps_to_start_finish": true,
+        "zone": "A2",
+        "zone_end_m": {
+          "source": "UNRESOLVED: official FIA 2026 British Grand Prix circuit map identifies the Overtake Activation Line but does not publish an Overtake zone-end line",
+          "value": null,
+          "value_source": "UNVERIFIED"
+        }
+      },
+      {
+        "activation_line_m": {
+          "landmark": "155m after T7",
+          "source": "Aligned to official FIA 2026 British Grand Prix circuit map, Document 6, p. 2, OVERTAKE ACTIVATION 155m after T7, https://www.fia.com/system/files/decision-document/2026_british_grand_prix_-_competition_notes_-_circuit_map_pit_lane_drawing_emergency_exits_map_and_red_zone.pdf; T7 observed corner distance 2175.9m from geometry.corner_distances_m",
+          "value": 2330.9,
+          "value_source": "DERIVED_TELEMETRY"
+        },
+        "detection_line_m": {
+          "landmark": "n/a",
+          "not_applicable": true,
+          "source": "Official FIA 2026 British Grand Prix circuit map, Document 6, p. 2, OVERTAKE DETECTION n/a for A3, https://www.fia.com/system/files/decision-document/2026_british_grand_prix_-_competition_notes_-_circuit_map_pit_lane_drawing_emergency_exits_map_and_red_zone.pdf",
+          "value": null,
+          "value_source": "RULE_FIA"
+        },
+        "name": "Overtake A3",
+        "zone": "A3",
+        "zone_end_m": {
+          "source": "UNRESOLVED: official FIA 2026 British Grand Prix circuit map identifies the Overtake Activation Line but does not publish an Overtake zone-end line",
+          "value": null,
+          "value_source": "UNVERIFIED"
+        }
+      },
+      {
+        "activation_line_m": {
+          "landmark": "65m after T14",
+          "source": "Aligned to official FIA 2026 British Grand Prix circuit map, Document 6, p. 2, OVERTAKE ACTIVATION 65m after T14, https://www.fia.com/system/files/decision-document/2026_british_grand_prix_-_competition_notes_-_circuit_map_pit_lane_drawing_emergency_exits_map_and_red_zone.pdf; T14 observed corner distance 3979.6m from geometry.corner_distances_m",
+          "value": 4044.6,
+          "value_source": "DERIVED_TELEMETRY"
+        },
+        "detection_line_m": {
+          "landmark": "125m after T14",
+          "source": "Aligned to official FIA 2026 British Grand Prix circuit map, Document 6, p. 2, OVERTAKE DETECTION 125m after T14, https://www.fia.com/system/files/decision-document/2026_british_grand_prix_-_competition_notes_-_circuit_map_pit_lane_drawing_emergency_exits_map_and_red_zone.pdf; T14 observed corner distance 3979.6m from geometry.corner_distances_m",
+          "value": 4104.6,
+          "value_source": "DERIVED_TELEMETRY"
+        },
+        "name": "Overtake A4",
+        "zone": "A4",
+        "zone_end_m": {
+          "source": "UNRESOLVED: official FIA 2026 British Grand Prix circuit map identifies the Overtake Activation Line but does not publish an Overtake zone-end line",
+          "value": null,
+          "value_source": "UNVERIFIED"
+        }
+      }
+    ]
+  },
+  "power_envelope": {
+    "competition_adjustments": [],
+    "normal": {
+      "breakpoints_kmh": [
+        0,
+        290,
+        340,
+        345
+      ],
+      "max_power_kw": [
+        350,
+        350,
+        100,
+        0
+      ],
+      "note": "The 350 kW absolute cap applies below 290 km/h; above it the Article C5.2.8i formula is 1800 - 5*speed below 340 km/h, then 6900 - 20*speed below 345 km/h, then zero.",
+      "source": "FIA Section C Technical Issue 20, Article C5.2.7 and C5.2.8i, pp. 63-64, https://www.fia.com/system/files/documents/fia_2026_f1_regulations_-_section_c_technical_-_iss_20_-_2026-08-05.pdf",
+      "value_source": "RULE_FIA"
+    },
+    "override": {
+      "breakpoints_kmh": [
+        0,
+        337.5,
+        355
+      ],
+      "max_power_kw": [
+        350,
+        350,
+        0
+      ],
+      "note": "The 350 kW absolute cap intersects 7100 - 20*speed at 337.5 km/h; the Overtake-active curve reaches zero at 355 km/h.",
+      "source": "FIA Section C Technical Issue 20, Article C5.2.7 and C5.2.8ii, p. 63, https://www.fia.com/system/files/documents/fia_2026_f1_regulations_-_section_c_technical_-_iss_20_-_2026-08-05.pdf",
+      "value_source": "RULE_FIA"
+    },
+    "separation_speed_kmh": {
+      "note": "Below this the curves coincide, so override confers no power advantage and the mode is not observable. The M35 discriminator must return UNKNOWN below it rather than NORMAL (section 20.2).",
+      "source": "Calculated from the 350 kW absolute cap in FIA Section C Technical Issue 20 Article C5.2.7 and the non-Overtake formula in Article C5.2.8i, p. 63, https://www.fia.com/system/files/documents/fia_2026_f1_regulations_-_section_c_technical_-_iss_20_-_2026-08-05.pdf",
+      "value": 290,
+      "value_source": "RULE_FIA"
+    }
+  },
+  "race_control": {
+    "overtake_disabled_conditions": {
+      "note": "Observed in the 2026 message feed: 51 OVERTAKE ENABLED and 23 OVERTAKE DISABLED messages across the season, alongside 11 Safety Car and 31 VSC deployments. The list is the observed association, not a cited regulation.",
+      "source": "artifacts/race_control/2026_*.json, generated by scripts/data/extract_race_control.py",
+      "value": [
+        "SAFETY_CAR",
+        "VIRTUAL_SAFETY_CAR",
+        "RED_FLAG",
+        "WET_DECLARED"
+      ],
+      "value_source": "OBSERVED_RCM"
+    },
+    "overtake_disabled_messages": 3,
+    "overtake_enabled_messages": 2,
+    "overtake_windows_source": "artifacts/race_control/2026_british_grand_prix.json",
+    "source": "race-control messages in the raw mirror, extracted by scripts/data/extract_race_control.py",
+    "value_source": "OBSERVED_RCM"
+  },
+  "regulation_snapshot": {
+    "effective_date": "2026-08-05",
+    "encoded_configuration_version": "rules-2026-common-v2-fia-iss08-iss20",
+    "note": "The published regulation, applicable competition configuration and this encoding are kept separately auditable (section 6). Final mode additionally requires every consumed value to be resolved and sourced.",
+    "publication_dates": {
+      "section_b_sporting": "2026-08-05",
+      "section_c_technical": "2026-08-05"
+    },
+    "retrieved_at": "2026-09-13",
+    "section_issues": {
+      "section_b_sporting": 8,
+      "section_c_technical": 20
+    },
+    "source_documents": [
+      {
+        "article": "B7.2.1, B7.2.2, B7.2.3",
+        "confidence": "HIGH",
+        "document": "FIA 2026 F1 Regulations - Section B Sporting - Issue 08",
+        "interpretation": "Overtake enablement, Detection Gap/Line and Activation Line are competition inputs; race control can disable Overtake.",
+        "pages": [
+          62,
+          63,
+          64
+        ],
+        "url": "https://www.fia.com/system/files/documents/fia_2026_f1_regulations_-_section_b_sporting_-_iss_08_-_2026-08-05_7.pdf"
+      },
+      {
+        "article": "C5.2.7, C5.2.8, C5.2.9, C5.2.10",
+        "confidence": "HIGH",
+        "document": "FIA 2026 F1 Regulations - Section C Technical - Issue 20",
+        "interpretation": "Absolute ERS-K power, speed-dependent deployment curves, ES SOC excursion, and Recharge limits.",
+        "pages": [
+          63,
+          64
+        ],
+        "url": "https://www.fia.com/system/files/documents/fia_2026_f1_regulations_-_section_c_technical_-_iss_20_-_2026-08-05.pdf"
+      }
+    ]
+  },
+  "schema_version": 1,
+  "season": 2026,
+  "strict_mode": false,
+  "versions": {
+    "api_version": "1.0.0",
+    "git_commit": "synthetic-development",
+    "models": {
+      "planner": "m24_beam_development_v1",
+      "policies": "m27_rival_policies_v1",
+      "rival": "m09_rival_benchmark_v2",
+      "rules": "rules-2026-common-v2-fia-iss08-iss20",
+      "simulator": "m26_simulator_development_v1",
+      "value": "m22_dp_development_v2"
+    }
+  },
+  "year": 2026
+}

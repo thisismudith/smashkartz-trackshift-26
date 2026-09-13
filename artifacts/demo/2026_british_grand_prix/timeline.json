@@ -1,0 +1,87 @@
+{
+  "battle_id": "synthetic_2026_GBR_Race_HAM_ANT",
+  "causal_cutoff": {
+    "provenance": "DERIVED",
+    "segment_index": 1
+  },
+  "segments": [
+    {
+      "energy_mj": {
+        "provenance": "SIMULATED",
+        "unit": "MJ",
+        "value": 2.4
+      },
+      "gap_s": {
+        "provenance": "SIMULATED",
+        "unit": "s",
+        "value": 0.72
+      },
+      "provenance": "SIMULATED",
+      "rival_state": {
+        "api_version": "1.0.0",
+        "causal_cutoff": 0,
+        "merged": [],
+        "merged_states": [],
+        "model_version": "m09_rival_benchmark_v2",
+        "p": {
+          "BALANCED": 6.699234334906672e-92,
+          "CONSERVING": 0.9999999573769481,
+          "DEPLOYING": 0.0,
+          "DERATING": 4.262305188160397e-08
+        },
+        "provenance": "INFERRED",
+        "split_version": "synthetic-c9-v1",
+        "uncertainty": {
+          "entropy": 7.659733492748162e-07,
+          "provenance": "INFERRED"
+        }
+      },
+      "segment_id": 1
+    },
+    {
+      "energy_mj": {
+        "provenance": "SIMULATED",
+        "unit": "MJ",
+        "value": 2.32
+      },
+      "gap_s": {
+        "provenance": "SIMULATED",
+        "unit": "s",
+        "value": 0.6799999999999999
+      },
+      "provenance": "SIMULATED",
+      "rival_state": {
+        "api_version": "1.0.0",
+        "causal_cutoff": 1,
+        "merged": [],
+        "merged_states": [],
+        "model_version": "m09_rival_benchmark_v2",
+        "p": {
+          "BALANCED": 1.7777984470077735e-83,
+          "CONSERVING": 0.9999999313578961,
+          "DEPLOYING": 0.0,
+          "DERATING": 6.864210389663135e-08
+        },
+        "provenance": "INFERRED",
+        "split_version": "synthetic-c9-v1",
+        "uncertainty": {
+          "entropy": 1.2008496559018765e-06,
+          "provenance": "INFERRED"
+        }
+      },
+      "segment_id": 2
+    }
+  ],
+  "versions": {
+    "api_version": "1.0.0",
+    "git_commit": "synthetic-development",
+    "models": {
+      "planner": "m24_beam_development_v1",
+      "policies": "m27_rival_policies_v1",
+      "rival": "m09_rival_benchmark_v2",
+      "rules": "rules-2026-common-v2-fia-iss08-iss20",
+      "simulator": "m26_simulator_development_v1",
+      "value": "m22_dp_development_v2"
+    }
+  }
+}

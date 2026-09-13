@@ -1,0 +1,40 @@
+{
+  "model_version": "m27_rival_policies_v1",
+  "policies": [
+    {
+      "description": "holds energy and deploys only at a declared activation opportunity",
+      "name": "DEFEND_CONSERVE",
+      "parameters": {
+        "deploy_level_default": 0.25
+      }
+    },
+    {
+      "description": "matches attacker deployment one segment late",
+      "name": "DEFEND_MIRROR",
+      "parameters": {
+        "lag_segments": 1
+      }
+    },
+    {
+      "description": "uses the maximum currently legal deployment to counterattack",
+      "name": "ATTACK_GREEDY",
+      "parameters": {
+        "deploy_level": 1.0
+      }
+    }
+  ],
+  "provenance": "RULE",
+  "schema_version": "m27_rival_policies_v1",
+  "versions": {
+    "api_version": "1.0.0",
+    "git_commit": "synthetic-development",
+    "models": {
+      "planner": "m24_beam_development_v1",
+      "policies": "m27_rival_policies_v1",
+      "rival": "m09_rival_benchmark_v2",
+      "rules": "rules-2026-common-v2-fia-iss08-iss20",
+      "simulator": "m26_simulator_development_v1",
+      "value": "m22_dp_development_v2"
+    }
+  }
+}

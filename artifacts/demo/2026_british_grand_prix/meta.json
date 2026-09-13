@@ -1,0 +1,16 @@
+{
+  "api_version": "1.0.0",
+  "git_commit": "synthetic-development",
+  "mode": "replay",
+  "models": {
+    "planner": "m24_beam_development_v1",
+    "policies": "m27_rival_policies_v1",
+    "rival": "m09_rival_benchmark_v2",
+    "rules": "rules-2026-common-v2-fia-iss08-iss20",
+    "simulator": "m26_simulator_development_v1",
+    "value": "m22_dp_development_v2"
+  },
+  "release_ready": false,
+  "stubs": [],
+  "synthetic_fixture": "trackshift-synthetic-closure-v1"
+}
