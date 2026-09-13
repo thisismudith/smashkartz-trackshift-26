@@ -248,7 +248,7 @@ CP-09 baselines
 
 CP-10 state machine ──▶ CP-11 rule engine ──▶ CP-12 eligibility ──▶ CP-13 opportunities ──▶ CP-14 pass model
                                                                                               ├─▶ CP-15 calibration ──▶ CP-16 ensemble
-                                                                                              └─▶ CP-17 era handling
+                                                                                              └─▶ CP-17 fine-tuning
 CP-23 ablation  (needs CP-14 + CP-21)
 CP-24 service   (needs CP-11 + CP-14 + CP-21)
 ```

@@ -263,6 +263,7 @@ def fit_cell(
     deterministic: bool = True,
     include_identity: bool = False,
     return_model: bool = False,
+    drop_features: tuple[str, ...] = (),
 ):
     """Fit and score one (checkpoint, family, fold) cell.
 
@@ -284,6 +285,16 @@ def fit_cell(
             checkpoint, rows.columns, include_identity=include_identity, dtypes=rows.dtypes
         )
         audit_feature_matrix(rows, selection)
+        # CP-23 ablation. Applied after selection and after the audit so the
+        # ablated run differs from the baseline in exactly one way: the columns
+        # this group contributed. Re-selecting instead would let an unrelated
+        # decision move at the same time and be attributed to the group.
+        if drop_features:
+            selection = selection.without(drop_features, reason="CP-23 ablation")
+            if not selection.columns:
+                raise ValueError(
+                    "ablation removed every feature; there is nothing left to fit. "
+                    "That is a real result for this group, recorded as such.")
 
         splits = {}
         for role, index in (("train", fold.train), ("validation", fold.validation),
