@@ -105,20 +105,30 @@ def posterior_stability(evidence: Iterable[Mapping[str, Any]]) -> dict[str, floa
             "max_abs_delta": max(deltas) if deltas else None}
 
 
-def _metrics(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
-    """Compatibility metric envelope for callers without C10 evidence."""
+def _metrics(
+    rows: Sequence[Mapping[str, Any]],
+    evidence: Sequence[Mapping[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Return only measured C10 predictive evidence, never tactical labels."""
     events, years = _coverage(rows)
+    observed = list(evidence or ())
+    nll = observation_predictive_nll(observed)
+    stability = posterior_stability(observed) if observed else None
+    measured = nll is not None and stability is not None and int(stability["n"]) > 0
     return {
-        "status": "BLOCKED",
-        "reason": "C10 predictive probabilities and causal perturbation posteriors are unavailable",
+        "status": "MEASURED" if measured else "BLOCKED",
+        "reason": None if measured else "C10 predictive probabilities and causal perturbation posteriors are unavailable",
         "n": len(rows),
-        "mean_log_likelihood": None,
-        "mean_nll": None,
-        "stability": None,
+        "held_out_evidence_n": len(observed),
+        "mean_log_likelihood": -nll if nll is not None else None,
+        "mean_nll": nll,
+        "stability": stability,
         "event_coverage": events,
         "year_coverage": years,
         "calibration": "UNAVAILABLE: no real tactical-state labels",
         "rule_configuration_versions": _versions(rows, "rule_configuration_version"),
+        "model_versions": _versions(observed, "model_version"),
+        "fold_ids": _versions(observed, "fold_id"),
     }
 
 
@@ -141,7 +151,20 @@ def c10_prediction_evidence(model: Any, sequences: Sequence[Mapping[str, Any]], 
         if perturbed:
             name = next((key for key in ("pace_residual_delta_s", "relative_speed_to_ahead_mps", "gap_rate_ahead_s_per_s", "braking_intensity_delta") if key in perturbed[-1]), None)
             if name:
-                perturbed[-1][name] = float(perturbed[-1][name]) + perturbation_delta
+                # M08 uses public Quantity objects.  Preserve that envelope
+                # while perturbing only its causal numeric value; converting
+                # the whole field to a float breaks the public C10 boundary.
+                original = perturbed[-1][name]
+                if isinstance(original, Mapping):
+                    value = original.get("value")
+                    if value is None:
+                        name = None
+                    else:
+                        updated = dict(original)
+                        updated["value"] = float(value) + perturbation_delta
+                        perturbed[-1][name] = updated
+                elif original is not None:
+                    perturbed[-1][name] = float(original) + perturbation_delta
         perturbed_values = model.predict_distribution(perturbed)
         result.append({"event": sequence.get("event"), "year": 2026, "fold_id": sequence.get("fold_id"),
                        "model_version": getattr(model, "model_version", None), "provenance": "INFERRED",
@@ -171,6 +194,7 @@ def evaluate_era_strategies(
     rule_configuration_version: str,
     historical_rows: Iterable[Mapping[str, Any]] | None = None,
     materialisation: Mapping[str, Any] | None = None,
+    prediction_evidence: Mapping[str, Sequence[Mapping[str, Any]]] | None = None,
 ) -> dict[str, Any]:
     """Compare strategies when historical rows are supplied; otherwise block honestly."""
     current = [dict(row) for row in rows]
@@ -199,7 +223,17 @@ def evaluate_era_strategies(
     blocked_reason = audit.get("reason") if audit.get("status") == "BLOCKED" else None
     if not historical:
         blocked_reason = blocked_reason or "historical M08 materialisation for 2022-2025 is unavailable"
-    metrics = {strategy: _metrics(current if strategy == "2026_only" else [*current, *historical]) for strategy in STRATEGIES}
+    evidence_by_strategy = dict(prediction_evidence or {})
+    unknown_strategies = sorted(set(evidence_by_strategy).difference(STRATEGIES))
+    if unknown_strategies:
+        raise ValueError(f"unknown CP-08 strategy evidence: {unknown_strategies}")
+    metrics = {
+        strategy: _metrics(
+            current if strategy == "2026_only" else [*current, *historical],
+            evidence_by_strategy.get(strategy),
+        )
+        for strategy in STRATEGIES
+    }
     if not blocked_reason and _missing_predictive_evidence(metrics):
         blocked_reason = "held-out predictive likelihood and stability evidence is not materialised by the era harness"
     return {

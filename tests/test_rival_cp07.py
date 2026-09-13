@@ -15,6 +15,7 @@ from trackshift.rival.api import (  # noqa: E402
     REGRESSION_SEED,
     SyntheticConfig,
     build_battle_sequences,
+    c10_prediction_evidence,
     fit_model,
     generate,
     load_model,
@@ -115,3 +116,12 @@ def test_cpu_artifact_load_and_manifest_mismatch(tmp_path: Path):
     manifest.write_text(json.dumps({"schema_version": "wrong", "m08_schema_version": "m08_rival_state_features_v1", "c9_split_version": "c9-test"}), encoding="utf-8")
     with pytest.raises(ManifestMismatchError):
         load_model(path, manifest_path=manifest)
+
+
+def test_cp08_perturbation_preserves_quantity_feature_contract():
+    model = fit_model(generate(SyntheticConfig(seed=REGRESSION_SEED, sequences=4, length=8)), kind="hmm", split_version="c9-test")
+    rows = [_m08_row(segment=index) for index in range(1, 8)]
+    evidence = c10_prediction_evidence(model, build_battle_sequences(rows, require_c9=True))
+    assert len(evidence) == 1
+    assert evidence[0]["observation_log_likelihood"] is not None
+    assert evidence[0]["posterior"] != evidence[0]["perturbed_posterior"]

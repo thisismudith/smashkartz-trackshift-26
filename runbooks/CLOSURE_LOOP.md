@@ -126,6 +126,66 @@ Exact outputs and local artifact paths are appended per iteration below.
 - Generated local outputs are ignored and must not be staged.
 - Next: restart the exact scale command, wait for the aggregate manifest, then run focused historical tests and `.venv/bin/python -m pytest -q` before moving to A2 or B1.
 
+### Closure-loop continuation — CP-08 and Chain V development evidence — 2026-09-13
+
+- Historical C1/C7 materialisation evidence supplied at continuation:
+  `COMPLETE_WITH_FAILURES`; 55 planned units and 55,994 telemetry laps
+  discovered; C1 = 1,823,855 rows; C7 = 1,269,276 rows; C7 normal-race
+  eligible = 941,605 rows. British Grand Prix remains excluded from training
+  and calibration. Monaco C1 failed with exit `-11`; the failure's scope is
+  Monaco C1 and its four dependent C7 units only, which contain no rows.
+- No historical materialisation was rerun. CP-20/21/22 were not rerun.
+- Source correction: CP-08's causal perturbation now preserves the public M08
+  Quantity envelope instead of coercing it to a float; its evaluator now
+  accepts and reports measured 2026 C10 evidence without treating it as
+  historical-era evidence. Regression tests cover both paths.
+- Focused test command:
+  `.venv/bin/python -m pytest -q tests/test_rival_chain.py tests/test_rival_cp07.py tests/test_chain_v_cores.py`
+  → `24 passed in 0.36s`.
+- CP-08 command:
+  `.venv/bin/python scripts/rival/evaluate_era.py --processed-root data/processed/cp05_full_nonbritish_validation_v3 > /tmp/trackshift-cp08-evaluation.json`
+  → exit `0`; local uncommitted artifact
+  `/tmp/trackshift-cp08-evaluation.json`. It measured 104,263 eligible
+  non-British 2026 M08 rows and 11,387 C10 causal evidence prefixes over C9
+  folds `fold_0` through `fold_4`. 2026-only mean observation NLL was
+  `3835.688792627944`; mean maximum posterior perturbation was
+  `0.0012554738740647817`; calibration remains unavailable because public
+  telemetry has no rival tactical-state labels. Historical M08 partitions for
+  2022–2025 were absent, no historical strategy was scored, and CP-08 is
+  `BLOCKED_EVIDENCE`.
+- Chain V development smoke command:
+  `.venv/bin/python scripts/simulate/run_chain_v_smoke.py > /tmp/trackshift-chain-v-smoke.json`
+  → exit `0`; local uncommitted artifact
+  `/tmp/trackshift-chain-v-smoke.json`. It used a deliberately tiny,
+  development-only C3/C4/C5-shaped fixture. CP-10 DP and same-state shadow
+  perturbation completed; no time-based shadow price was emitted. CP-11
+  returned `PASS_AND_SECURE` at low repass risk and `PASS_BUT_EXPOSED` at high
+  repass risk. CP-12's 100-call CPU planner p50/p95 was
+  `3.1278489987016656`/`3.3504378006909974` ms and rule violations were zero.
+  CP-13 used the six required baseline names with the shared legal set.
+  CP-14 ran 8 episodes with seed 17 and zero rule violations; missing
+  callbacks return `STUB_RESPONSE`. CP-15 registered `DEFEND_CONSERVE`,
+  `DEFEND_MIRROR`, and `ATTACK_GREEDY`.
+- Follow-up focused tests:
+  `.venv/bin/python -m pytest -q tests/test_chain_v_cores.py tests/test_strategic_state.py tests/test_rules.py`
+  → `51 passed in 2.26s`.
+- Required final suite attempt:
+  `.venv/bin/python -m pytest -q` was started twice in this workspace, but the
+  executor terminated each invocation after 30 seconds at approximately 5%
+  collection/execution without an exit status or final summary. It is therefore
+  **not** reported as a full-suite pass; the focused results above are the only
+  complete test evidence from this continuation.
+- Final-mode disposition: C4 candidate artifacts exist under
+  `artifacts/models/pass/cp14_2026_v1/`, but no accepted public C5 transition
+  artifact is available. Existing C4/C5 conditions therefore do not permit
+  final mode. CP-10 through CP-15 are `DEVELOPMENT_SMOKE_ONLY`; CP-16 is
+  `BLOCKED_FINAL_MODE`. No routes/replay bundle were generated, preventing a
+  second serializer or stub-based final response.
+- Tracked source/docs changed only: `src/trackshift/rival/era.py`, regression
+  tests, `scripts/simulate/run_chain_v_smoke.py`, this runbook, and
+  `CHECKPOINTS_RISHABH.md`. Generated data, models, caches, manifests, and
+  `/tmp` evidence are not staged.
+
 ## Terminal status
 
 `IN_PROGRESS`

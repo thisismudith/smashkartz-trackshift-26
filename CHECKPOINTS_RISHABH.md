@@ -729,3 +729,51 @@ Owner A route modules in **src/trackshift/serve/**, service tests, replay inputs
 | Shared registry additions | both | each producing checkpoint |
 | UI and final demo composition | Owner C | final release |
 | Joint integration plan | Rishabh through `CHECKPOINTS_INTEGRATION.md` | end-to-end merge and rehearsal |
+
+---
+
+## Closure-loop v2 execution record — 2026-09-13
+
+This record is for branch `rishabh/closure-loop-v2`. Local generated evidence
+is deliberately kept out of Git.
+
+| Checkpoint | Status | Evidence / remaining condition |
+|---|---|---|
+| CP-08 | `BLOCKED_EVIDENCE` | Existing non-British 2026 M08/C10 evidence is measured, but no 2022–2025 M08 partitions exist. A regulation-era comparison cannot be claimed. Historical DRS remains absent from all 2026 Overtake inputs. |
+| CP-10 | `DEVELOPMENT_SMOKE_ONLY` | DP calls C3 before scoring, records excluded actions, and the finite-difference shadow price uses the same full state. Its terminal objective remains abstract; no seconds/MJ shadow price is emitted. |
+| CP-11 | `DEVELOPMENT_SMOKE_ONLY` | Controlled pass/repass scenarios demonstrate the counterattack valuation; C4/C6/C10 final callbacks remain unavailable. |
+| CP-12 | `DEVELOPMENT_SMOKE_ONLY` | C3-legal planner smoke and CPU latency passed; final mode rejects the development-only abstract DP and stub dependencies. |
+| CP-13 | `DEVELOPMENT_SMOKE_ONLY` | All six baselines use the same legal action set; comparative final metrics require accepted C4/C5. |
+| CP-14 | `DEVELOPMENT_SMOKE_ONLY` | Seeded, deterministic smoke episodes have zero illegal actions. A missing callback returns `STUB_RESPONSE`; no alternate real-race outcome is claimed. |
+| CP-15 | `DEVELOPMENT_SMOKE_ONLY` | The three explicit rival policies are deterministic and C3-routed. Final comparison remains downstream of CP-14's real callbacks. |
+| CP-16 | `BLOCKED_FINAL_MODE` | No final replay may be generated: public final-mode C4/C5 transitions are not accepted, and the Owner A service/replay hand-off cannot emit stub-based files. British GP remains replay/demo-only. |
+
+### Exact commands and local evidence
+
+```bash
+.venv/bin/python -m pytest -q tests/test_rival_chain.py tests/test_rival_cp07.py tests/test_chain_v_cores.py
+.venv/bin/python scripts/rival/evaluate_era.py --processed-root data/processed/cp05_full_nonbritish_validation_v3 > /tmp/trackshift-cp08-evaluation.json
+.venv/bin/python scripts/simulate/run_chain_v_smoke.py > /tmp/trackshift-chain-v-smoke.json
+.venv/bin/python -m pytest -q tests/test_chain_v_cores.py tests/test_strategic_state.py tests/test_rules.py
+```
+
+- CP-08 local artifact: `/tmp/trackshift-cp08-evaluation.json`. It reports
+  104,263 eligible non-British 2026 rows and 11,387 causal C10 prefixes across
+  five C9 folds. The measured 2026-only observation NLL is 3835.688793 and the
+  mean maximum posterior perturbation is 0.00125547. These are C10
+  observation-predictive diagnostics, not tactical-state labels or a
+  regulation-era result. Historical M08 partitions for 2022–2025: zero.
+- CP-10 through CP-15 local artifact: `/tmp/trackshift-chain-v-smoke.json`.
+  The tiny development fixture recorded zero rule violations, eight seeded
+  episodes (`seed=17`), all six baseline names, and a 100-call CPU planner p95
+  of 3.350438 ms. It is explicitly `development_only: true` and
+  `final_mode_permitted: false`.
+- C4/C5 gate inspection: `artifacts/models/pass/cp14_2026_v1/` contains
+  pass candidates, but no accepted public C5 transition artifact is present.
+  The pass manifest also needs final-mode acceptance review; it is not used to
+  upgrade any Chain V checkpoint. CP-20/21/22 were not rerun.
+- Historical materialisation evidence received for this closure run:
+  `COMPLETE_WITH_FAILURES`; 55 planned units and 55,994 telemetry laps
+  discovered; C1 has 1,823,855 rows; C7 has 1,269,276 rows, including 941,605
+  normal-race eligible rows. Monaco C1 alone failed with exit `-11`; its four
+  downstream C7 units have no rows. This does not create historical M08.
