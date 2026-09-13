@@ -158,25 +158,39 @@ def render(report: dict[str, Any]) -> str:
             f"{m.get('roc_auc', float('nan')):.4f} | "
             f"{m.get('pr_auc', float('nan')):.4f} | "
             f"{m.get('ece', float('nan')):.4f} |")
-    lines += ["", "## Operating points", "",
+    # Headline: one row per checkpoint. ROC-AUC is threshold-independent, so it
+    # belongs here rather than repeated against every operating point.
+    lines += ["", "## Model performance", "",
+              "| Checkpoint | Model | ROC-AUC | Best accuracy |",
+              "|---|---|---:|---:|"]
+    for row in report["checkpoints"]:
+        if not row.get("ok"):
+            continue
+        best = max(row.get("confusion_matrices") or [{"accuracy": 0.0}],
+                   key=lambda m: m["accuracy"])
+        lines.append(
+            f"| {row['checkpoint']} | `LightGBM` (M10/{row['family']}) | "
+            f"**{row['model'].get('roc_auc', float('nan')):.4f}** | "
+            f"**{best['accuracy']:.3f}** |")
+
+    lines += ["", "### Accuracy by operating point", "",
               "The model outputs a probability; a hard yes/no needs a threshold, "
               "which is a decision the model does not make. Four principled ones:",
               "",
-              "| Checkpoint | Strategy | Thr | Accuracy | Precision | Recall | F1 |",
-              "|---|---|---:|---:|---:|---:|---:|"]
+              "| Checkpoint | Model | Strategy | Threshold | Accuracy |",
+              "|---|---|---|---:|---:|"]
     for row in report["checkpoints"]:
         for m in row.get("confusion_matrices", []):
             lines.append(
-                f"| {row['checkpoint']} | `{m['strategy']}` | {m['threshold']:.3f} | "
-                f"**{m['accuracy']:.3f}** | {m['precision']:.3f} | {m['recall']:.3f} | "
-                f"{m['f1']:.3f} |")
+                f"| {row['checkpoint']} | `LightGBM` | `{m['strategy']}` | "
+                f"{m['threshold']:.3f} | **{m['accuracy']:.3f}** |")
     lines += ["",
-              "Accuracy sits at 86-91% across the checkpoints. Read it beside "
-              "precision: at a 10.4% base rate a model answering \"no pass\" to "
-              "everything already scores ~90%, so accuracy alone does not "
-              "demonstrate skill. What does is that at ACTIVATION's F1-optimal "
-              "threshold the model is right **65% of the time it calls a pass**, "
-              "against a 10.4% prior -- a better-than-6x lift.",
+              "Accuracy sits at 86-91% across the checkpoints, measured on an event "
+              "the model never saw. One caveat worth carrying: at a 10.4% base rate "
+              "a model answering \"no pass\" to everything already scores ~90%, so "
+              "accuracy is best read alongside ROC-AUC, which is prevalence-"
+              "independent and shows the model is genuinely ordering opportunities "
+              "rather than exploiting the class imbalance.",
               ""]
     lines += ["", "## Against a gap-only reference", "",
               "CP-14 expects `gap_at_checkpoint` to carry real signal alone. If the "
