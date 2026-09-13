@@ -14,9 +14,9 @@ function makeTrack(): TrackModel {
     x: new Float32Array(1), y: new Float32Array(1), z: new Float32Array(1),
     halfWidth: new Float32Array([6]), widthBinMetres: length,
     timingLines: { sf: 0, s1: 1600, s2: 3300 },
-    corners: [], grid: { order: [], pitchMetres: 8 },
+    corners: [], grid: { order: [], pitchMetres: 8, anchorMetres: null },
     pitLanePath: null,
-    pitLane: { entryStation: null, exitStation: null, mergeStation: null, loopLateral: null },
+    pitLane: { entryStation: null, exitStation: null, mergeStation: null, loopLateral: null, exitLateral: null },
     referenceProfile: { binMetres: 10, speedKph, gear },
   };
 }
@@ -151,7 +151,7 @@ function leaf(value: number | null, extra: Record<string, unknown> = {}) {
 function makeStandingStart(overrides: Partial<StandingStartBlock> = {}): StandingStartBlock {
   return {
     grid: {
-      slotPitchMetres: leaf(PITCH_M, { se: 0.031155, n: 208 }),
+      slotPitchMetres: leaf(PITCH_M, { se: 0.031155, n: 208, anchorMetres: null }),
       perSessionPitchMetres: {},
       anchorMetresPastTimingLine: {
         provenance: "DERIVED",

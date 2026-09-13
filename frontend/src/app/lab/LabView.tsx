@@ -74,8 +74,7 @@ export default function LabView() {
     const g: Group[] = [
       {
         name: "Pace",
-        blurb:
-          "How lap time moves through a session independently of the tyre. Fuel burn and track evolution are collinear in lap number and cannot be separated from lap data alone, so the artifact ships their sum and says so.",
+        blurb: "Fuel burn + track evolution, inseparable in lap data.",
         rows: [
           {
             label: "Session pace trend",
@@ -86,8 +85,7 @@ export default function LabView() {
       },
       {
         name: "Proximity & overtaking",
-        blurb:
-          "The dirty-air term, measured on the gap at the start of the lap. It doubles as the per-circuit overtaking-difficulty index.",
+        blurb: "Dirty air, on the gap at lap start. Doubles as overtaking difficulty.",
         rows: [
           {
             label: "Dirty-air loss",
@@ -98,8 +96,7 @@ export default function LabView() {
       },
       {
         name: "Noise",
-        blurb:
-          "Two components: a Normal core for ordinary lap-to-lap scatter, and a rare incident tail. A single Gaussian would understate how often a lap goes badly wrong.",
+        blurb: "Normal core + rare incident tail.",
         rows: [
           { label: "Core sigma", leaf: params.noise.coreSigma, unit: "s" },
           { label: "Incident probability", leaf: params.noise.incidentProbability, unit: "per lap" },
@@ -118,9 +115,8 @@ export default function LabView() {
           Parameter <em>Lab</em>
         </h1>
         <p className={s.lede}>
-          Every input the race model takes, with the spread it was fitted to. A parameter whose
-          interval is wide is one the data barely pins down — worth knowing before you lean on an
-          answer that depends on it.
+          Every model input, with its fitted spread. A wide interval is a parameter the data
+          barely pins down.
         </p>
       </header>
 
@@ -172,10 +168,7 @@ export default function LabView() {
       <section className={s.gated}>
         <h2 className={s.sectionTitle}>Answers</h2>
         <p className={s.sectionLede}>
-          The questions left. Each needs the lap model evaluated, which happens in Python — the
-          browser never computes physics. The delivery route is the one the envelope calculator
-          above already uses: a precomputed table the UI reads as a lookup, so a slider still
-          responds immediately and offline.
+          Waiting on Python. Each arrives as a lookup table, like the calculator above.
         </p>
         <div className={s.gatedGrid}>
           <AwaitingModel
@@ -383,11 +376,9 @@ function EnvelopeCalculator() {
     <section className={s.calc}>
       <h2 className={s.sectionTitle}>Envelope calculator</h2>
       <p className={s.sectionLede}>
-        The modelled electrical power cap at a speed, read off the table Python sampled from{" "}
-        <code>max_electrical_power_kw</code> — the system&apos;s only implementation of this curve.
-        The browser looks the value up and never interpolates, so the kW below is the kW the
-        optimiser saw. Speeds snap to the sampled grid: every {fmtSpeed(table.step_kmh)} km/h from 0
-        to {fmtSpeed(grid.maxSpeed)}, plus every breakpoint.
+        Electrical power cap vs speed, read off Python&apos;s sampled table — never interpolated
+        here, so this is the kW the optimiser saw. Grid: {fmtSpeed(table.step_kmh)} km/h steps to{" "}
+        {fmtSpeed(grid.maxSpeed)}, plus breakpoints.
       </p>
 
       <div className={s.badges}>

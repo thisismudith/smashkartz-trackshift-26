@@ -16,7 +16,10 @@ import { type CatalogueTrack, type Selection, SessionSelector } from "./SessionS
 import { TimelineScrubber } from "./TimelineScrubber";
 import { TrackLegend } from "./TrackLegend";
 import { CollapsiblePanel } from "./CollapsiblePanel";
-import { OvertakePanel } from "./OvertakePanel";
+import { OvertakePanel, useOvertakeGeometry } from "./OvertakePanel";
+import { HelpModal } from "./HelpModal";
+import { Minimap } from "./Minimap";
+import { RailPanel } from "./RailPanel";
 import { WeatherStrip } from "./WeatherStrip";
 import styles from "./sim.module.css";
 
@@ -71,6 +74,27 @@ export default function SimCanvas() {
   /** driver code -> car number / team colour, for the compact leaderboard */
   const [driverMeta, setDriverMeta] = useState<Map<string, { num: string | null; colour: string | null }>>(new Map());
 
+  /** Which rail panels are on screen. A hidden panel is removed entirely rather
+   * than folded: a folded panel still costs a title bar, and with five of them
+   * that is most of the rail. "Show all" restores every one at once. */
+  const [visible, setVisible] = useState<Record<string, boolean>>({
+    minimap: true, driver: true, overtake: true, environment: true,
+  });
+  const allVisible = Object.values(visible).every(Boolean);
+  function toggle(key: string) {
+    setVisible((v) => ({ ...v, [key]: !v[key] }));
+  }
+  function showAll() {
+    setVisible({ minimap: true, driver: true, overtake: true, environment: true });
+  }
+
+  /** Shift+/ opens the reference overlay; Escape closes it. */
+  const [helpOpen, setHelpOpen] = useState(false);
+  /** Escape with no modal open hides every HUD layer, leaving only the circuit.
+   * Pressing it again brings them all back -- the same key both ways, because a
+   * viewer who hid the HUD by accident should not have to find a different one. */
+  const [hudHidden, setHudHidden] = useState(false);
+
   const [rules, setRules] = useState<RuleSet | null>(null);
   const [index, setIndex] = useState<SimIndex | null>(null);
   const [catalogue, setCatalogue] = useState<Catalogue | null>(null);
@@ -83,6 +107,10 @@ export default function SimCanvas() {
   const selectedRow = selectedDriver
     ? dashboard?.leaderboard.find((r) => r.driver === selectedDriver) ?? null
     : null;
+
+  // One fetch per circuit, shared by the panel, the plan view and the legend.
+  const { geometry: overtakeGeometry, error: overtakeError } =
+    useOvertakeGeometry(selection?.trackSlug ?? null);
 
   // Direction of travel at the focused car, for resolving the wind into head and
   // cross components (API.md section 8). The board publishes lap PROGRESS rather
@@ -230,14 +258,32 @@ export default function SimCanvas() {
     rendererRef.current?.setCameraMode(cameraMode);
   }, [cameraMode]);
 
-  // Spacebar is play/pause, unless the user is typing in a control.
+  // Stage keys: space plays, Shift+/ opens the reference overlay, Escape hides
+  // and restores the HUD. None of them fire while the viewer is typing in a
+  // control, or the session selector would swallow its own keystrokes.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.code !== "Space") return;
       const el = e.target as HTMLElement | null;
-      if (el && /^(INPUT|SELECT|TEXTAREA|BUTTON)$/.test(el.tagName)) return;
-      e.preventDefault();
-      togglePlay();
+      if (el && /^(INPUT|SELECT|TEXTAREA)$/.test(el.tagName)) return;
+      if (e.code === "Space") {
+        if (el && el.tagName === "BUTTON") return; // space already activates it
+        e.preventDefault();
+        togglePlay();
+        return;
+      }
+      // "?" is Shift+/ on most layouts, but not all -- accept either spelling
+      // rather than making the shortcut depend on the keyboard's country.
+      if (e.key === "?" || (e.shiftKey && e.code === "Slash")) {
+        e.preventDefault();
+        setHelpOpen((v) => !v);
+        return;
+      }
+      if (e.key === "Escape") {
+        // The modal handles its own Escape in a capturing listener, so reaching
+        // here means no modal is open and the key belongs to the HUD.
+        e.preventDefault();
+        setHudHidden((v) => !v);
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -251,8 +297,45 @@ export default function SimCanvas() {
   return (
     <div className={styles.stage}>
       <canvas ref={canvasRef} className={styles.canvas} />
+
+      <HelpModal open={helpOpen} title="Camera & display" onClose={() => setHelpOpen(false)}>
+        {/* The key list lives beside the input handlers in scene.ts so the two
+            can never drift apart; this only renders it. */}
+        <dl className={styles.cameraHelp}>
+          {CAMERA_CONTROL_HELP.map(({ keys, action }) => (
+            <div key={keys} className={styles.cameraHelpRow}>
+              <dt>{keys}</dt>
+              <dd>{action}</dd>
+            </div>
+          ))}
+          <div className={styles.cameraHelpRow}><dt>Esc</dt><dd>hide / show the HUD</dd></div>
+          <div className={styles.cameraHelpRow}><dt>?</dt><dd>this panel</dd></div>
+        </dl>
+        <TrackLegend
+          hasPitLane={hasPitLane}
+          hasDetection={overtakeGeometry?.detectionM != null}
+          hasZones={Boolean(overtakeGeometry?.zones.some((z) => z.activationM != null))}
+        />
+        <GpuBadge
+          gpu={gpuInfo}
+          perf={perf}
+          preference={gpuPref}
+          onPreferenceChange={setGpuPref}
+        />
+      </HelpModal>
+
+      {hudHidden ? (
+        <button
+          type="button"
+          className={styles.hudRestore}
+          onClick={() => setHudHidden(false)}
+        >
+          Esc · show HUD
+        </button>
+      ) : null}
+
       {/* top left: what you are watching, and how you are watching it */}
-      <div className={styles.topLeft}>
+      <div className={styles.topLeft} data-hidden={hudHidden}>
         <div className={styles.titleRow}>
           {state.error || loadError ? (
             <span className={styles.error}>{state.error ?? loadError}</span>
@@ -273,80 +356,6 @@ export default function SimCanvas() {
           />
         ) : null}
 
-        <div className={styles.segmented} role="group" aria-label="Camera">
-          <button
-            type="button"
-            data-active={!cameraLocked}
-            onClick={() => {
-              const next = !cameraLocked;
-              setCameraLocked(next);
-              rendererRef.current?.setCameraLocked(next);
-            }}
-            title="Lock / unlock the camera (middle mouse). Unlocked: drag to orbit, right-drag to pan, scroll to zoom at the cursor"
-          >
-            {cameraLocked ? "locked" : "free"}
-          </button>
-          <button
-            type="button"
-            data-active={showTags}
-            onClick={() => {
-              const next = !showTags;
-              setShowTags(next);
-              rendererRef.current?.setLabelsVisible(next);
-            }}
-          >
-            tags
-          </button>
-          <button
-            type="button"
-            data-active={dimField}
-            title="Fade every car except the one in focus, so it is easy to pick out of a pack"
-            onClick={() => {
-              const next = !dimField;
-              setDimField(next);
-              rendererRef.current?.setDimUnfocused(next);
-            }}
-          >
-            dim field
-          </button>
-          {CAMERA_MODES.map((m) => (
-            <button
-              key={m}
-              type="button"
-              data-active={cameraMode === m}
-              onClick={() => setCameraMode(m)}
-            >
-              {m}
-            </button>
-          ))}
-        </div>
-
-        <details className={styles.infoFold}>
-          <summary>Display &amp; hardware</summary>
-          <TrackLegend hasPitLane={hasPitLane} />
-          <GpuBadge
-            gpu={gpuInfo}
-            perf={perf}
-            preference={gpuPref}
-            onPreferenceChange={setGpuPref}
-          />
-        </details>
-
-        {/* The keyboard/mouse rig has real depth (WASD flight, boost, per-mode chase
-            panning, free-orbit) that a first-time viewer cannot discover by trial. The
-            list itself lives beside the input handlers in scene.ts so the two can never
-            drift apart -- this component only renders it. */}
-        <details className={styles.infoFold}>
-          <summary>Camera controls</summary>
-          <dl className={styles.cameraHelp}>
-            {CAMERA_CONTROL_HELP.map(({ keys, action }) => (
-              <div key={keys} className={styles.cameraHelpRow}>
-                <dt>{keys}</dt>
-                <dd>{action}</dd>
-              </div>
-            ))}
-          </dl>
-        </details>
 
         {/* The focused car takes every pixel the controls above leave, because its
             energy readout is the densest thing on screen. The environment panel is
@@ -354,31 +363,118 @@ export default function SimCanvas() {
             wanted at a glance rather than scrolled to. Both used to be nested under the
             leaderboard, where a 20-row table pushed them below the fold. */}
         <div className={styles.leftDock}>
-          <DriverPanel row={selectedRow} rules={rules} />
+          <div className={styles.hudToggles}>
+            {([
+              ["minimap", "Map"], ["driver", "Car"],
+              ["overtake", "Overtake"], ["environment", "Env"],
+            ] as const).map(([key, label]) => (
+              <button
+                key={key} type="button" data-on={visible[key]}
+                onClick={() => toggle(key)}
+                aria-pressed={visible[key]}
+              >
+                {label}
+              </button>
+            ))}
+            {!allVisible ? (
+              <button type="button" data-all="true" onClick={showAll}>Show all</button>
+            ) : null}
+          </div>
+
+          <RailPanel title="Circuit" hidden={!visible.minimap}>
+            <Minimap
+              track={trackModel}
+              dashboard={dashboard}
+              geometry={overtakeGeometry}
+              selectedDriver={selectedDriver}
+              onSelectDriver={selectDriver}
+            />
+          </RailPanel>
+
+          <RailPanel title="Focused car" hidden={!visible.driver}>
+            <DriverPanel row={selectedRow} rules={rules} />
+          </RailPanel>
+
           {/* The rules service knows circuits by the slug the artifacts use, so
               the selection's own trackSlug is the key -- no second mapping to
               drift out of step with the one the sim already loads by. */}
-          <OvertakePanel
-            event={selection?.trackSlug ?? null}
-            renderer={renderer}
-            dashboard={dashboard}
-          />
+          <RailPanel title="Overtake" hidden={!visible.overtake}>
+            <OvertakePanel
+              event={selection?.trackSlug ?? null}
+              renderer={renderer}
+              dashboard={dashboard}
+              selectedDriver={selectedDriver}
+              geometry={overtakeGeometry}
+              geometryError={overtakeError}
+            />
+          </RailPanel>
         </div>
 
-        <EnvironmentPanel
-          weather={meta?.weather ?? null}
-          headingRad={focusHeadingRad}
-          headingLabel={selectedRow ? `${selectedRow.driver}'s heading` : null}
-          sessionTime={dashboard?.sessionTime ?? 0}
-          duration={state.duration}
-          totalLaps={state.totalLaps}
-          neutralisation={dashboard?.activeNeutralisation ?? null}
-        />
+        <RailPanel title="Environment" hidden={!visible.environment} defaultOpen={false}>
+          <EnvironmentPanel
+            weather={meta?.weather ?? null}
+            headingRad={focusHeadingRad}
+            headingLabel={selectedRow ? `${selectedRow.driver}'s heading` : null}
+            sessionTime={dashboard?.sessionTime ?? 0}
+            duration={state.duration}
+            totalLaps={state.totalLaps}
+            neutralisation={dashboard?.activeNeutralisation ?? null}
+          />
+        </RailPanel>
       </div>
 
       {/* bottom centre: transport, the way a player behaves */}
-      <div className={styles.transport}>
+      <div className={styles.transport} data-hidden={hudHidden}>
         <div className={styles.transportRow}>
+          {/* Moved down from the top-left corner: the stage reads better with
+              the left side free for panels, and these belong with the transport. */}
+          <div className={styles.segmented} role="group" aria-label="Camera">
+            <button
+              type="button"
+              data-active={!cameraLocked}
+              onClick={() => {
+                const next = !cameraLocked;
+                setCameraLocked(next);
+                rendererRef.current?.setCameraLocked(next);
+              }}
+              title="Lock / unlock the camera (middle mouse). Unlocked: drag to orbit, right-drag to pan, scroll to zoom at the cursor"
+            >
+              {cameraLocked ? "locked" : "free"}
+            </button>
+            <button
+              type="button"
+              data-active={showTags}
+              onClick={() => {
+                const next = !showTags;
+                setShowTags(next);
+                rendererRef.current?.setLabelsVisible(next);
+              }}
+            >
+              tags
+            </button>
+            <button
+              type="button"
+              data-active={dimField}
+              title="Fade every car except the one in focus, so it is easy to pick out of a pack"
+              onClick={() => {
+                const next = !dimField;
+                setDimField(next);
+                rendererRef.current?.setDimUnfocused(next);
+              }}
+            >
+              dim field
+            </button>
+            {CAMERA_MODES.map((m) => (
+              <button
+                key={m}
+                type="button"
+                data-active={cameraMode === m}
+                onClick={() => setCameraMode(m)}
+              >
+                {m}
+              </button>
+            ))}
+          </div>
           <button
             type="button"
             className={styles.playBtn}

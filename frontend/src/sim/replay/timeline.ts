@@ -73,7 +73,8 @@ import type {
 import { type DecodedLap, decodeLap, sampleLap } from "../data/codec";
 import type { RawDriverEntry, RawLapEntry, RawSessionManifest } from "../data/manifest";
 import {
-  gridSlotsOf, halfWidthAt, lapPositionFrame, measuredLateralRoomM, trackPointAt,
+  gridSlotStation, gridSlotsOf, halfWidthAt, lapPositionFrame, measuredLateralRoomM,
+  trackPointAt,
 } from "../data/manifest";
 // The two-column grid stagger and the parked queue are PRESENTATION placements, so they
 // legitimately take the presentation layer's car width -- the same 2.0 m the renderer
@@ -302,9 +303,8 @@ const CENTRE_SMOOTH_OFFSETS_M = [-4, -2, 0, 2, 4];
 function roadCentreFromRing(track: TrackModel, stationM: number): number | null {
   const samples: number[] = [];
   for (const d of CENTRE_SMOOTH_OFFSETS_M) {
-    const left = measuredLateralRoomM(track, stationM + d, 1);
-    const right = measuredLateralRoomM(track, stationM + d, -1);
-    if (left !== null && right !== null) samples.push((left - right) / 2);
+    const pair = roadEdgesAt(track, stationM + d);
+    if (pair) samples.push((pair.left - pair.right) / 2);
   }
   if (samples.length < 2) return null;
   samples.sort((a, b) => a - b);
@@ -312,15 +312,46 @@ function roadCentreFromRing(track: TrackModel, stationM: number): number | null 
   return samples.length % 2 ? samples[mid] : (samples[mid - 1] + samples[mid]) / 2;
 }
 
+/**
+ * The widest a station's two measured edges may be apart and still describe ONE ROAD.
+ *
+ * The bake's edge walk stops at the first step that is not drivable surface, which is
+ * the right rule on a circuit whose track is bounded by grass or gravel and the wrong
+ * one wherever asphalt run-off, a pit apron or a service road is CONTINUOUS with the
+ * track: the walk crosses the painted edge and keeps going to its own 40 m cap.
+ * Measured over Silverstone's 5806 two-sided stations, left + right exceeds 25 m at
+ * 23.3 % of them and reaches 80 m, against a circuit that is 12-18 m wide and a shipped
+ * ribbon of 12.17-15.00 m. 25 m is wider than any F1 circuit's tarmac and narrower than
+ * every one of those leaks.
+ *
+ * A pair this cannot be is not a road measurement, so it does not get to say where the
+ * middle of the road is -- placing a grid on one put half the British field 9 m one side
+ * of the ring and the other half 8 m the other, an 18 m break down the middle of a
+ * straight grid. The station then falls back to the single-sided placement, which is the
+ * same answer a station with only one measured edge already gets.
+ */
+const MAX_MEASURED_ROAD_WIDTH_M = 25;
+
+/** Both measured edges at a station, or null unless the pair describes one road. */
+function roadEdgesAt(
+  track: TrackModel, stationM: number,
+): { left: number; right: number } | null {
+  const left = measuredLateralRoomM(track, stationM, 1);
+  const right = measuredLateralRoomM(track, stationM, -1);
+  if (left === null || right === null) return null;
+  if (left + right > MAX_MEASURED_ROAD_WIDTH_M) return null;
+  return { left, right };
+}
+
 function columnLateral(
   track: TrackModel, stationM: number, sign: number,
 ): number {
   const surfaced = Boolean(track.surface);
   if (surfaced) {
-    const leftRoom = measuredLateralRoomM(track, stationM, 1);
-    const rightRoom = measuredLateralRoomM(track, stationM, -1);
     const carHalfWidth = CAR_RENDER_WIDTH_M / 2;
-    if (leftRoom !== null && rightRoom !== null) {
+    const edges = roadEdgesAt(track, stationM);
+    if (edges) {
+      const { left: leftRoom, right: rightRoom } = edges;
       // The road's own measured midpoint, in the ring's "+ = left" lateral frame --
       // e.g. leftRoom 1.75 m, rightRoom 17.5 m puts the centre 7.875 m RIGHT of the
       // ring, matching the 6.5 m this file's own measurement above found by hand.
@@ -334,10 +365,10 @@ function columnLateral(
       // on the road here, not on its neighbours' average road.
       return Math.max(-(rightRoom - carHalfWidth), Math.min(leftRoom - carHalfWidth, target));
     }
-    // Only one side has a measurement: there is no true centre to place against, so
-    // fall back to the single-side, ring-relative placement -- single file on the
+    // Only one side has a usable measurement: there is no true centre to place against,
+    // so fall back to the single-side, ring-relative placement -- single file on the
     // unmeasured side, exactly as when nothing at all is measured (see below).
-    const measured = sign >= 0 ? leftRoom : rightRoom;
+    const measured = measuredLateralRoomM(track, stationM, sign);
     if (measured === null) return 0;
     const fits = measured - carHalfWidth;
     const offset = Math.max(0, Math.min(GRID_LATERAL_FALLBACK_M, fits));
@@ -430,6 +461,11 @@ export class ReplayTimeline implements RaceTimeline {
   /** Drivers whose lap-1 position is not a measurement, straight from the track model.
    * Kept as a Set because sampleAt consults it at 60 Hz. */
   private gridUnplaced = new Set<string>();
+  /** Drivers the PRODUCER placed in a box. Not the same as `gridIndex`, which also
+   * carries everyone gridOrder had to append (a pit-lane starter, a driver the producer
+   * could not place) at indices past the last published slot. Only a driver in here may
+   * be held on a grid slot. */
+  private gridBoxed = new Set<string>();
   /** driver -> index in gridOrder. sampleAt runs at 60 Hz; indexOf inside a comparator
    * is O(n) per comparison, this is O(1). */
   private gridIndex = new Map<string, number>();
@@ -502,6 +538,9 @@ export class ReplayTimeline implements RaceTimeline {
       // trustworthy: keep it, appending anyone it missed
       this.gridOrder = [...detected,
         ...[...this.byDriver.keys()].filter((d) => !detected.includes(d))];
+      // The appended drivers are exactly the ones with NO box; the producer's own order
+      // is the list of cars that have one.
+      this.gridBoxed = new Set(detected);
     } else {
       // too sparse to believe; order by who completed lap 1 first, which needs only
       // the lap clock and is unaffected by broken position data
@@ -511,6 +550,9 @@ export class ReplayTimeline implements RaceTimeline {
         .map((x) => x.driver);
     }
 
+    // the fallback order is lap-1 completion order: every driver in it is a starter the
+    // producer simply could not slot, so all of them keep a box
+    if (this.gridBoxed.size === 0) this.gridBoxed = new Set(this.gridOrder);
     this.gridOrder.forEach((d, i) => this.gridIndex.set(d, i));
     this.gridUnplaced = new Set(this.track.grid.unplaced ?? []);
     // The side of the ring each slot sits on is the PRODUCER's to state, and it states
@@ -535,10 +577,46 @@ export class ReplayTimeline implements RaceTimeline {
    * about where the car actually is (it does not feed gaps, laps, or any other
    * reported number). */
   private parkedStation(driver: string): number {
-    const idx = this.parkIndex.get(driver) ?? 0;
-    const back = (idx + 1) * this.track.grid.pitchMetres;
-    return ((this.track.timingLines.sf - back) % this.track.lengthMetres + this.track.lengthMetres)
-      % this.track.lengthMetres;
+    // Queued in the GRID's own boxes, one car per box behind pole, rather than behind
+    // the timing line. Same reason the grid moved (gridSlotStation): at Silverstone the
+    // line is 110.8 m short of the boxes and the road behind it is the exit of Club, so
+    // a queue measured from the line parked the finishers around a 45 deg bend.
+    return gridSlotStation(this.track, (this.parkIndex.get(driver) ?? 0) + 1);
+  }
+
+  /**
+   * Progress a car released from the pit lane ranks at: BEHIND EVERY GRID BOX.
+   *
+   * Its station is a real measurement and is drawn as one, but it is a pit-lane
+   * coordinate projected onto the RACING ring, so it is not comparable with a station
+   * measured on the circuit -- the same reason `gapUsable` already refuses to compute a
+   * gap from it. Measured at the 2026 British GP: ALO sits in the lane at ring station
+   * 351.2 m while the stationary field is on its boxes at 110.8 m and behind, so ranking
+   * the two on the same axis put the one car that had not started the race at P1.
+   */
+  private pitLaneRankProgress(): number {
+    return -((this.gridOrder.length + 1) * this.track.grid.pitchMetres)
+      / this.track.lengthMetres;
+  }
+
+  /** Where a pit-lane starter is placed before its own telemetry begins.
+   *
+   * The station is the pit EXIT and so is the lateral. They used to come from different
+   * points of the lane -- `exitStation` paired with `loopLateral`, which is the offset of
+   * the BOX -- and at Silverstone the box is 34.95 m off the ring where the exit road at
+   * that station is 19.33 m, so the car was parked 15.6 m beyond the pit road. An
+   * artifact too old to carry `exitLateral` keeps the old pairing rather than inventing
+   * one.
+   */
+  private pitLaneStart(lapEntry: RawLapEntry | null): ReturnType<ReplayTimeline["progress"]> {
+    const pit = this.track.pitLane;
+    return {
+      lapsDone: 0, lapProgress: 0, rankProgress: this.pitLaneRankProgress(),
+      stationM: pit.exitStation ?? 0,
+      lapEntry, kind: "pit", officialPos: null,
+      lateralOverride: pit.exitLateral ?? pit.loopLateral ?? 0,
+      posProvenance: "RULE", positionFrame: null,
+    };
   }
 
   /** The parked queue's lateral, laid out in the same two columns as the grid.
@@ -603,14 +681,7 @@ export class ReplayTimeline implements RaceTimeline {
         // Genuinely started from the pit lane (their lap 1 has a pit-exit time --
         // measured: ALO at the 2026 British GP). They are released after the field has
         // gone, so they rank behind the last grid slot.
-        const pit = this.track.pitLane;
-        return {
-          lapsDone: 0, lapProgress: 0, rankProgress: slotFraction(this.gridOrder.length),
-          stationM: pit.exitStation ?? 0,
-          lapEntry: first ?? null, kind: "pit", officialPos: null,
-          lateralOverride: pit.loopLateral ?? 0,
-          posProvenance: "RULE", positionFrame: null,
-        };
+        return this.pitLaneStart(first ?? null);
       }
       // A driver Python could not place has NO grid position, and the old fallback gave
       // EVERY such driver the same slot (gridOrder.length), stacking them on one point.
@@ -627,9 +698,7 @@ export class ReplayTimeline implements RaceTimeline {
         };
       }
       const safeSlot = slot >= 0 ? slot : this.gridOrder.length;
-      const gridStation = (safeSlot + 1) * -this.track.grid.pitchMetres;
-      const slotStation = ((gridStation % this.track.lengthMetres) + this.track.lengthMetres)
-        % this.track.lengthMetres;
+      const slotStation = gridSlotStation(this.track, safeSlot);
       // A real starting grid is two staggered columns, not a single file on the
       // centreline. The audit found the raw data gives a usable grid ORDER and ~8 m
       // spacing but no lateral at all (every car is snapped to one line), so the
@@ -713,11 +782,14 @@ export class ReplayTimeline implements RaceTimeline {
     // Measured consequence: 70 % of frames in the first minute had cars intersecting,
     // versus 0 % after 20 minutes. While a car is still stationary on lap 1, keep it
     // in its own grid slot instead.
-    const stationarySlot = this.gridIndex.get(dl.entry.driver) ?? -1;
+    // ...but only for a car that HAS a box. A pit-lane starter has none: it is held at
+    // the end of the lane, and snapping it to a slot index past the last published one
+    // invented a 22nd grid box on the racing line and left ALO parked in it for the whole
+    // of the 2026 British GP, from the moment it stopped at the pit exit light.
+    const boxed = this.gridBoxed.has(dl.entry.driver) && !this.pitStarters.has(dl.entry.driver);
+    const stationarySlot = boxed ? (this.gridIndex.get(dl.entry.driver) ?? -1) : -1;
     if (lap.lap === 1 && sample && sample.speedKph < 1 && stationarySlot >= 0) {
-      const gridStation = (stationarySlot + 1) * -this.track.grid.pitchMetres;
-      const slotStation = ((gridStation % this.track.lengthMetres) + this.track.lengthMetres)
-        % this.track.lengthMetres;
+      const slotStation = gridSlotStation(this.track, stationarySlot);
       return {
         lapsDone: 0, lapProgress: 0, rankProgress: slotFraction(stationarySlot),
         stationM: slotStation,
@@ -753,10 +825,19 @@ export class ReplayTimeline implements RaceTimeline {
     // and the station stays absent so no consumer can draw or gap it.
     const positionKnown = Number.isFinite(frac)
       && (!sample || Number.isFinite(sample.stationM));
+    // A car that has not yet been RELEASED from the pit lane is not in the race, however
+    // far down the ring its lane coordinates happen to project. Its own pit-exit time
+    // says when that stops being true, so this holds only until `pout` and only on lap 1;
+    // its drawn position stays the measurement throughout. Without it the 2026 British GP
+    // opened with ALO -- stationary at the pit exit light, ring station 351 m -- shown as
+    // the leader, ahead of a whole field still on its boxes at 110 m and behind.
+    const heldInLane = lap.lap === 1 && this.pitStarters.has(dl.entry.driver)
+      && lap.pout !== null && t < lap.pout;
+    const measuredProgress = nonFf1gLapsBefore + (positionKnown ? frac : 0);
     return {
       lapsDone: nonFf1gLapsBefore,
       lapProgress: positionKnown ? frac : 0,
-      rankProgress: nonFf1gLapsBefore + (positionKnown ? frac : 0),
+      rankProgress: heldInLane ? this.pitLaneRankProgress() : measuredProgress,
       // NOT the start/finish line. Substituting a real place on the circuit for an
       // unknown one is the same fabrication the encoder just stopped doing; NaN keeps
       // it absent, and the renderer skips a car it cannot place.

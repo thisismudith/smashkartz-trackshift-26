@@ -27,17 +27,15 @@ const PRIMARY_ENTRIES: Entry[] = [
   { href: "/sessions", label: "Sessions" },
   { href: "/insights", label: "Insights" },
   { href: "/rules", label: "Rules" },
-  { href: "/decision", label: "Decision", pending: "awaiting strategic replay artifacts" },
+  { href: "/decision", label: "Decision", pending: "awaiting M22 shadow price, M10 pass, M09 rival, M24 planner" },
 ];
 
 /** Secondary evidence and parameter surfaces. They are useful, but not the first lap of analysis. */
 const TOOL_ENTRIES: Entry[] = [
   { href: "/league", label: "League" },
   { href: "/lab", label: "Lab" },
-  { href: "/decision", label: "Decision", pending: "awaiting M22" },
   { href: "/config", label: "Config" },
   { href: "/sim", label: "Simulator" },
-  { href: "/about", label: "About" },
 ];
 
 /** Routes that own the whole viewport and must not get a bar over the top. */

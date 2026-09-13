@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { DashboardRow, DashboardSnapshot } from "../contract/types";
-import { closestBattle, intervalSeconds, readableError, rulesEventKey } from "./OvertakePanel";
+import { battlesToShow, closestBattle, driverBattles, intervalSeconds, readableError, rulesEventKey } from "./OvertakePanel";
 
 function row(driver: string, interval: string, status: DashboardRow["status"] = "track"): DashboardRow {
   return {
@@ -41,7 +41,7 @@ describe("closestBattle", () => {
     const battle = closestBattle(snapshot([
       row("AAA", "LEADER"), row("BBB", "+3.0"), row("CCC", "+0.4"), row("DDD", "+2.0"),
     ]));
-    expect(battle).toEqual({ attacker: "CCC", defender: "BBB", gapS: 0.4 });
+    expect(battle).toEqual({ attacker: "CCC", defender: "BBB", gapS: 0.4, relation: "closest" });
   });
 
   it("ignores a car in the pit lane, which is not racing the car ahead", () => {
@@ -90,5 +90,63 @@ describe("readableError", () => {
 
   it("has something to say when there is no error text at all", () => {
     expect(readableError(undefined)).toContain("unreachable");
+  });
+});
+
+
+describe("driverBattles", () => {
+  const board = snapshot([
+    row("AAA", "LEADER"), row("BBB", "+1.2"), row("CCC", "+0.4"), row("DDD", "+3.0"),
+  ]);
+
+  it("returns the car the focused driver is chasing AND the one chasing it", () => {
+    const battles = driverBattles(board, "CCC");
+    expect(battles).toEqual([
+      { attacker: "CCC", defender: "BBB", gapS: 0.4, relation: "ahead" },
+      { attacker: "DDD", defender: "CCC", gapS: 3.0, relation: "behind" },
+    ]);
+  });
+
+  it("gives the leader only the car chasing it", () => {
+    expect(driverBattles(board, "AAA")).toEqual([
+      { attacker: "BBB", defender: "AAA", gapS: 1.2, relation: "behind" },
+    ]);
+  });
+
+  it("gives the last car only the one it is chasing", () => {
+    expect(driverBattles(board, "DDD")).toEqual([
+      { attacker: "DDD", defender: "CCC", gapS: 3.0, relation: "ahead" },
+    ]);
+  });
+
+  it("is empty for a driver not on the board, or none selected", () => {
+    expect(driverBattles(board, "ZZZ")).toEqual([]);
+    expect(driverBattles(board, null)).toEqual([]);
+  });
+});
+
+describe("battlesToShow", () => {
+  const board = snapshot([
+    row("AAA", "LEADER"), row("BBB", "+1.2"), row("CCC", "+0.4"), row("DDD", "+3.0"),
+  ]);
+
+  it("follows the focused driver rather than the tightest gap in the field", () => {
+    // The tightest gap is CCC->BBB at 0.4 s, but AAA is focused, so the panel
+    // must answer about AAA -- the whole point of the fix.
+    const shown = battlesToShow(board, "AAA");
+    expect(shown).toHaveLength(1);
+    expect(shown[0]).toMatchObject({ attacker: "BBB", defender: "AAA", relation: "behind" });
+  });
+
+  it("falls back to the closest battle when nothing is focused, and says so", () => {
+    const shown = battlesToShow(board, null);
+    expect(shown).toHaveLength(1);
+    expect(shown[0].relation).toBe("closest");
+    expect(shown[0]).toMatchObject({ attacker: "CCC", defender: "BBB" });
+  });
+
+  it("is empty when a focused driver is in clear air and the field has no gaps", () => {
+    const strung = snapshot([row("AAA", "LEADER"), row("BBB", "—")]);
+    expect(battlesToShow(strung, "AAA")).toEqual([]);
   });
 });

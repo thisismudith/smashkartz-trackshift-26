@@ -294,7 +294,9 @@
   max-height: 46vh;
 }
 
-.topRight { top: 1rem; right: 1rem; }
+/* Tall enough for a full 22-car field without an inner scrollbar; the body
+   still scrolls if a future field is longer or the window is short. */
+.topRight { top: 1rem; right: 1rem; max-height: 82vh; }
 .bottomRight { bottom: 1rem; right: 1rem; max-height: 34vh; }
 
 .dockHeader {
@@ -493,7 +495,7 @@
   bottom: 1rem;
   left: 50%;
   transform: translateX(-50%);
-  width: min(46rem, 52vw);
+  width: min(64rem, 74vw);
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
@@ -507,6 +509,11 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  /* The camera strip moved in here from the top-left corner, so a narrow window
+     now has more in this row than fits on one line. Wrapping keeps every control
+     reachable instead of pushing the weather readout off the end. */
+  flex-wrap: wrap;
+  row-gap: 0.35rem;
 }
 
 .transportRow button,
@@ -552,6 +559,9 @@
   overscroll-behavior: contain;
   pointer-events: none;
   scrollbar-width: thin;
+  /* Clear the transport bar, or the last panel in the rail sits behind it and
+     reads as missing rather than as scrolled past. */
+  padding-bottom: 7rem;
 }
 
 .leftDock > * {
@@ -712,4 +722,223 @@
 
 .overtakeEras li[data-era="OVERTAKE"] .overtakeEraTag {
   color: var(--haas-white);
+}
+
+
+/* ------------------------------------------------------- left-rail panels
+
+   Stacked in the rail's flex column, so they size to content rather than to a
+   viewport fraction the way the corner docks do. */
+.railPanel {
+  background: rgba(17, 17, 17, 0.82);
+  border: 1px solid var(--haas-grey);
+  font-size: 0.7rem;
+  color: var(--haas-grey);
+}
+
+.railHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  background: transparent;
+  border: none;
+  color: var(--haas-white);
+  cursor: pointer;
+  padding: 0.3rem 0.6rem;
+  font-size: 0.62rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.railPanel[data-open="true"] .railHeader {
+  border-bottom: 1px solid rgba(174, 174, 174, 0.3);
+}
+
+.railTitle { flex: 1 1 auto; text-align: left; }
+.railBadge { color: var(--haas-grey); letter-spacing: 0.04em; }
+.railChevron { color: var(--haas-grey); font-family: var(--font-mono, monospace); }
+
+.railBody {
+  padding: 0.4rem 0.6rem 0.5rem;
+  /* Four panels share one rail; capping each keeps the last one reachable
+     instead of pushed past the bottom of the window. The rail scrolls too, but
+     a panel that needs scrolling to reach at all is a panel nobody opens. */
+  max-height: 22vh;
+  overflow-y: auto;
+}
+
+/* The plan is the one panel worth a fixed square: it is a map, and a map that
+   reflows with the rail's width is a map whose scale keeps changing. */
+.railPanel:has(.minimapSvg) .railBody {
+  max-height: none;
+  overflow: visible;
+  padding: 0.3rem;
+}
+
+/* ------------------------------------------------------------- HUD toggles */
+.hudToggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  align-items: center;
+}
+
+.hudToggles button {
+  background: rgba(17, 17, 17, 0.82);
+  border: 1px solid var(--haas-grey);
+  color: var(--haas-grey);
+  font-size: 0.58rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0.15rem 0.4rem;
+  cursor: pointer;
+}
+
+.hudToggles button[data-on="true"] {
+  color: var(--haas-white);
+  border-color: var(--haas-white);
+}
+
+.hudToggles button[data-all="true"] {
+  color: var(--haas-red);
+  border-color: var(--haas-red);
+}
+
+/* ----------------------------------------------------------------- minimap */
+.minimapSvg {
+  width: 100%;
+  max-height: 13vh;
+  height: auto;
+  display: block;
+}
+
+.minimapNote {
+  margin: 0;
+  color: var(--haas-grey);
+  font-size: 0.62rem;
+}
+
+/* --------------------------------------------- legend swatches for Overtake
+
+   The Detection Line is solid and the Activation Line dashed, matching how they
+   are drawn on the track and on the plan, because one is a measured position of
+   a stated rule and the other a development proxy. */
+.swatchDetection {
+  width: 0.9rem;
+  height: 0;
+  border-top: 2px solid var(--haas-white);
+  display: inline-block;
+}
+
+.swatchActivation {
+  width: 0.9rem;
+  height: 0;
+  border-top: 2px dashed var(--haas-red);
+  display: inline-block;
+}
+
+.swatchZone {
+  width: 0.9rem;
+  height: 0.5rem;
+  background: rgba(218, 41, 28, 0.3);
+  display: inline-block;
+}
+
+.legendProv {
+  color: rgba(174, 174, 174, 0.7);
+  font-style: italic;
+  font-size: 0.56rem;
+  margin-left: 0.25rem;
+}
+
+
+/* --------------------------------------------------------------- HUD hiding
+
+   Escape takes every overlay off the stage so the circuit can be watched or
+   captured clean. A single restore affordance stays, or the only way back would
+   be a key the viewer has to already know. */
+.topLeft[data-hidden="true"],
+.transport[data-hidden="true"] {
+  display: none;
+}
+
+.hudRestore {
+  position: absolute;
+  left: 1rem;
+  bottom: 1rem;
+  background: rgba(17, 17, 17, 0.8);
+  border: 1px solid var(--haas-grey);
+  color: var(--haas-grey);
+  font-size: 0.6rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 0.3rem 0.6rem;
+  cursor: pointer;
+  pointer-events: auto;
+  z-index: 5;
+}
+
+.hudRestore:hover { color: var(--haas-white); border-color: var(--haas-white); }
+
+/* ------------------------------------------------------------------- modal */
+.modalBackdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(17, 17, 17, 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+  z-index: 20;
+}
+
+.modal {
+  background: rgba(17, 17, 17, 0.97);
+  border: 1px solid var(--haas-grey);
+  width: min(34rem, 88vw);
+  max-height: 82vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.modalHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0.8rem;
+  border-bottom: 1px solid rgba(174, 174, 174, 0.35);
+  color: var(--haas-white);
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.modalClose {
+  background: transparent;
+  border: none;
+  color: var(--haas-grey);
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.modalClose:hover { color: var(--haas-white); }
+
+.modalBody {
+  padding: 0.7rem 0.8rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.modalFoot {
+  margin: 0;
+  padding: 0.35rem 0.8rem;
+  border-top: 1px solid rgba(174, 174, 174, 0.25);
+  color: var(--haas-grey);
+  font-size: 0.58rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }

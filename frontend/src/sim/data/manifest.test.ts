@@ -3,9 +3,9 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it, vi } from "vitest";
 import type { TrackModel } from "../contract/types";
 import {
-  gridSlotsOf, halfWidthAt, lapPositionDropped, lapPositionFrame, lapPositionsMeasured,
-  measuredLateralRoomM, parseCorners, parseGridSlots, parseTrackModel, ringDsMetres,
-  surfaceAt, trackPointAt,
+  gridSlotStation, gridSlotsOf, halfWidthAt, lapPositionDropped, lapPositionFrame,
+  lapPositionsMeasured, measuredLateralRoomM, parseCorners, parseGridSlots,
+  parseTrackModel, ringDsMetres, surfaceAt, trackPointAt,
   type RawSessionManifest, type RawTrackModel, type RawTrackSurface,
 } from "./manifest";
 
@@ -738,15 +738,18 @@ describe.skipIf(!shipped)("grid slots on every shipped artifact", () => {
     for (const { slug, raw } of parseableModels()) {
       const published = parseGridSlots(raw);
       const L = raw.ring.lengthMetres;
-      const pitch = raw.grid.pitchMetres;
+      const model = parseTrackModel(raw);
       let worst = 0;
       for (const slot of published) {
         slots++;
         expect(Math.abs(slot.lateralSign), `${slug} P${slot.position} sign`).toBe(1);
-        // The frontend derives a slot station from the pitch alone. That derivation is
-        // sound -- this pins it against the producer's own number on every shipped
-        // slot, which is why only the SIDE had to be taken from grid.slots.
-        const derived = (((slot.position) * -pitch) % L + L) % L;
+        // The renderer derives its own slot station rather than reading grid.slots, so
+        // that a model carrying none (the generated engine, a fixture) still places a
+        // grid. This pins that derivation against the producer's own number on every
+        // shipped slot: the two are the SAME arithmetic in two languages
+        // (gridSlotStation here, grid_slot_station in scripts/simdata/track.py) and a
+        // drift between them is two grids in one race.
+        const derived = gridSlotStation(model, slot.position - 1);
         let d = Math.abs(derived - ((slot.station % L) + L) % L);
         if (d > L / 2) d = L - d;
         worst = Math.max(worst, d);
@@ -809,5 +812,57 @@ describe("measuredLateralRoomM: what the artifact has measured on ONE side of th
         expect(measuredLateralRoomM(model, 0, -1), slug).toBeNull();
       }
     }
+  });
+});
+
+describe("gridSlotStation: the grid goes where the anchor says, not behind the line", () => {
+  const track = (anchorMetres: number | null, sf = 0): TrackModel => ({
+    ...parseTrackModel(makeRaw()),
+    lengthMetres: 5825.74,
+    timingLines: { sf, s1: null, s2: null },
+    grid: { order: [], pitchMetres: 8, unplaced: [], anchorMetres },
+  });
+
+  it("puts pole ON the measured anchor and lays the field back from there", () => {
+    // Silverstone's measured anchor. The old rule put pole at -8 m instead, which is
+    // 118.8 m short of its real box -- verified against the pack, where every car's
+    // first lap-1 sample sits 109.5-122.6 m ahead of the slot it was drawn in.
+    const t = track(110.815);
+    expect(gridSlotStation(t, 0)).toBeCloseTo(110.815, 6);
+    expect(gridSlotStation(t, 1)).toBeCloseTo(102.815, 6);
+    // the back of a 21-car grid is behind the timing line, so it wraps onto the end of
+    // the lap rather than going negative
+    expect(gridSlotStation(t, 20)).toBeCloseTo(110.815 - 160 + 5825.74, 6);
+  });
+
+  it("measures the anchor from the timing line, wherever that is on the ring", () => {
+    // sf is not 0 on a shipped artifact: the ring is rotated so start/finish is station
+    // 0 and the line is then RE-MEASURED in that frame, landing 0.44 m short of the seam
+    // at Silverstone. The anchor is defined against the line, so it has to follow it.
+    const t = track(110.815, 5825.297);
+    expect(gridSlotStation(t, 0)).toBeCloseTo((5825.297 + 110.815) % 5825.74, 6);
+  });
+
+  it("wraps a box laid back across the line onto the end of the lap", () => {
+    const t = track(27.5);
+    for (let i = 0; i < 22; i++) {
+      const s = gridSlotStation(t, i);
+      expect(s).toBeGreaterThanOrEqual(0);
+      expect(s).toBeLessThan(5825.74);
+    }
+    expect(gridSlotStation(t, 10)).toBeCloseTo((27.5 - 80 + 5825.74) % 5825.74, 6);
+  });
+
+  it("falls back to one pitch behind the line when no lattice was resolved", () => {
+    // 4 of the 13 shipped packs are in this state. It is the worse answer and it is the
+    // only one those sessions measured; the artifact says so by carrying a null anchor.
+    const t = track(null);
+    expect(gridSlotStation(t, 0)).toBeCloseTo(5825.74 - 8, 6);
+    expect(gridSlotStation(t, 1)).toBeCloseTo(5825.74 - 16, 6);
+  });
+
+  it("treats a non-finite anchor as no anchor rather than as a position", () => {
+    expect(gridSlotStation(track(NaN), 0)).toBeCloseTo(5825.74 - 8, 6);
+    expect(gridSlotStation(track(Infinity), 0)).toBeCloseTo(5825.74 - 8, 6);
   });
 });

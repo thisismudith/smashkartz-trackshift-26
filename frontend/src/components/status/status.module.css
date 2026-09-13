@@ -1,0 +1,69 @@
+.bar {
+  display: flex;
+  align-items: baseline;
+  gap: 0.7rem;
+  padding: 0.5rem 1.25rem;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  border-bottom: 1px solid rgba(174, 174, 174, 0.16);
+}
+
+/* The synthetic state is the loud one: it is the claim the rest of the page depends on. */
+.synthetic {
+  background: rgba(218, 41, 28, 0.12);
+  border-bottom-color: var(--haas-red);
+}
+
+.offline {
+  background: rgba(174, 174, 174, 0.07);
+  color: var(--muted);
+}
+
+.ok {
+  background: rgba(58, 99, 214, 0.1);
+  color: var(--muted);
+}
+
+.tag,
+.tagStrong {
+  flex: none;
+  padding: 0.1em 0.45em;
+  border-radius: 2px;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.tag {
+  border: 1px solid var(--muted);
+  color: var(--muted);
+}
+
+.tagStrong {
+  background: var(--haas-red);
+  color: var(--haas-white);
+}
+
+.text {
+  color: var(--muted);
+}
+
+.notice {
+  color: var(--foreground);
+  font-weight: 600;
+}
+
+.code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.92em;
+  color: var(--foreground);
+}
+
+@media (max-width: 640px) {
+  .bar {
+    flex-direction: column;
+    gap: 0.3rem;
+    padding: 0.55rem 1rem;
+  }
+}

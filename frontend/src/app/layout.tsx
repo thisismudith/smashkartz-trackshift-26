@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Archivo } from "next/font/google";
 import RaceLoader from "@/components/loader/RaceLoader";
 import SiteNav from "@/components/nav/SiteNav";
+import ApiStatusBanner from "@/components/status/ApiStatusBanner";
 import { HAAS } from "@/lib/palette";
 import "./globals.css";
 
@@ -37,6 +38,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         {/* Lives in the root layout: renders once per full load, persists across client navigation. */}
         <RaceLoader />
         <SiteNav />
+        {/* App-level claim about what every page below is made of. See the component. */}
+        <ApiStatusBanner />
         <div id="main-content" tabIndex={-1}>{children}</div>
       </body>
     </html>

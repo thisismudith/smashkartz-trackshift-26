@@ -20,7 +20,8 @@ import {
 import {
   CAMERA_CONTROL_HELP, CAMERA_KEY_CODES, KEY_BOOST, MAX_RIG_ELEVATION,
   MIN_EYE_ABOVE_GROUND_M, MIN_MOVE_MPS, MIN_RIG_ELEVATION, MOVE_PER_DISTANCE_HZ,
-  cameraMoveSpeed, carRenderPos, chaseCameraPose, chaseRigGeometry, clampEyeAboveGround,
+  cameraMoveSpeed, carPlanPos, carRenderPos, chaseCameraPose, chaseRigGeometry,
+  clampEyeAboveGround,
   clampRigElevation, dampFactor, declutterLanes, disposeRenderObject, disposeTrackLayers,
   environmentGlbCached, groundHeightAt, installTrackLayers, keyBoost, keyLabel,
   keyMoveVector, loadEnvironmentGlb, makeCameraRig, nearestRingIndex, orbitEye,
@@ -52,9 +53,9 @@ function makeRing(over: Partial<TrackModel> = {}): TrackModel {
     slug: "scene-ring", event: "Scene GP", lengthMetres: len,
     x, y, z, halfWidth: new Float32Array([6]), widthBinMetres: len,
     timingLines: { sf: 0, s1: len / 3, s2: (2 * len) / 3 }, corners: [],
-    grid: { order: [], pitchMetres: 8 },
+    grid: { order: [], pitchMetres: 8, anchorMetres: null },
     pitLanePath: null,
-    pitLane: { entryStation: null, exitStation: null, mergeStation: null, loopLateral: null },
+    pitLane: { entryStation: null, exitStation: null, mergeStation: null, loopLateral: null, exitLateral: null },
     referenceProfile: { binMetres: 10, speedKph: new Float32Array([250]), gear: new Uint8Array([7]) },
     ...over,
   };
@@ -1618,5 +1619,55 @@ describe.skipIf(!silverstone)("the ground clamp against the shipped British GP s
      
     console.log(`groundHeightAt: ${perCall.toFixed(4)} ms/call over ${track.x.length} vertices`);
     expect(perCall).toBeLessThan(0.5);
+  });
+});
+
+describe("a car takes its height from the road it is actually on", () => {
+  /** A ring with a real elevation, so "the ring's z" is a number worth getting wrong. */
+  function slopedRing(): TrackModel {
+    const track = makeRing();
+    for (let i = 0; i < track.z.length; i++) track.z[i] = 200 + i * 0.01;
+    return track;
+  }
+
+  it("uses the ring's own height when the caller offers nothing better", () => {
+    const track = slopedRing();
+    const out = new THREE.Vector3();
+    carRenderPos(track, 0, 0, carMinY, out);
+    expect(out.y - carInstanceY(track.z[0], carMinY)).toBeCloseTo(0, 6);
+    // an absent override is absence, not zero: a car must not drop to sea level
+    carRenderPos(track, 0, 0, carMinY, out, undefined, null);
+    expect(out.y - carInstanceY(track.z[0], carMinY)).toBeCloseTo(0, 6);
+    carRenderPos(track, 0, 0, carMinY, out, undefined, NaN);
+    expect(out.y - carInstanceY(track.z[0], carMinY)).toBeCloseTo(0, 6);
+  });
+
+  it("stands on the override where one is given, and moves nowhere in plan", () => {
+    // The pit-lane case: at the 2026 British GP the pit road under the released car is
+    // 3.28 m BELOW the racing line at the same station, so a car drawn from the ring's
+    // height stood in mid-air by exactly that much.
+    const track = slopedRing();
+    const ring = new THREE.Vector3(), lane = new THREE.Vector3();
+    const station = track.lengthMetres * 0.2;
+    carRenderPos(track, station, -19, carMinY, ring);
+    carRenderPos(track, station, -19, carMinY, lane, undefined, ring.y + carMinY
+      - CAR_GROUND_CLEARANCE_M - 3.28);
+    expect(lane.x).toBeCloseTo(ring.x, 9);
+    expect(lane.z).toBeCloseTo(ring.z, 9);
+    expect(ring.y - lane.y).toBeCloseTo(3.28, 6);
+  });
+
+  it("asks about the exact point it draws the car at", () => {
+    // carPlanPos exists so the height lookup and the draw cannot disagree about where
+    // the car is; a second copy of the interpolation is how they would.
+    const track = slopedRing();
+    const drawn = new THREE.Vector3();
+    const plan = carPlanPos(track, track.lengthMetres * 0.61, -19.33,
+      { x: 0, y: 0, ringZ: 0, heading: 0 });
+    carRenderPos(track, track.lengthMetres * 0.61, -19.33, carMinY, drawn);
+    const [rx, , rz] = toRenderFrame(plan.x, plan.y, plan.ringZ);
+    expect(drawn.x).toBeCloseTo(rx, 9);
+    expect(drawn.z).toBeCloseTo(rz, 9);
+    expect(drawn.y).toBeCloseTo(carInstanceY(plan.ringZ, carMinY), 9);
   });
 });

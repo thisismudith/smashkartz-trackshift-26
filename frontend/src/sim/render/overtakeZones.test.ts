@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { TrackModel } from "../contract/types";
-import { buildGate, buildOvertakeLayer, buildZoneBand, overtakeGeometryFromRules } from "./overtakeZones";
+import { buildGate, buildGateMarker, buildOvertakeLayer, buildZoneBand, overtakeGeometryFromRules } from "./overtakeZones";
 
 /** A closed square-ish ring so a gate has a real heading to be perpendicular to. */
 function ringTrack(lengthMetres = 4000, n = 400): TrackModel {
@@ -19,9 +19,9 @@ function ringTrack(lengthMetres = 4000, n = 400): TrackModel {
     x, y, z,
     halfWidth: new Float32Array([6]), widthBinMetres: lengthMetres,
     timingLines: { sf: 0, s1: null, s2: null },
-    corners: [], grid: { order: [], pitchMetres: 8 },
+    corners: [], grid: { order: [], pitchMetres: 8, anchorMetres: null },
     pitLanePath: null,
-    pitLane: { entryStation: null, exitStation: null, mergeStation: null, loopLateral: null },
+    pitLane: { entryStation: null, exitStation: null, mergeStation: null, loopLateral: null, exitLateral: null },
     referenceProfile: {
       binMetres: 10, speedKph: new Float32Array(400).fill(200), gear: new Uint8Array(400).fill(6),
     },
@@ -152,5 +152,37 @@ describe("buildOvertakeLayer", () => {
       zones: [{ zone: 1, activationM: null, endM: null, source: null }],
     });
     expect(layer!.children.map((c) => c.name)).toEqual(["detection-line"]);
+  });
+});
+
+
+describe("buildGateMarker", () => {
+  it("draws a band plus two posts for a posted gate", () => {
+    const marker = buildGateMarker(ringTrack(), 1000, {
+      colour: "#EFEFEF", opacity: 0.75, posts: true,
+    });
+    expect(marker).not.toBeNull();
+    // one band mesh + two post lines
+    expect(marker!.children).toHaveLength(3);
+  });
+
+  it("draws the band alone when posts are off, so a proxy carries less weight", () => {
+    const marker = buildGateMarker(ringTrack(), 1000, {
+      colour: "#DA291C", opacity: 0.45, posts: false,
+    });
+    expect(marker!.children).toHaveLength(1);
+  });
+
+  it("makes the band wide enough along the track to read at racing speed", () => {
+    // A hairline is one pixel for one frame from a chase camera; the band has
+    // real along-track extent, which is the whole point of it.
+    const marker = buildGateMarker(ringTrack(), 1000, {
+      colour: "#EFEFEF", opacity: 0.75, posts: false,
+    })!;
+    const band = marker.children[0] as import("three").Mesh;
+    band.geometry.computeBoundingBox();
+    const box = band.geometry.boundingBox!;
+    const extent = Math.max(box.max.x - box.min.x, box.max.z - box.min.z);
+    expect(extent).toBeGreaterThan(4);
   });
 });

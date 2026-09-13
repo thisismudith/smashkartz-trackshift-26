@@ -475,7 +475,7 @@ function MetricNavigator({
                 </span>
                 {hasInterval && lead ? (
                   <span className={s.metricInterval} data-warn={crossesZero ? "true" : undefined}>
-                    {intervalLabel} {metric.format(lead.lo)} â†’ {metric.format(lead.hi)}
+                    {intervalLabel} {metric.format(lead.lo)} → {metric.format(lead.hi)}
                     {crossesZero ? " Â· ns" : ""}
                   </span>
                 ) : null}
@@ -603,7 +603,7 @@ function DriverHeadline({ rows }: { rows: Row[] }) {
         <span className={s.tileLabel}>fitted grid spread</span>
         <span className={s.tileValue}>{spread.toFixed(3)} s/lap</span>
         <span className={s.tileMeta}>
-          {format(quickest.value)} â†’ {format(slowest.value)} from quickest to largest positive offset
+          {format(quickest.value)} → {format(slowest.value)} from quickest to largest positive offset
         </span>
       </div>
 

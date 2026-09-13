@@ -16,8 +16,9 @@ import {
   type ResolvedEnvironment,
 } from "./environments";
 import {
-  applyShadowPriceOverlay, buildPitLaneMesh, buildTrackMesh, buildTrackOutline,
-  carOrientation, fromRenderFrame, renderForward, toRenderFrame,
+  applyShadowPriceOverlay, buildPitLaneMesh, buildPitLaneHeightField, buildTrackMesh,
+  buildTrackOutline, carOrientation, fromRenderFrame, pitLaneHeightAt, renderForward,
+  toRenderFrame, type PitLaneHeightField,
 } from "./trackMesh";
 import { buildOvertakeLayer, type OvertakeGeometry } from "./overtakeZones";
 
@@ -331,10 +332,26 @@ function ringHeading(track: Pick<TrackModel, "x" | "y">, i0: number, i1: number)
  *
  * Allocates nothing beyond toRenderFrame's tuple: the caller owns `out`.
  */
-export function carRenderPos(
-  track: TrackModel, stationM: number, lateralM: number, geometryMinY: number,
-  out: THREE.Vector3, headingOut?: { value: number },
-): THREE.Vector3 {
+export interface CarPlanPos {
+  /** Track-frame plan position the car is DRAWN at, metres. */
+  x: number;
+  y: number;
+  /** The ring's own height at this station, track-frame metres. */
+  ringZ: number;
+  heading: number;
+}
+
+/**
+ * The plan position carRenderPos draws a car at, without the height decision.
+ *
+ * Split out so anything that needs to ask "what is under this car" -- the pit lane's
+ * height, today -- asks about the EXACT point the car is drawn at, rather than about a
+ * second point computed from a second copy of the same interpolation. The height is then
+ * fed back into carRenderPos; the two must not be able to disagree about where the car is.
+ */
+export function carPlanPos(
+  track: TrackModel, stationM: number, lateralM: number, out: CarPlanPos,
+): CarPlanPos {
   const n = track.x.length;
   const ds = track.lengthMetres / n;
   const s = ((stationM % track.lengthMetres) + track.lengthMetres) % track.lengthMetres;
@@ -344,13 +361,35 @@ export function carRenderPos(
   const frac = f - Math.floor(f);
   const cx = track.x[i0] + (track.x[i1] - track.x[i0]) * frac;
   const cy = track.y[i0] + (track.y[i1] - track.y[i0]) * frac;
-  const cz = track.z[i0] + (track.z[i1] - track.z[i0]) * frac;
-  const heading = ringHeading(track, i0, i1);
-  const nx = -Math.sin(heading), ny = Math.cos(heading);
+  out.ringZ = track.z[i0] + (track.z[i1] - track.z[i0]) * frac;
+  out.heading = ringHeading(track, i0, i1);
+  const nx = -Math.sin(out.heading), ny = Math.cos(out.heading);
   // lateral is scaled with the road (presentation.ts), so a car sitting halfway to the
   // kerb in the data still sits halfway to the kerb on the widened ribbon
   const lat = lateralM * PRESENTATION_SCALE;
-  const [rx, ry, rz] = toRenderFrame(cx + nx * lat, cy + ny * lat, cz);
+  out.x = cx + nx * lat;
+  out.y = cy + ny * lat;
+  return out;
+}
+
+const PLAN_SCRATCH: CarPlanPos = { x: 0, y: 0, ringZ: 0, heading: 0 };
+
+export function carRenderPos(
+  track: TrackModel, stationM: number, lateralM: number, geometryMinY: number,
+  out: THREE.Vector3, headingOut?: { value: number },
+  elevationM?: number | null,
+): THREE.Vector3 {
+  const plan = carPlanPos(track, stationM, lateralM, PLAN_SCRATCH);
+  const cz = plan.ringZ;
+  const heading = plan.heading;
+  // The ring's own height, UNLESS the caller has a better one for this point. The ring's
+  // is right to within the road's camber for the +-3 m of lateral the feed reports on the
+  // circuit, and wrong by metres for a car in the pit lane 19-35 m away -- a different
+  // road at a different height. See pitLaneHeightAt; a null override means "no better
+  // height exists here", which is the ring's.
+  const groundZ = elevationM !== undefined && elevationM !== null
+    && Number.isFinite(elevationM) ? elevationM : cz;
+  const [rx, ry, rz] = toRenderFrame(plan.x, plan.y, groundZ);
   if (headingOut) headingOut.value = heading;
   // The geometry's origin is NOT its lowest point (the wheels hang below it), so
   // placing the origin on the road buries them. carInstanceY lifts by the geometry's
@@ -1040,6 +1079,9 @@ export class SimRenderer {
   private onLockChange: ((locked: boolean) => void) | null = null;
   private dragButton: number | null = null;
   private panOffset = new THREE.Vector3();
+  /** The pit lane's drawn elevation, rebuilt with the circuit. See pitLaneHeightAt. */
+  private pitHeights: PitLaneHeightField | null = null;
+  private planScratch: CarPlanPos = { x: 0, y: 0, ringZ: 0, heading: 0 };
   private lastPointer = { x: 0, y: 0 };
   private matrixScratch = new THREE.Matrix4();
   private quatScratch = new THREE.Quaternion();
@@ -1157,6 +1199,10 @@ export class SimRenderer {
     this.track = track;
     disposeTrackLayers(this.scene, this.layers);
     this.layers = installTrackLayers(this.scene, track);
+    // Prepared here, not per frame: the lane's elevation costs a nearest-ring search per
+    // vertex, and the draw loop only needs to read it. Null on a circuit with no traced
+    // lane, which is the same thing as "no pit ribbon drawn".
+    this.pitHeights = buildPitLaneHeightField(track);
     // Frame the orbit view on the CIRCUIT's own centre, not the telemetry origin:
     // the coordinate origin is an arbitrary point in the feed's frame and can sit
     // well outside the track, which left the circuit off-centre and clipped.
@@ -1736,6 +1782,14 @@ export class SimRenderer {
     carRenderPos(this.track, pose[o + 0], pose[o + 1], this.carGeomMinY, out, headingOut);
   }
 
+  /** Height of the pit lane under a car at (station, lateral), or null when that point
+   * is not on a modelled piece of lane -- the caller then keeps the ring's height. */
+  private pitHeightAt(stationM: number, lateralM: number): number | null {
+    if (!this.pitHeights || !this.track) return null;
+    const plan = carPlanPos(this.track, stationM, lateralM, this.planScratch);
+    return pitLaneHeightAt(this.pitHeights, plan.x, plan.y);
+  }
+
   private updateCars(pose: Float32Array, dtWall: number) {
     if (!this.cars || !this.track) return;
     const n = this.driverCount;
@@ -1793,8 +1847,14 @@ export class SimRenderer {
         continue;
       }
       if (this.labels && this.showLabels) this.labels.sprites[i].visible = true;
+      // A car IN THE PIT LANE stands on the lane, not at the height of the racing line
+      // beside it. Only that status takes the lookup: on the circuit the ring is the
+      // right answer and the scan would be pure cost.
+      const onLane = pose[i * POSE_FLOATS_PER_CAR + 12] === POSE_STATUS.pit
+        ? this.pitHeightAt(station[i], lateral[i])
+        : null;
       carRenderPos(track, station[i], lateral[i], this.carGeomMinY,
-        this.posScratch, this.headingBox);
+        this.posScratch, this.headingBox, onLane);
       carOrientation(this.headingBox.value, this.quatScratch);
       this.matrixScratch.compose(this.posScratch, this.quatScratch, this.scaleScratch);
       this.cars.setMatrixAt(i, this.matrixScratch);

@@ -655,6 +655,68 @@ GRID_MAX_LATERAL_M = 25.0
 POOLED_PITCH_M = 8.041
 PITCH_TOLERANCE_M = 1.2
 
+# A car that has reached this speed has left its box, so nothing at or after that point
+# is a grid position. Measured why it has to exist: at Spa 2026 RUS's first lap-1 sample
+# reads 2 km/h (a creep in the feed, not a car moving -- it is 12 m from its neighbours,
+# exactly one box back), so an unbounded search for `speed == 0` ran 298 samples down the
+# lap and took RUS's grid station from a point 2357.8 m past the rest of the field. That
+# one reading moved the fitted pole 2353.5 m and made the lattice claim 290 empty boxes.
+# 10 km/h is above every stationary car's noise (21 of Spa's 22 read exactly 0) and far
+# below a launch: a car is through it within a metre of moving at all.
+GRID_LAUNCH_KPH = 10.0
+# A fitted lattice may not claim many more boxes than the field it was fitted to. Empty
+# boxes are real -- pit starters and non-starters leave gaps -- but they are countable:
+# measured over the 13 shipped grids the eight credible fits span -1 to 4 empty boxes,
+# while the Spa fit above spans 290. Allowing as many empty boxes as there are placed
+# cars sits 5x above the worst credible fit and 13x below the pathological one.
+GRID_MAX_EMPTY_SLOT_RATIO = 1.0
+
+
+def grid_slot_station(sf_station: float, length_m: float, anchor_m, pitch_m: float,
+                      slot_index: int) -> float:
+    """Ring station of the `slot_index`-th grid box (0 = pole), metres.
+
+    THE ANCHOR IS WHERE THE FRONT BOX ACTUALLY IS, and it is measured per session --
+    across the 2026 grids it runs -53.3 m (Austria) to +288.1 m (Monza), so there is no
+    constant to fall back on and no reason to guess. `anchor_m` is the signed distance
+    from the timing line to pole along travel, as fitted from the cars' own stationary
+    lap-1 stations (see the anchor block in `grid`).
+
+    A null anchor -- the session's cars do not resolve a box lattice -- keeps the
+    pre-existing RULE of pole one pitch behind the line. That rule is what put the
+    British grid 120 m from its boxes, which at Silverstone laid two thirds of the field
+    out around the exit of Club instead of along the straight; it survives only as the
+    answer for a session that measured nothing better, and it is labelled as such by
+    `anchorMetres` being null beside it.
+
+    The mirror of this function is `gridSlotStation` in the frontend's manifest.ts, which
+    reads `grid.anchorMetres` out of the artifact this writes. The two must agree: the
+    renderer draws from its copy while the artifact's own `slots[].station` comes from
+    this one, and a disagreement is two grids in one race.
+    """
+    front = float(anchor_m) if anchor_m is not None and math.isfinite(anchor_m) else -pitch_m
+    return (sf_station + front - slot_index * pitch_m) % length_m
+
+
+def _grid_box_sample(speed) -> int:
+    """Index of the sample that shows a car IN ITS BOX, from one lap-1 speed channel.
+
+    The car is stationary on the grid at the start of the lap and never returns there,
+    so only the leading, not-yet-launched run of samples can contain a grid position.
+    Inside that run a reported zero is preferred -- it is the cleanest evidence the car
+    is at rest -- and the first sample is the answer when the run holds no zero (the
+    feed creeping at 1-2 km/h under a stationary car) or when the car is already moving
+    at the first sample (nothing here is then a box, and sample 0 is the closest thing
+    to one this lap carries).
+
+    See GRID_LAUNCH_KPH for the reading that made the unbounded search unsafe.
+    """
+    speed = np.asarray(speed)
+    moving = np.where(np.isfinite(speed) & (speed >= GRID_LAUNCH_KPH))[0]
+    end = int(moving[0]) if moving.size else speed.size
+    stopped = np.where(np.isfinite(speed[:end]) & (speed[:end] == 0))[0]
+    return int(stopped[0]) if stopped.size else 0
+
 
 def grid(session_dir, table: LapTable, ring: Ring, sf_station: float, pitch_m=8.0):
     """Grid ORDER is derived; the anchor and stagger are RULE values.
@@ -682,10 +744,7 @@ def grid(session_dir, table: LapTable, ring: Ring, sf_station: float, pitch_m=8.
         l = load_lap(session_dir, r["drv"], 1)
         if l is None or not l.has_xy:
             continue
-        i = 0
-        stopped = np.where(np.isfinite(l.speed) & (l.speed == 0))[0]
-        if stopped.size:
-            i = int(stopped[0])
+        i = _grid_box_sample(l.speed)
         st, lat = ring.project(l.x[i:i + 1], l.y[i:i + 1])
         if np.isfinite(st[0]):
             obs.append({"driver": r["drv"], "rawStation": float(st[0]),
@@ -764,6 +823,15 @@ def grid(session_dir, table: LapTable, ring: Ring, sf_station: float, pitch_m=8.
             anchor_note = (f"lattice coherence {got['coherence']:.3f} is at the "
                            f"{got['noiseFloor']:.3f} noise floor: these cars do not "
                            "resolve their boxes")
+        elif got["emptySlots"] > GRID_MAX_EMPTY_SLOT_RATIO * got["n"]:
+            # The pitch and the coherence can both be right while the lattice is pinned
+            # to the wrong end: one car whose grid station is not a grid station at all
+            # drags the OLS intercept out to itself, and the give-away is a lattice that
+            # spans far more boxes than there are cars to fill them. See
+            # GRID_MAX_EMPTY_SLOT_RATIO for the measured separation this bound sits in.
+            anchor_note = (f"fitted lattice spans {got['emptySlots']} empty boxes for "
+                           f"{got['n']} placed cars: one of these stations is not a grid "
+                           "position, so the front box it implies is not one either")
         else:
             # poleAlong is in `rel`'s frame (relative to the median car), so lift it back
             # onto the ring and measure from the timing line, along travel.
@@ -777,7 +845,7 @@ def grid(session_dir, table: LapTable, ring: Ring, sf_station: float, pitch_m=8.
         anchor_note = f"anchor fit failed: {type(exc).__name__}"
 
     slots = [{"position": i + 1, "driver": drv,
-              "station": (sf_station - (i + 1) * pitch_m) % L,
+              "station": grid_slot_station(sf_station, L, anchor_m, pitch_m, i),
               "lateralSign": 1 if i % 2 == 0 else -1}
              for i, drv in enumerate(order)]
     rels = sorted(o["rel"] for o in placed)
