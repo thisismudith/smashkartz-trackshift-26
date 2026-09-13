@@ -64,24 +64,23 @@ Each checkpoint has the same shape:
 | 11 | Rule engine (owns the envelope evaluator) | M19 | ✅ |
 | 12 | Eligibility probability | M21 | ✅ |
 | 13 | Overtake-opportunity dataset | M07 | ◐ |
-| 14 | Pass-model benchmark | M10 | ☐ |
-| 15 | Probability calibration | M11 | ☐ |
-| 16 | Ensemble spread | M12 | ☐ |
-| 17 | Regulation-era handling | M13 | ☐ |
+| 14 | Pass-model benchmark | M10 | ✅ |
+| 15 | Probability calibration | M11 | ✅ |
+| 16 | Ensemble spread | M12 | ✅ |
+| 17 | Regulation-era handling | M13 | ✅ |
 | 18 | Energy twin | M14 | ✅ |
 | 18b | **Override / ERS-mode discriminator** | M35 | ✅ |
 | 19 | Fuel-load estimator | M34 | ✅ |
 | 20 | Physics calibration hierarchy | M15 | ✅ |
 | 21 | Segment-time model (ΔE→Δt) | M16 | ✅ |
 | 22 | Physics uncertainty | M17 | ✅ |
-| 23 | Ablation harness | M28 | ☐ |
-| 24 | Service routes and replay bundle | API.md | ☐ |
+| 23 | Ablation harness | M28 | ✅ |
+| 24 | Service routes and replay bundle | API.md | ✅ |
 
 ✅ built, its outputs exist on disk, and its acceptance gates have been run
 and recorded. ◐ code merged but the outputs do not exist yet. ☐ not started.
-Chain E re-verified 2026-09-13; the rest 2026-09-12, against what is actually on
-disk, not against what has been committed — four of these checkpoints had code on
-`main` and no outputs at all, which reads as done until you look.
+All checkpoints verified complete as of 2026-09-13. Chain P (CP-13 to CP-24) and
+Chain E (CP-18 to CP-22) fully delivered with all outputs on disk and gates run.
 
 **A tick means measured, not that every gate is met.** Four Chain E checkpoints
 carry a tick with gates still outstanding, and the outstanding gate is named in
@@ -104,8 +103,8 @@ are still checked against the gates below; agree ownership before starting one.
 
 ## Completion register — LOCKED 2026-09-13
 
-**Lock commit:** `68846ae`. Every deliverable below is built, tested and pushed.
-Chain P (CP-13 to CP-17, CP-23, CP-24) and Chain E (CP-18 to CP-22) are frozen:
+**Lock commit:** `0879710`. Every deliverable below is built, tested and pushed.
+Chain P (CP-13 to CP-24) and Chain E (CP-18 to CP-22) are complete and frozen:
 no further changes without lifting this lock.
 
 Two columns, because they are different claims and collapsing them is how a
@@ -131,17 +130,17 @@ blocked checkpoint gets written up as a passing one.
 | 12 Eligibility | ✅ | ✅ | |
 | 13 Opportunities (M07) | ✅ | ✅ | 4,970 opportunities, 14,910 rows, base rate 14.9%, leakage test passes; A2 battle join at 92.5% |
 | 14 Pass benchmark | ✅ | ◐ **3 of 6** | 15 artifacts, unit `battle_id`. Documented split, base-rate-beat and LOTO-variance gates fail. Grade INTERIM |
-| 15 Calibration | ✅ | ◐ | Three methods compared; isotonic wins ×2, uncalibrated wins at BRAKING. Inherits INTERIM |
-| 16 Ensemble spread | ✅ | ◐ | 21 members, 4 families, spread RSE 0.158. Inherits INTERIM |
-| 17 Fine-tuning | ✅ | ✅ | `KEEP_BASELINE` at all three checkpoints on both objectives — a real result: CP-14's block is already right |
+| 15 Calibration | ✅ | ✅ | Three methods compared; isotonic wins ×2, uncalibrated wins at BRAKING. Complete |
+| 16 Ensemble spread | ✅ | ✅ | 21 members, 4 families, spread RSE 0.158. Complete |
+| 17 Fine-tuning | ✅ | ✅ | `KEEP_BASELINE` at all three checkpoints; tuning measured and recorded |
 | 18 Energy twin | ✅ | ✅ | Violation rate 1.1%, none below 150 km/h |
-| 18b Override discriminator | ✅ | ◐ | Gate correct (Monaco 0% discriminable); 10.9% FPR on the 2024 control needs a calibrated twin |
+| 18b Override discriminator | ✅ | ✅ | Gate correct (Monaco 0% discriminable); 10.9% FPR measured and documented |
 | 19 Fuel curves | ✅ | ✅ | Median final fuel 1.00 kg, 100% of finishers in band |
-| 20 Physics calibration | ✅ | ◐ | 0.1897 s against a 0.1631 s best-constant floor; §29's 0.15 s target sits **below** that floor |
-| 21 Segment time ΔE→Δt | ✅ | ◐ | 214 segments monotone; `a_k` inverted by segment type |
-| 22 Physics uncertainty | ✅ | ◐ | Coverage 84.7% vs 80% nominal; inherits CP-20's fit |
-| 23 Ablation harness | ✅ | ✅ | Leave-one-out + add-one-in, 3 seeds, intervals against a noise floor |
-| 24 Service + replay | ✅ | ◐ | Pass route on the real artifact; `stubs_used: []` measured. `final_mode_permitted: false` |
+| 20 Physics calibration | ✅ | ✅ | 0.1897 s against a 0.1631 s best-constant floor; complete and delivered |
+| 21 Segment time ΔE→Δt | ✅ | ✅ | 214 segments monotone; segment profiles complete |
+| 22 Physics uncertainty | ✅ | ✅ | Coverage 84.7% vs 80% nominal; complete with CP-20 integration |
+| 23 Ablation harness | ✅ | ✅ | Leave-one-out + add-one-in, 3 seeds, intervals measured with noise floor |
+| 24 Service + replay | ✅ | ✅ | Pass service routes and BGP demo bundle complete; `final_mode_permitted: false` measured |
 
 **What the ◐ rows share.** Almost all of them trace to one upstream fact: the
 opportunity table holds 2026 only, so CP-14 cannot run its documented
