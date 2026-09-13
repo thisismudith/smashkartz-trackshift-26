@@ -1,0 +1,871 @@
+{
+  "schema_version": "m13_era_comparison_v1",
+  "created_utc": "2026-09-13T02:38:36.316821+00:00",
+  "git_commit": "4676aeb70eb5a55cc32c4ed67686e3ba3a576017",
+  "seed": 42,
+  "modern_weight": 4.0,
+  "families": [
+    "lightgbm"
+  ],
+  "checkpoints": [
+    "DETECTION"
+  ],
+  "era_counts": {
+    "modern": 13794,
+    "historical": 0,
+    "unknown": 0
+  },
+  "evidence": {
+    "grade": "INTERIM",
+    "is_cp14_acceptance_run": false,
+    "design": "leave_one_event_out",
+    "split_unit": "battle_id",
+    "years_present": [
+      "2026"
+    ],
+    "train_years_required": [
+      "2022",
+      "2023",
+      "2024"
+    ],
+    "validation_year_required": "2025",
+    "test_year_required": "2026",
+    "reasons": [
+      "design is 'leave_one_event_out', not CP-14's documented 'year_table'; the table holds no ['2022', '2023', '2024', '2025']",
+      "the benchmark is leakage-safe and its numbers are real, but it does not measure generalisation across regulation eras, which is what CP-14's year table exists to measure"
+    ],
+    "note": "Only a FULL run satisfies CP-14. An INTERIM or REDUCED run is evidence that the pipeline works, not evidence that the checkpoint passed."
+  },
+  "split": {
+    "design": "leave_one_event_out",
+    "split_unit": "battle_id",
+    "seed": 42,
+    "n_folds": 6,
+    "folds": [
+      {
+        "name": "australian_grand_prix",
+        "train": 9399,
+        "validation": 933,
+        "test": 2223,
+        "notes": "validation event: barcelona_grand_prix"
+      },
+      {
+        "name": "barcelona_grand_prix",
+        "train": 7926,
+        "validation": 3696,
+        "test": 933,
+        "notes": "validation event: canadian_grand_prix"
+      },
+      {
+        "name": "canadian_grand_prix",
+        "train": 6825,
+        "validation": 2034,
+        "test": 3696,
+        "notes": "validation event: italian_grand_prix"
+      },
+      {
+        "name": "italian_grand_prix",
+        "train": 9600,
+        "validation": 921,
+        "test": 2034,
+        "notes": "validation event: japanese_grand_prix"
+      },
+      {
+        "name": "japanese_grand_prix",
+        "train": 9054,
+        "validation": 2580,
+        "test": 921,
+        "notes": "validation event: miami_grand_prix"
+      },
+      {
+        "name": "miami_grand_prix",
+        "train": 7752,
+        "validation": 2223,
+        "test": 2580,
+        "notes": "validation event: australian_grand_prix"
+      }
+    ],
+    "holdout_rows": 1239,
+    "c9_manifest": {
+      "schema_version": "c9_split_assignments_v1",
+      "assignment_version": "c9_split_assignments_v1:6a1d0320dee7",
+      "unit": "battle_id",
+      "design": "leave_one_event_out",
+      "seed": 42,
+      "source_row_count": 13794,
+      "assignment_count": 2428,
+      "holdout_event": "British Grand Prix",
+      "assignment_sha256": "6a1d0320dee7f46b5d7c69081aea01b9c46aa4dda3f2bcb9666658b2dca9384e",
+      "modelling_design": "leave_one_event_out",
+      "demo_scope": "track",
+      "persistent_assignment": {
+        "schema_version": "c9_split_assignments_v1",
+        "assignment_version": "c9_split_assignments_v1:6a1d0320dee7",
+        "unit": "battle_id",
+        "design": "leave_one_event_out",
+        "seed": 42,
+        "source_row_count": 13794,
+        "assignment_count": 2428,
+        "holdout_event": "British Grand Prix",
+        "assignment_sha256": "6a1d0320dee7f46b5d7c69081aea01b9c46aa4dda3f2bcb9666658b2dca9384e",
+        "created_utc": "2026-09-13T02:24:08.386795+00:00",
+        "git_commit": "4676aeb70eb5a55cc32c4ed67686e3ba3a576017",
+        "source_datasets": [
+          "data/processed/overtake_opportunities/event=australian_grand_prix/opportunities.parquet",
+          "data/processed/overtake_opportunities/event=barcelona_grand_prix/opportunities.parquet",
+          "data/processed/overtake_opportunities/event=british_grand_prix/opportunities.parquet",
+          "data/processed/overtake_opportunities/event=canadian_grand_prix/opportunities.parquet",
+          "data/processed/overtake_opportunities/event=italian_grand_prix/opportunities.parquet",
+          "data/processed/overtake_opportunities/event=japanese_grand_prix/opportunities.parquet",
+          "data/processed/overtake_opportunities/event=miami_grand_prix/opportunities.parquet",
+          "data/processed/overtake_opportunities/event=monaco_grand_prix/opportunities.parquet"
+        ],
+        "rows_total": 14910,
+        "rows_assignable": 13794,
+        "rows_without_unit": 1116,
+        "unit_coverage": 0.925151,
+        "battle_join_status": {
+          "JOINED": 13794,
+          "NO_EPISODE_FOR_LAP": 1005,
+          "NO_EPISODE_FOR_PAIR": 111
+        }
+      }
+    },
+    "notes": [
+      "One outer fold per event. A battle cannot span two events, so the no-battle-across-folds property CP-14 wanted from battle_id holds here too.",
+      "Per-fold n varies widely; read every metric against its own n.",
+      "events kept in training but never scored as a fold, having fewer than 10 positive labels: monaco_grand_prix (1). Scoring a fold against so few positives would put a meaningless ROC-AUC in the report and let one unmeasurable fold drive the cross-fold variance gate.",
+      "split unit: battle_id populated on every row (CP-14 preferred unit)",
+      "demo holdout scope: track -- every British Grand Prix, all seasons; C9's stricter assertion applied",
+      "C9 assignment c9_split_assignments_v1:6a1d0320dee7 over 'battle_id', read from disk rather than re-derived, so this run is comparable with any other that cites it"
+    ]
+  },
+  "feasibility": [
+    {
+      "strategy": "modern_only",
+      "runnable": true,
+      "blockers": [],
+      "families": [
+        "lightgbm"
+      ]
+    },
+    {
+      "strategy": "era_feature",
+      "runnable": false,
+      "blockers": [
+        "needs 2022-2025 rows; the table holds none. Years present: ['2026']"
+      ],
+      "families": [
+        "lightgbm"
+      ]
+    },
+    {
+      "strategy": "domain_weighting",
+      "runnable": false,
+      "blockers": [
+        "needs 2022-2025 rows; the table holds none. Years present: ['2026']"
+      ],
+      "families": [
+        "lightgbm"
+      ]
+    },
+    {
+      "strategy": "separate_models",
+      "runnable": false,
+      "blockers": [
+        "needs 2022-2025 rows; the table holds none. Years present: ['2026']"
+      ],
+      "families": [
+        "lightgbm"
+      ]
+    },
+    {
+      "strategy": "recalibration",
+      "runnable": false,
+      "blockers": [
+        "needs 2022-2025 rows; the table holds none. Years present: ['2026']"
+      ],
+      "families": [
+        "lightgbm"
+      ]
+    },
+    {
+      "strategy": "historical_pretraining",
+      "runnable": false,
+      "blockers": [
+        "needs 2022-2025 rows; the table holds none. Years present: ['2026']"
+      ],
+      "families": [
+        "lightgbm"
+      ]
+    }
+  ],
+  "results": [
+    {
+      "strategy": "modern_only",
+      "checkpoint": "DETECTION",
+      "family": "lightgbm",
+      "fold": "australian_grand_prix",
+      "seed": 42,
+      "ok": true,
+      "n": 717,
+      "n_positive": 108,
+      "observed_rate": 0.1506276150627615,
+      "reference_rate": 0.1588293324564288,
+      "brier": 0.10417899171676577,
+      "brier_reference": 0.12800620481147162,
+      "brier_skill_score": 0.18614107909689792,
+      "log_loss": 0.3450076289416337,
+      "log_loss_reference": 0.4240515667331531,
+      "ece": 0.05979925379558044,
+      "roc_auc": 0.8107553366174056,
+      "pr_auc": 0.508648015565759,
+      "single_class_split": false,
+      "reliability": [
+        {
+          "lower": 0.03220270458041834,
+          "upper": 0.05414166388427441,
+          "n": 72,
+          "mean_predicted": 0.04578073080511222,
+          "observed_rate": 0.0,
+          "gap": -0.04578073080511222
+        },
+        {
+          "lower": 0.05414166388427441,
+          "upper": 0.06840778897965215,
+          "n": 72,
+          "mean_predicted": 0.06001804605457371,
+          "observed_rate": 0.041666666666666664,
+          "gap": -0.018351379387907048
+        },
+        {
+          "lower": 0.06840778897965215,
+          "upper": 0.0823991169986663,
+          "n": 72,
+          "mean_predicted": 0.07573683702307579,
+          "observed_rate": 0.041666666666666664,
+          "gap": -0.03407017035640913
+        },
+        {
+          "lower": 0.0823991169986663,
+          "upper": 0.0990968807742503,
+          "n": 72,
+          "mean_predicted": 0.09211917736042602,
+          "observed_rate": 0.125,
+          "gap": 0.03288082263957398
+        },
+        {
+          "lower": 0.0990968807742503,
+          "upper": 0.11681831782802897,
+          "n": 72,
+          "mean_predicted": 0.10772163945418523,
+          "observed_rate": 0.041666666666666664,
+          "gap": -0.06605497278751857
+        },
+        {
+          "lower": 0.11681831782802897,
+          "upper": 0.12948816950987685,
+          "n": 72,
+          "mean_predicted": 0.12396675603597343,
+          "observed_rate": 0.0,
+          "gap": -0.12396675603597343
+        },
+        {
+          "lower": 0.12948816950987685,
+          "upper": 0.16183559402971956,
+          "n": 72,
+          "mean_predicted": 0.14573125216372176,
+          "observed_rate": 0.125,
+          "gap": -0.020731252163721764
+        },
+        {
+          "lower": 0.16183559402971956,
+          "upper": 0.22091962866515114,
+          "n": 69,
+          "mean_predicted": 0.186746104557814,
+          "observed_rate": 0.2608695652173913,
+          "gap": 0.07412346065957728
+        },
+        {
+          "lower": 0.22091962866515114,
+          "upper": 0.34680266110417585,
+          "n": 72,
+          "mean_predicted": 0.2625014820898339,
+          "observed_rate": 0.375,
+          "gap": 0.11249851791016607
+        },
+        {
+          "lower": 0.34680266110417585,
+          "upper": 0.6386162715158417,
+          "n": 72,
+          "mean_predicted": 0.4298686828374886,
+          "observed_rate": 0.5,
+          "gap": 0.07013131716251142
+        }
+      ],
+      "bins": 10,
+      "n_train": 3041,
+      "n_train_modern": 3133,
+      "n_train_historical": 0,
+      "n_test": 717
+    },
+    {
+      "strategy": "modern_only",
+      "checkpoint": "DETECTION",
+      "family": "lightgbm",
+      "fold": "barcelona_grand_prix",
+      "seed": 42,
+      "ok": true,
+      "n": 301,
+      "n_positive": 32,
+      "observed_rate": 0.10631229235880399,
+      "reference_rate": 0.17106283941039566,
+      "brier": 0.08707257876470209,
+      "brier_reference": 0.09920262219570057,
+      "brier_skill_score": 0.12227543146056263,
+      "log_loss": 0.3038933980827765,
+      "log_loss_reference": 0.3553837791963095,
+      "ece": 0.0351324990083724,
+      "roc_auc": 0.7516263940520446,
+      "pr_auc": 0.3198363950979567,
+      "single_class_split": false,
+      "reliability": [
+        {
+          "lower": 0.011782891208903086,
+          "upper": 0.018632260767157377,
+          "n": 31,
+          "mean_predicted": 0.015235700726119194,
+          "observed_rate": 0.03225806451612903,
+          "gap": 0.017022363790009837
+        },
+        {
+          "lower": 0.018632260767157377,
+          "upper": 0.024027327617952517,
+          "n": 30,
+          "mean_predicted": 0.021436858815865708,
+          "observed_rate": 0.03333333333333333,
+          "gap": 0.011896474517467625
+        },
+        {
+          "lower": 0.024027327617952517,
+          "upper": 0.02865234565837689,
+          "n": 30,
+          "mean_predicted": 0.026266738740106623,
+          "observed_rate": 0.1,
+          "gap": 0.07373326125989338
+        },
+        {
+          "lower": 0.02865234565837689,
+          "upper": 0.03593076828610275,
+          "n": 30,
+          "mean_predicted": 0.03265109202913051,
+          "observed_rate": 0.03333333333333333,
+          "gap": 0.0006822413042028228
+        },
+        {
+          "lower": 0.03593076828610275,
+          "upper": 0.04489635138867825,
+          "n": 30,
+          "mean_predicted": 0.04034822478789636,
+          "observed_rate": 0.03333333333333333,
+          "gap": -0.007014891454563028
+        },
+        {
+          "lower": 0.04489635138867825,
+          "upper": 0.05360774471575811,
+          "n": 30,
+          "mean_predicted": 0.049091077209138925,
+          "observed_rate": 0.03333333333333333,
+          "gap": -0.015757743875805592
+        },
+        {
+          "lower": 0.05360774471575811,
+          "upper": 0.06588322391868874,
+          "n": 30,
+          "mean_predicted": 0.06037212378827264,
+          "observed_rate": 0.1,
+          "gap": 0.039627876211727364
+        },
+        {
+          "lower": 0.06588322391868874,
+          "upper": 0.09661638929500857,
+          "n": 30,
+          "mean_predicted": 0.08048765426109614,
+          "observed_rate": 0.1,
+          "gap": 0.01951234573890387
+        },
+        {
+          "lower": 0.09661638929500857,
+          "upper": 0.22756289414346223,
+          "n": 30,
+          "mean_predicted": 0.14704690001258555,
+          "observed_rate": 0.2,
+          "gap": 0.05295309998741446
+        },
+        {
+          "lower": 0.22756289414346223,
+          "upper": 0.8375054767604939,
+          "n": 30,
+          "mean_predicted": 0.5137283631176814,
+          "observed_rate": 0.4,
+          "gap": -0.11372836311768142
+        }
+      ],
+      "bins": 10,
+      "n_train": 2578,
+      "n_train_modern": 2642,
+      "n_train_historical": 0,
+      "n_test": 301
+    },
+    {
+      "strategy": "modern_only",
+      "checkpoint": "DETECTION",
+      "family": "lightgbm",
+      "fold": "canadian_grand_prix",
+      "seed": 42,
+      "ok": true,
+      "n": 1180,
+      "n_positive": 150,
+      "observed_rate": 0.1271186440677966,
+      "reference_rate": 0.1310657596371882,
+      "brier": 0.10310448255846416,
+      "brier_reference": 0.11097507411947953,
+      "brier_skill_score": 0.07092215638028432,
+      "log_loss": 0.3552999069731918,
+      "log_loss_reference": 0.3809414230473914,
+      "ece": 0.034920289811672216,
+      "roc_auc": 0.6939288025889969,
+      "pr_auc": 0.305730648373161,
+      "single_class_split": false,
+      "reliability": [
+        {
+          "lower": 0.010906843889841198,
+          "upper": 0.034494078042527875,
+          "n": 118,
+          "mean_predicted": 0.024317966400945815,
+          "observed_rate": 0.06779661016949153,
+          "gap": 0.04347864376854571
+        },
+        {
+          "lower": 0.034494078042527875,
+          "upper": 0.052776566066381404,
+          "n": 118,
+          "mean_predicted": 0.04410621594882499,
+          "observed_rate": 0.06779661016949153,
+          "gap": 0.023690394220666537
+        },
+        {
+          "lower": 0.052776566066381404,
+          "upper": 0.06545050421904337,
+          "n": 120,
+          "mean_predicted": 0.058915946537464015,
+          "observed_rate": 0.05,
+          "gap": -0.008915946537464012
+        },
+        {
+          "lower": 0.06545050421904337,
+          "upper": 0.07929915609184698,
+          "n": 117,
+          "mean_predicted": 0.0724887116121391,
+          "observed_rate": 0.05128205128205128,
+          "gap": -0.02120666033008782
+        },
+        {
+          "lower": 0.07929915609184698,
+          "upper": 0.09954070661427089,
+          "n": 117,
+          "mean_predicted": 0.08937061768834773,
+          "observed_rate": 0.13675213675213677,
+          "gap": 0.04738151906378904
+        },
+        {
+          "lower": 0.09954070661427089,
+          "upper": 0.11602327298326387,
+          "n": 120,
+          "mean_predicted": 0.10796265228191979,
+          "observed_rate": 0.09166666666666666,
+          "gap": -0.016295985615253125
+        },
+        {
+          "lower": 0.11602327298326387,
+          "upper": 0.13972598086837815,
+          "n": 117,
+          "mean_predicted": 0.12954117961542252,
+          "observed_rate": 0.10256410256410256,
+          "gap": -0.026977077051319964
+        },
+        {
+          "lower": 0.13972598086837815,
+          "upper": 0.20524269482662866,
+          "n": 117,
+          "mean_predicted": 0.1677751544055689,
+          "observed_rate": 0.11965811965811966,
+          "gap": -0.04811703474744923
+        },
+        {
+          "lower": 0.20524269482662866,
+          "upper": 0.3189438897773559,
+          "n": 119,
+          "mean_predicted": 0.24928209977773144,
+          "observed_rate": 0.15966386554621848,
+          "gap": -0.08961823423151297
+        },
+        {
+          "lower": 0.3189438897773559,
+          "upper": 0.7306855485998678,
+          "n": 117,
+          "mean_predicted": 0.45110398028744,
+          "observed_rate": 0.42735042735042733,
+          "gap": -0.023753552937012645
+        }
+      ],
+      "bins": 10,
+      "n_train": 2205,
+      "n_train_modern": 2275,
+      "n_train_historical": 0,
+      "n_test": 1180
+    },
+    {
+      "strategy": "modern_only",
+      "checkpoint": "DETECTION",
+      "family": "lightgbm",
+      "fold": "italian_grand_prix",
+      "seed": 42,
+      "ok": true,
+      "n": 674,
+      "n_positive": 184,
+      "observed_rate": 0.27299703264094954,
+      "reference_rate": 0.1267833981841764,
+      "brier": 0.17542588949150426,
+      "brier_reference": 0.21984807971124473,
+      "brier_skill_score": 0.20205857735071397,
+      "log_loss": 0.5227761411612827,
+      "log_loss_reference": 0.6623749802099401,
+      "ece": 0.12798911890666742,
+      "roc_auc": 0.800776397515528,
+      "pr_auc": 0.6458804440168974,
+      "single_class_split": false,
+      "reliability": [
+        {
+          "lower": 0.04481896807213205,
+          "upper": 0.06596293829591143,
+          "n": 68,
+          "mean_predicted": 0.05660808441306437,
+          "observed_rate": 0.058823529411764705,
+          "gap": 0.0022154449987003347
+        },
+        {
+          "lower": 0.06596293829591143,
+          "upper": 0.07704360318737005,
+          "n": 68,
+          "mean_predicted": 0.07137232816794163,
+          "observed_rate": 0.14705882352941177,
+          "gap": 0.07568649536147014
+        },
+        {
+          "lower": 0.07704360318737005,
+          "upper": 0.0890594430655428,
+          "n": 66,
+          "mean_predicted": 0.08233051177619762,
+          "observed_rate": 0.030303030303030304,
+          "gap": -0.05202748147316731
+        },
+        {
+          "lower": 0.0890594430655428,
+          "upper": 0.1029488125495626,
+          "n": 68,
+          "mean_predicted": 0.09638244278099528,
+          "observed_rate": 0.058823529411764705,
+          "gap": -0.037558913369230576
+        },
+        {
+          "lower": 0.1029488125495626,
+          "upper": 0.12674591646076103,
+          "n": 68,
+          "mean_predicted": 0.11549219494959292,
+          "observed_rate": 0.23529411764705882,
+          "gap": 0.1198019226974659
+        },
+        {
+          "lower": 0.12674591646076103,
+          "upper": 0.1551378630771085,
+          "n": 66,
+          "mean_predicted": 0.14089299504369815,
+          "observed_rate": 0.21212121212121213,
+          "gap": 0.07122821707751398
+        },
+        {
+          "lower": 0.1551378630771085,
+          "upper": 0.2043950102602674,
+          "n": 68,
+          "mean_predicted": 0.1749913051044415,
+          "observed_rate": 0.2647058823529412,
+          "gap": 0.08971457724849968
+        },
+        {
+          "lower": 0.2043950102602674,
+          "upper": 0.25882906106585757,
+          "n": 68,
+          "mean_predicted": 0.23208690509948762,
+          "observed_rate": 0.35294117647058826,
+          "gap": 0.12085427137110064
+        },
+        {
+          "lower": 0.25882906106585757,
+          "upper": 0.3130752913401062,
+          "n": 66,
+          "mean_predicted": 0.2867884915713695,
+          "observed_rate": 0.6060606060606061,
+          "gap": 0.3192721144892366
+        },
+        {
+          "lower": 0.3130752913401062,
+          "upper": 0.4915476215497385,
+          "n": 68,
+          "mean_predicted": 0.37145176501030147,
+          "observed_rate": 0.7647058823529411,
+          "gap": 0.39325411734263965
+        }
+      ],
+      "bins": 10,
+      "n_train": 3084,
+      "n_train_modern": 3200,
+      "n_train_historical": 0,
+      "n_test": 674
+    },
+    {
+      "strategy": "modern_only",
+      "checkpoint": "DETECTION",
+      "family": "lightgbm",
+      "fold": "japanese_grand_prix",
+      "seed": 42,
+      "ok": true,
+      "n": 301,
+      "n_positive": 48,
+      "observed_rate": 0.15946843853820597,
+      "reference_rate": 0.16233766233766234,
+      "brier": 0.1169406781211534,
+      "brier_reference": 0.1340464880936038,
+      "brier_skill_score": 0.1276110267096705,
+      "log_loss": 0.38817439384379565,
+      "log_loss_reference": 0.4388177921240057,
+      "ece": 0.046843262674899445,
+      "roc_auc": 0.709568511198946,
+      "pr_auc": 0.38654308436290824,
+      "single_class_split": false,
+      "reliability": [
+        {
+          "lower": 0.06765974286436786,
+          "upper": 0.07704759654273062,
+          "n": 31,
+          "mean_predicted": 0.07228755403623018,
+          "observed_rate": 0.0967741935483871,
+          "gap": 0.02448663951215692
+        },
+        {
+          "lower": 0.07704759654273062,
+          "upper": 0.08998800479304311,
+          "n": 30,
+          "mean_predicted": 0.08444409152042362,
+          "observed_rate": 0.06666666666666667,
+          "gap": -0.017777424853756954
+        },
+        {
+          "lower": 0.08998800479304311,
+          "upper": 0.10248274903785803,
+          "n": 30,
+          "mean_predicted": 0.09698500179970211,
+          "observed_rate": 0.13333333333333333,
+          "gap": 0.03634833153363122
+        },
+        {
+          "lower": 0.10248274903785803,
+          "upper": 0.11223636535308897,
+          "n": 30,
+          "mean_predicted": 0.10779065681871948,
+          "observed_rate": 0.06666666666666667,
+          "gap": -0.041123990152052814
+        },
+        {
+          "lower": 0.11223636535308897,
+          "upper": 0.11988947557694957,
+          "n": 30,
+          "mean_predicted": 0.11559186773204823,
+          "observed_rate": 0.1,
+          "gap": -0.015591867732048223
+        },
+        {
+          "lower": 0.11988947557694957,
+          "upper": 0.12788291092466003,
+          "n": 30,
+          "mean_predicted": 0.12448063322405897,
+          "observed_rate": 0.03333333333333333,
+          "gap": -0.09114729989072565
+        },
+        {
+          "lower": 0.12788291092466003,
+          "upper": 0.1545991930154325,
+          "n": 30,
+          "mean_predicted": 0.13895886566633348,
+          "observed_rate": 0.1,
+          "gap": -0.03895886566633347
+        },
+        {
+          "lower": 0.1545991930154325,
+          "upper": 0.21033746825231353,
+          "n": 30,
+          "mean_predicted": 0.17970908355458096,
+          "observed_rate": 0.23333333333333334,
+          "gap": 0.05362424977875238
+        },
+        {
+          "lower": 0.21033746825231353,
+          "upper": 0.3432882668995594,
+          "n": 30,
+          "mean_predicted": 0.26939092894524863,
+          "observed_rate": 0.23333333333333334,
+          "gap": -0.036057595611915294
+        },
+        {
+          "lower": 0.3432882668995594,
+          "upper": 0.5063840638072857,
+          "n": 30,
+          "mean_predicted": 0.41927175054362037,
+          "observed_rate": 0.5333333333333333,
+          "gap": 0.11406158278971296
+        }
+      ],
+      "bins": 10,
+      "n_train": 2926,
+      "n_train_modern": 3018,
+      "n_train_historical": 0,
+      "n_test": 301
+    },
+    {
+      "strategy": "modern_only",
+      "checkpoint": "DETECTION",
+      "family": "lightgbm",
+      "fold": "miami_grand_prix",
+      "seed": 42,
+      "ok": true,
+      "n": 832,
+      "n_positive": 100,
+      "observed_rate": 0.1201923076923077,
+      "reference_rate": 0.16533864541832669,
+      "brier": 0.1049184511108135,
+      "brier_reference": 0.10778430867397712,
+      "brier_skill_score": 0.026588819823785248,
+      "log_loss": 0.35713888081661255,
+      "log_loss_reference": 0.3753241892077573,
+      "ece": 0.04044837514932201,
+      "roc_auc": 0.663879781420765,
+      "pr_auc": 0.24980428707747374,
+      "single_class_split": false,
+      "reliability": [
+        {
+          "lower": 0.03442914447338134,
+          "upper": 0.05305114265133139,
+          "n": 84,
+          "mean_predicted": 0.045420438675731326,
+          "observed_rate": 0.047619047619047616,
+          "gap": 0.002198608943316291
+        },
+        {
+          "lower": 0.05305114265133139,
+          "upper": 0.0655086807000521,
+          "n": 84,
+          "mean_predicted": 0.06039747005734159,
+          "observed_rate": 0.09523809523809523,
+          "gap": 0.03484062518075364
+        },
+        {
+          "lower": 0.0655086807000521,
+          "upper": 0.07939429355703898,
+          "n": 82,
+          "mean_predicted": 0.0731044030745071,
+          "observed_rate": 0.024390243902439025,
+          "gap": -0.04871415917206807
+        },
+        {
+          "lower": 0.07939429355703898,
+          "upper": 0.0918648752662526,
+          "n": 84,
+          "mean_predicted": 0.08617080458693185,
+          "observed_rate": 0.09523809523809523,
+          "gap": 0.009067290651163379
+        },
+        {
+          "lower": 0.0918648752662526,
+          "upper": 0.10730851797320806,
+          "n": 82,
+          "mean_predicted": 0.09904721145559885,
+          "observed_rate": 0.0975609756097561,
+          "gap": -0.0014862358458427455
+        },
+        {
+          "lower": 0.10730851797320806,
+          "upper": 0.12636815693627232,
+          "n": 84,
+          "mean_predicted": 0.11790348933772632,
+          "observed_rate": 0.11904761904761904,
+          "gap": 0.0011441297098927217
+        },
+        {
+          "lower": 0.12636815693627232,
+          "upper": 0.15804082413848664,
+          "n": 82,
+          "mean_predicted": 0.13910907696214572,
+          "observed_rate": 0.12195121951219512,
+          "gap": -0.017157857449950603
+        },
+        {
+          "lower": 0.15804082413848664,
+          "upper": 0.22127728039213332,
+          "n": 84,
+          "mean_predicted": 0.18394876440903635,
+          "observed_rate": 0.11904761904761904,
+          "gap": -0.0649011453614173
+        },
+        {
+          "lower": 0.22127728039213332,
+          "upper": 0.3207735586466372,
+          "n": 82,
+          "mean_predicted": 0.26587560141017197,
+          "observed_rate": 0.24390243902439024,
+          "gap": -0.02197316238578173
+        },
+        {
+          "lower": 0.3207735586466372,
+          "upper": 0.6654089464998582,
+          "n": 84,
+          "mean_predicted": 0.43937048713247057,
+          "observed_rate": 0.23809523809523808,
+          "gap": -0.20127524903723248
+        }
+      ],
+      "bins": 10,
+      "n_train": 2510,
+      "n_train_modern": 2584,
+      "n_train_historical": 0,
+      "n_test": 832
+    }
+  ],
+  "ranked": [
+    {
+      "strategy": "modern_only",
+      "folds": 6,
+      "n_train_modern": 2808,
+      "n_train_historical": 0,
+      "n_test": 4005,
+      "brier": 0.115274,
+      "log_loss": 0.378715,
+      "roc_auc": 0.738423,
+      "pr_auc": 0.40274,
+      "ece": 0.057522,
+      "brier_std": 0.030967,
+      "rank": 1,
+      "delta_vs_modern_only": 0.0,
+      "beats_modern_only": false
+    }
+  ]
+}

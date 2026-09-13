@@ -1,0 +1,235 @@
+{
+  "api_version": "1.0.0",
+  "era_evaluation": {
+    "british_gp_used_for_training_or_calibration": false,
+    "cp08_next_blocker": null,
+    "held_out_2026_n": 384,
+    "historical_drs_is_not_2026_overtake": true,
+    "historical_n": 384,
+    "metrics": {
+      "2026_only": {
+        "calibration": "UNAVAILABLE: no real tactical-state labels",
+        "event_coverage": [
+          "Australian Grand Prix"
+        ],
+        "fold_ids": [
+          "synthetic"
+        ],
+        "held_out_evidence_n": 16,
+        "mean_log_likelihood": 2.9338105103157988,
+        "mean_nll": -2.9338105103157988,
+        "model_versions": [
+          "m09_rival_benchmark_v2"
+        ],
+        "n": 384,
+        "reason": null,
+        "rule_configuration_versions": [
+          "rules-2026-common-v2-fia-iss08-iss20"
+        ],
+        "stability": {
+          "max_abs_delta": 1.2324295139976016e-08,
+          "mean_max_abs_delta": 8.325829913044319e-10,
+          "n": 16
+        },
+        "status": "MEASURED",
+        "year_coverage": [
+          2026
+        ]
+      },
+      "domain_weighting": {
+        "calibration": "UNAVAILABLE: no real tactical-state labels",
+        "event_coverage": [
+          "Australian Grand Prix"
+        ],
+        "fold_ids": [
+          "synthetic"
+        ],
+        "held_out_evidence_n": 16,
+        "mean_log_likelihood": 2.9338105103157988,
+        "mean_nll": -2.9338105103157988,
+        "model_versions": [
+          "m09_rival_benchmark_v2"
+        ],
+        "n": 768,
+        "reason": null,
+        "rule_configuration_versions": [
+          "historical_drs_era",
+          "rules-2026-common-v2-fia-iss08-iss20"
+        ],
+        "stability": {
+          "max_abs_delta": 1.2324295139976016e-08,
+          "mean_max_abs_delta": 8.325829913044319e-10,
+          "n": 16
+        },
+        "status": "MEASURED",
+        "year_coverage": [
+          2025,
+          2026
+        ]
+      },
+      "era_feature": {
+        "calibration": "UNAVAILABLE: no real tactical-state labels",
+        "event_coverage": [
+          "Australian Grand Prix"
+        ],
+        "fold_ids": [
+          "synthetic"
+        ],
+        "held_out_evidence_n": 16,
+        "mean_log_likelihood": 2.9338105103157988,
+        "mean_nll": -2.9338105103157988,
+        "model_versions": [
+          "m09_rival_benchmark_v2"
+        ],
+        "n": 768,
+        "reason": null,
+        "rule_configuration_versions": [
+          "historical_drs_era",
+          "rules-2026-common-v2-fia-iss08-iss20"
+        ],
+        "stability": {
+          "max_abs_delta": 1.2324295139976016e-08,
+          "mean_max_abs_delta": 8.325829913044319e-10,
+          "n": 16
+        },
+        "status": "MEASURED",
+        "year_coverage": [
+          2025,
+          2026
+        ]
+      },
+      "historical_pretrain_2026_recalibration": {
+        "calibration": "UNAVAILABLE: no real tactical-state labels",
+        "event_coverage": [
+          "Australian Grand Prix"
+        ],
+        "fold_ids": [
+          "synthetic"
+        ],
+        "held_out_evidence_n": 16,
+        "mean_log_likelihood": 2.9338105103157988,
+        "mean_nll": -2.9338105103157988,
+        "model_versions": [
+          "m09_rival_benchmark_v2"
+        ],
+        "n": 768,
+        "reason": null,
+        "rule_configuration_versions": [
+          "historical_drs_era",
+          "rules-2026-common-v2-fia-iss08-iss20"
+        ],
+        "stability": {
+          "max_abs_delta": 1.2324295139976016e-08,
+          "mean_max_abs_delta": 8.325829913044319e-10,
+          "n": 16
+        },
+        "status": "MEASURED",
+        "year_coverage": [
+          2025,
+          2026
+        ]
+      },
+      "separate_models": {
+        "calibration": "UNAVAILABLE: no real tactical-state labels",
+        "event_coverage": [
+          "Australian Grand Prix"
+        ],
+        "fold_ids": [
+          "synthetic"
+        ],
+        "held_out_evidence_n": 16,
+        "mean_log_likelihood": 2.9338105103157988,
+        "mean_nll": -2.9338105103157988,
+        "model_versions": [
+          "m09_rival_benchmark_v2"
+        ],
+        "n": 768,
+        "reason": null,
+        "rule_configuration_versions": [
+          "historical_drs_era",
+          "rules-2026-common-v2-fia-iss08-iss20"
+        ],
+        "stability": {
+          "max_abs_delta": 1.2324295139976016e-08,
+          "mean_max_abs_delta": 8.325829913044319e-10,
+          "n": 16
+        },
+        "status": "MEASURED",
+        "year_coverage": [
+          2025,
+          2026
+        ]
+      }
+    },
+    "provenance": "SIMULATED",
+    "real_historical_evidence": false,
+    "reason": "selected 2026-only unless held-out predictive evidence supports historical data",
+    "rule_configuration_version": "rules-2026-common-v2-fia-iss08-iss20",
+    "schema_version": "m13_rival_era_comparison_v2",
+    "selected": "2026_only",
+    "split_version": "synthetic-c9-v1",
+    "status": "COMPLETE",
+    "strategies": [
+      "2026_only",
+      "historical_pretrain_2026_recalibration",
+      "era_feature",
+      "domain_weighting",
+      "separate_models"
+    ],
+    "synthetic_fixture": "trackshift-synthetic-closure-v1"
+  },
+  "git_commit": "synthetic-development",
+  "models": {
+    "planner": "m24_beam_development_v1",
+    "policies": "m27_rival_policies_v1",
+    "rival": "m09_rival_benchmark_v2",
+    "rules": "rules-2026-common-v2-fia-iss08-iss20",
+    "simulator": "m26_simulator_development_v1",
+    "value": "m22_dp_development_v2"
+  },
+  "planner": {
+    "model_version": "m24_beam_development_v1",
+    "n": 2,
+    "provenance": "SIMULATED",
+    "rule_violations": 0,
+    "status": "SYNTHETIC_DEVELOPMENT"
+  },
+  "reason": "Synthetic development evidence is not a real-race calibration or final release claim",
+  "release_ready": false,
+  "rival": {
+    "model_version": "m09_rival_benchmark_v2",
+    "n_synthetic_rows": 384,
+    "provenance": "SIMULATED",
+    "real_state_calibration": "NOT_CLAIMED",
+    "synthetic_state_recovery": {
+      "10": {
+        "accuracy": 1.0,
+        "brier": 4.8712620886681475e-05,
+        "n": 16
+      },
+      "20": {
+        "accuracy": 1.0,
+        "brier": 3.557044395074395e-12,
+        "n": 16
+      },
+      "5": {
+        "accuracy": 1.0,
+        "brier": 4.421749438436128e-16,
+        "n": 16
+      }
+    }
+  },
+  "simulator": {
+    "model_version": "m26_simulator_development_v1",
+    "n_episodes": 8,
+    "provenance": "SIMULATED",
+    "rule_violations": 0,
+    "status": "SYNTHETIC_DEVELOPMENT"
+  },
+  "value": {
+    "model_version": "m22_dp_development_v2",
+    "n": 2,
+    "provenance": "SIMULATED",
+    "status": "SYNTHETIC_DEVELOPMENT"
+  }
+}

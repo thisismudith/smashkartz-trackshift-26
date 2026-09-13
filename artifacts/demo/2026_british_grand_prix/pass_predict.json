@@ -1,0 +1,44 @@
+{
+  "calibration": "uncalibrated",
+  "checkpoint": "DETECTION",
+  "evidence_grade": "INTERIM",
+  "features_missing": [
+    "attacker_tyre_life_laps",
+    "defender_tyre_life_laps",
+    "track_temperature",
+    "tyre_life_delta_laps",
+    "wind_cross_component_mps",
+    "wind_head_component_mps",
+    "attacker_tyre_compound",
+    "corner_type",
+    "defender_tyre_compound",
+    "sector",
+    "tyre_compound_pair",
+    "wet_track_flag"
+  ],
+  "features_supplied": [
+    "closing_rate_s_per_s",
+    "gap_at_checkpoint",
+    "p_eligible"
+  ],
+  "is_stub": false,
+  "p_pass_by_outcome_horizon": {
+    "artifact_version": "v1/detection/lightgbm",
+    "model": "M10/lightgbm",
+    "provenance": "INFERRED",
+    "unit": null,
+    "value": 0.10762269142475862
+  },
+  "versions": {
+    "api_version": "1.0.0",
+    "git_commit": "synthetic-development",
+    "models": {
+      "planner": "m24_beam_development_v1",
+      "policies": "m27_rival_policies_v1",
+      "rival": "m09_rival_benchmark_v2",
+      "rules": "rules-2026-common-v2-fia-iss08-iss20",
+      "simulator": "m26_simulator_development_v1",
+      "value": "m22_dp_development_v2"
+    }
+  }
+}

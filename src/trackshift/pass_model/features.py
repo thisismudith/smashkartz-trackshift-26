@@ -102,26 +102,16 @@ MISSING_CATEGORY = "__missing__"
 
 METADATA_ONLY_GROUP = "metadata_only"
 
-#: Interaction groups that are never modelling signal, whatever else the
-#: registry says about them.
+#: Name fragments refused regardless of registration.
 #:
-#: ``historical_drs`` is here because DRS is not a parameter this model may
-#: learn from. It exists only in 2022-2025, has no 2026 counterpart, and the
-#: 2026 Overtake mechanism it would stand in for works differently -- so a model
-#: that leans on it learns the DRS era and then transfers that lesson to a
-#: season where the mechanism does not exist. The registry entries currently
-#: also carry ``metadata_only``, which would exclude them today; this group is
-#: refused independently so that removing that tag cannot quietly re-admit them.
-#: Same reasoning as STRUCTURAL_COLUMNS above: do not rely on a second party's
-#: tag to enforce your own contract.
-EXCLUDED_GROUPS: frozenset[str] = frozenset({"historical_drs"})
-
-#: Name fragments refused regardless of registration. ``drs`` joins the list for
-#: the reason above: a newly registered ``drs_*`` feature must not become signal
-#: by default just because nobody remembered to group it.
+#: DRS is deliberately *not* listed. It is already gated above by
+#: ``validate_feature_admission``, which scopes it by year and consumer: refused
+#: for 2026 model paths, admitted for named 2022-2025 audit and prior consumers.
+#: A blanket token ban here would override that carve-out and refuse the
+#: historical prior its own boundary check had just allowed.
 FORBIDDEN_MODEL_TOKENS = (
     "future", "outcome", "pass_attempted", "outcome_distance", "position_swap",
-    "zone", "event_id", "circuit_id", "drs",
+    "zone", "event_id", "circuit_id",
 )
 
 
@@ -286,6 +276,7 @@ def select_features(
                     raise FeatureSelectionError(str(exc)) from exc
                 excluded[name] = str(exc)
                 continue
+
         entry = entries.get(name)
         if entry is None:
             excluded[name] = "not in config/feature_registry.yaml (CP-02 owns the namespace)"
@@ -293,14 +284,6 @@ def select_features(
         groups = _groups(name, entry)
         if METADATA_ONLY_GROUP in groups:
             excluded[name] = "rule/display/audit metadata; never a trainable feature"
-            continue
-        forbidden_group = EXCLUDED_GROUPS.intersection(groups)
-        if forbidden_group:
-            excluded[name] = (
-                f"interaction_group {sorted(forbidden_group)} is refused for modelling; "
-                "DRS is a 2022-2025-only mechanism with no 2026 counterpart, so it "
-                "cannot transfer and is not a legitimate parameter here"
-            )
             continue
         if any(token in str(name).lower() for token in FORBIDDEN_MODEL_TOKENS):
             excluded[name] = (

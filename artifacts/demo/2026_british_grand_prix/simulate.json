@@ -1,0 +1,459 @@
+{
+  "assumptions": [
+    "rival policy is explicit and fixed, not a learned agent",
+    "energy and pass transitions are supplied model outputs and tagged SIMULATED"
+  ],
+  "episodes": [
+    {
+      "environment_seed": 1303193990,
+      "episode": 0,
+      "outcome": "BEHIND",
+      "pass_lap": null,
+      "repassed": false,
+      "trace": [
+        {
+          "action": {
+            "applicable_mode": "normal",
+            "cap_kw": 350.0,
+            "delivered_power_kw": 175.0,
+            "delta_e_mj": null,
+            "deploy_level": 0.5,
+            "lift_amount": 0.25
+          },
+          "energy_mj": 2.09375,
+          "gap_s": 0.7,
+          "provenance": "SIMULATED",
+          "rival_action": {
+            "applicable_mode": "normal",
+            "cap_kw": 350.0,
+            "delivered_power_kw": 0.0,
+            "delta_e_mj": null,
+            "deploy_level": 0.0,
+            "lift_amount": 0.0
+          },
+          "segment_id": 1
+        },
+        {
+          "action": {
+            "applicable_mode": "normal",
+            "cap_kw": 200.0,
+            "delivered_power_kw": 100.0,
+            "delta_e_mj": null,
+            "deploy_level": 0.5,
+            "lift_amount": 0.25
+          },
+          "energy_mj": 2.1887499999999998,
+          "gap_s": 0.7,
+          "provenance": "SIMULATED",
+          "rival_action": {
+            "applicable_mode": "normal",
+            "cap_kw": 200.0,
+            "delivered_power_kw": 0.0,
+            "delta_e_mj": null,
+            "deploy_level": 0.0,
+            "lift_amount": 0.0
+          },
+          "segment_id": 2
+        }
+      ]
+    },
+    {
+      "environment_seed": 1243931546,
+      "episode": 1,
+      "outcome": "BEHIND",
+      "pass_lap": null,
+      "repassed": false,
+      "trace": [
+        {
+          "action": {
+            "applicable_mode": "normal",
+            "cap_kw": 350.0,
+            "delivered_power_kw": 175.0,
+            "delta_e_mj": null,
+            "deploy_level": 0.5,
+            "lift_amount": 0.25
+          },
+          "energy_mj": 2.09375,
+          "gap_s": 0.7,
+          "provenance": "SIMULATED",
+          "rival_action": {
+            "applicable_mode": "normal",
+            "cap_kw": 350.0,
+            "delivered_power_kw": 0.0,
+            "delta_e_mj": null,
+            "deploy_level": 0.0,
+            "lift_amount": 0.0
+          },
+          "segment_id": 1
+        },
+        {
+          "action": {
+            "applicable_mode": "normal",
+            "cap_kw": 200.0,
+            "delivered_power_kw": 100.0,
+            "delta_e_mj": null,
+            "deploy_level": 0.5,
+            "lift_amount": 0.25
+          },
+          "energy_mj": 2.1887499999999998,
+          "gap_s": 0.7,
+          "provenance": "SIMULATED",
+          "rival_action": {
+            "applicable_mode": "normal",
+            "cap_kw": 200.0,
+            "delivered_power_kw": 0.0,
+            "delta_e_mj": null,
+            "deploy_level": 0.0,
+            "lift_amount": 0.0
+          },
+          "segment_id": 2
+        }
+      ]
+    },
+    {
+      "environment_seed": 1195188523,
+      "episode": 2,
+      "outcome": "BEHIND",
+      "pass_lap": null,
+      "repassed": false,
+      "trace": [
+        {
+          "action": {
+            "applicable_mode": "normal",
+            "cap_kw": 350.0,
+            "delivered_power_kw": 175.0,
+            "delta_e_mj": null,
+            "deploy_level": 0.5,
+            "lift_amount": 0.25
+          },
+          "energy_mj": 2.09375,
+          "gap_s": 0.7,
+          "provenance": "SIMULATED",
+          "rival_action": {
+            "applicable_mode": "normal",
+            "cap_kw": 350.0,
+            "delivered_power_kw": 0.0,
+            "delta_e_mj": null,
+            "deploy_level": 0.0,
+            "lift_amount": 0.0
+          },
+          "segment_id": 1
+        },
+        {
+          "action": {
+            "applicable_mode": "normal",
+            "cap_kw": 200.0,
+            "delivered_power_kw": 100.0,
+            "delta_e_mj": null,
+            "deploy_level": 0.5,
+            "lift_amount": 0.25
+          },
+          "energy_mj": 2.1887499999999998,
+          "gap_s": 0.7,
+          "provenance": "SIMULATED",
+          "rival_action": {
+            "applicable_mode": "normal",
+            "cap_kw": 200.0,
+            "delivered_power_kw": 0.0,
+            "delta_e_mj": null,
+            "deploy_level": 0.0,
+            "lift_amount": 0.0
+          },
+          "segment_id": 2
+        }
+      ]
+    },
+    {
+      "environment_seed": 115692582,
+      "episode": 3,
+      "outcome": "BEHIND",
+      "pass_lap": null,
+      "repassed": false,
+      "trace": [
+        {
+          "action": {
+            "applicable_mode": "normal",
+            "cap_kw": 350.0,
+            "delivered_power_kw": 175.0,
+            "delta_e_mj": null,
+            "deploy_level": 0.5,
+            "lift_amount": 0.25
+          },
+          "energy_mj": 2.09375,
+          "gap_s": 0.7,
+          "provenance": "SIMULATED",
+          "rival_action": {
+            "applicable_mode": "normal",
+            "cap_kw": 350.0,
+            "delivered_power_kw": 0.0,
+            "delta_e_mj": null,
+            "deploy_level": 0.0,
+            "lift_amount": 0.0
+          },
+          "segment_id": 1
+        },
+        {
+          "action": {
+            "applicable_mode": "normal",
+            "cap_kw": 200.0,
+            "delivered_power_kw": 100.0,
+            "delta_e_mj": null,
+            "deploy_level": 0.5,
+            "lift_amount": 0.25
+          },
+          "energy_mj": 2.1887499999999998,
+          "gap_s": 0.7,
+          "provenance": "SIMULATED",
+          "rival_action": {
+            "applicable_mode": "normal",
+            "cap_kw": 200.0,
+            "delivered_power_kw": 0.0,
+            "delta_e_mj": null,
+            "deploy_level": 0.0,
+            "lift_amount": 0.0
+          },
+          "segment_id": 2
+        }
+      ]
+    },
+    {
+      "environment_seed": 1802024078,
+      "episode": 4,
+      "outcome": "BEHIND",
+      "pass_lap": null,
+      "repassed": false,
+      "trace": [
+        {
+          "action": {
+            "applicable_mode": "normal",
+            "cap_kw": 350.0,
+            "delivered_power_kw": 175.0,
+            "delta_e_mj": null,
+            "deploy_level": 0.5,
+            "lift_amount": 0.25
+          },
+          "energy_mj": 2.09375,
+          "gap_s": 0.7,
+          "provenance": "SIMULATED",
+          "rival_action": {
+            "applicable_mode": "normal",
+            "cap_kw": 350.0,
+            "delivered_power_kw": 0.0,
+            "delta_e_mj": null,
+            "deploy_level": 0.0,
+            "lift_amount": 0.0
+          },
+          "segment_id": 1
+        },
+        {
+          "action": {
+            "applicable_mode": "normal",
+            "cap_kw": 200.0,
+            "delivered_power_kw": 100.0,
+            "delta_e_mj": null,
+            "deploy_level": 0.5,
+            "lift_amount": 0.25
+          },
+          "energy_mj": 2.1887499999999998,
+          "gap_s": 0.7,
+          "provenance": "SIMULATED",
+          "rival_action": {
+            "applicable_mode": "normal",
+            "cap_kw": 200.0,
+            "delivered_power_kw": 0.0,
+            "delta_e_mj": null,
+            "deploy_level": 0.0,
+            "lift_amount": 0.0
+          },
+          "segment_id": 2
+        }
+      ]
+    },
+    {
+      "environment_seed": 1363373343,
+      "episode": 5,
+      "outcome": "BEHIND",
+      "pass_lap": null,
+      "repassed": false,
+      "trace": [
+        {
+          "action": {
+            "applicable_mode": "normal",
+            "cap_kw": 350.0,
+            "delivered_power_kw": 175.0,
+            "delta_e_mj": null,
+            "deploy_level": 0.5,
+            "lift_amount": 0.25
+          },
+          "energy_mj": 2.09375,
+          "gap_s": 0.7,
+          "provenance": "SIMULATED",
+          "rival_action": {
+            "applicable_mode": "normal",
+            "cap_kw": 350.0,
+            "delivered_power_kw": 0.0,
+            "delta_e_mj": null,
+            "deploy_level": 0.0,
+            "lift_amount": 0.0
+          },
+          "segment_id": 1
+        },
+        {
+          "action": {
+            "applicable_mode": "normal",
+            "cap_kw": 200.0,
+            "delivered_power_kw": 100.0,
+            "delta_e_mj": null,
+            "deploy_level": 0.5,
+            "lift_amount": 0.25
+          },
+          "energy_mj": 2.1887499999999998,
+          "gap_s": 0.7,
+          "provenance": "SIMULATED",
+          "rival_action": {
+            "applicable_mode": "normal",
+            "cap_kw": 200.0,
+            "delivered_power_kw": 0.0,
+            "delta_e_mj": null,
+            "deploy_level": 0.0,
+            "lift_amount": 0.0
+          },
+          "segment_id": 2
+        }
+      ]
+    },
+    {
+      "environment_seed": 1724819962,
+      "episode": 6,
+      "outcome": "BEHIND",
+      "pass_lap": null,
+      "repassed": false,
+      "trace": [
+        {
+          "action": {
+            "applicable_mode": "normal",
+            "cap_kw": 350.0,
+            "delivered_power_kw": 175.0,
+            "delta_e_mj": null,
+            "deploy_level": 0.5,
+            "lift_amount": 0.25
+          },
+          "energy_mj": 2.09375,
+          "gap_s": 0.7,
+          "provenance": "SIMULATED",
+          "rival_action": {
+            "applicable_mode": "normal",
+            "cap_kw": 350.0,
+            "delivered_power_kw": 0.0,
+            "delta_e_mj": null,
+            "deploy_level": 0.0,
+            "lift_amount": 0.0
+          },
+          "segment_id": 1
+        },
+        {
+          "action": {
+            "applicable_mode": "normal",
+            "cap_kw": 200.0,
+            "delivered_power_kw": 100.0,
+            "delta_e_mj": null,
+            "deploy_level": 0.5,
+            "lift_amount": 0.25
+          },
+          "energy_mj": 2.1887499999999998,
+          "gap_s": 0.7,
+          "provenance": "SIMULATED",
+          "rival_action": {
+            "applicable_mode": "normal",
+            "cap_kw": 200.0,
+            "delivered_power_kw": 0.0,
+            "delta_e_mj": null,
+            "deploy_level": 0.0,
+            "lift_amount": 0.0
+          },
+          "segment_id": 2
+        }
+      ]
+    },
+    {
+      "environment_seed": 267116024,
+      "episode": 7,
+      "outcome": "BEHIND",
+      "pass_lap": null,
+      "repassed": false,
+      "trace": [
+        {
+          "action": {
+            "applicable_mode": "normal",
+            "cap_kw": 350.0,
+            "delivered_power_kw": 175.0,
+            "delta_e_mj": null,
+            "deploy_level": 0.5,
+            "lift_amount": 0.25
+          },
+          "energy_mj": 2.09375,
+          "gap_s": 0.7,
+          "provenance": "SIMULATED",
+          "rival_action": {
+            "applicable_mode": "normal",
+            "cap_kw": 350.0,
+            "delivered_power_kw": 0.0,
+            "delta_e_mj": null,
+            "deploy_level": 0.0,
+            "lift_amount": 0.0
+          },
+          "segment_id": 1
+        },
+        {
+          "action": {
+            "applicable_mode": "normal",
+            "cap_kw": 200.0,
+            "delivered_power_kw": 100.0,
+            "delta_e_mj": null,
+            "deploy_level": 0.5,
+            "lift_amount": 0.25
+          },
+          "energy_mj": 2.1887499999999998,
+          "gap_s": 0.7,
+          "provenance": "SIMULATED",
+          "rival_action": {
+            "applicable_mode": "normal",
+            "cap_kw": 200.0,
+            "delivered_power_kw": 0.0,
+            "delta_e_mj": null,
+            "deploy_level": 0.0,
+            "lift_amount": 0.0
+          },
+          "segment_id": 2
+        }
+      ]
+    }
+  ],
+  "model_versions": {
+    "c3": "PUBLIC",
+    "c4": "PUBLIC_CALLBACK",
+    "c5": "PUBLIC_CALLBACK"
+  },
+  "provenance": "SIMULATED",
+  "schema_version": "m26_simulator_development_v1",
+  "status": "COMPLETE",
+  "summary": {
+    "mean_final_energy_mj": 2.1887499999999998,
+    "n_episodes": 8,
+    "p_ahead_at_horizon": 0.0,
+    "rule_violations": 0,
+    "seed": 17
+  },
+  "versions": {
+    "api_version": "1.0.0",
+    "git_commit": "synthetic-development",
+    "models": {
+      "planner": "m24_beam_development_v1",
+      "policies": "m27_rival_policies_v1",
+      "rival": "m09_rival_benchmark_v2",
+      "rules": "rules-2026-common-v2-fia-iss08-iss20",
+      "simulator": "m26_simulator_development_v1",
+      "value": "m22_dp_development_v2"
+    }
+  }
+}

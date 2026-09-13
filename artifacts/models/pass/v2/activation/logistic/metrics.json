@@ -1,0 +1,338 @@
+{
+  "cross_validated": {
+    "checkpoint": "ACTIVATION",
+    "family": "logistic",
+    "folds": 6,
+    "folds_ok": 6,
+    "errors": [],
+    "brier": 0.13778463727901977,
+    "brier_std": 0.044761678542121444,
+    "brier_n": 6,
+    "brier_reference": 0.13331046293424623,
+    "brier_reference_std": 0.04434238367382325,
+    "brier_reference_n": 6,
+    "log_loss": 0.4602050703344173,
+    "log_loss_std": 0.13123284689076053,
+    "log_loss_n": 6,
+    "ece": 0.09440807536587652,
+    "ece_std": 0.05478372035970364,
+    "ece_n": 6,
+    "roc_auc": 0.5869473732948265,
+    "roc_auc_std": 0.06888303256687996,
+    "roc_auc_n": 6,
+    "pr_auc": 0.25275199405507365,
+    "pr_auc_std": 0.08531655487859034,
+    "pr_auc_n": 6,
+    "brier_skill_score": -0.033562064419357496,
+    "n": 4005,
+    "n_positive": 622,
+    "seconds": 1.483,
+    "metrics": {
+      "test": {
+        "brier": 0.13778463727901977,
+        "ece": 0.09440807536587652,
+        "log_loss": 0.4602050703344173,
+        "roc_auc": 0.5869473732948265,
+        "n": 4005
+      }
+    }
+  },
+  "final_fit": {
+    "checkpoint": "ACTIVATION",
+    "family": "logistic",
+    "fold": "final",
+    "ok": false,
+    "metrics": {
+      "train": {
+        "n": 3342,
+        "n_positive": 515,
+        "observed_rate": 0.15409934171154996,
+        "reference_rate": 0.15409934171154996,
+        "brier": 0.11374209702119241,
+        "brier_reference": 0.13035273459561694,
+        "brier_skill_score": 0.12742837828415654,
+        "log_loss": 0.3795060566015047,
+        "log_loss_reference": 0.4297543973535425,
+        "ece": 0.02208840347018831,
+        "roc_auc": 0.7422015859551276,
+        "pr_auc": 0.3926687221537332,
+        "single_class_split": false,
+        "reliability": [
+          {
+            "lower": 0.0044400428252817205,
+            "upper": 0.05973394256583081,
+            "n": 335,
+            "mean_predicted": 0.043378026954423464,
+            "observed_rate": 0.041791044776119404,
+            "gap": -0.0015869821783040597
+          },
+          {
+            "lower": 0.05973394256583081,
+            "upper": 0.07599354119865903,
+            "n": 334,
+            "mean_predicted": 0.0681955892460065,
+            "observed_rate": 0.03293413173652695,
+            "gap": -0.035261457509479545
+          },
+          {
+            "lower": 0.07599354119865903,
+            "upper": 0.0905623173910361,
+            "n": 334,
+            "mean_predicted": 0.08333450262762329,
+            "observed_rate": 0.0718562874251497,
+            "gap": -0.011478215202473593
+          },
+          {
+            "lower": 0.0905623173910361,
+            "upper": 0.10460545045768369,
+            "n": 334,
+            "mean_predicted": 0.09764867532291537,
+            "observed_rate": 0.07784431137724551,
+            "gap": -0.019804363945669853
+          },
+          {
+            "lower": 0.10460545045768369,
+            "upper": 0.12287966333186537,
+            "n": 334,
+            "mean_predicted": 0.11348419888198295,
+            "observed_rate": 0.12874251497005987,
+            "gap": 0.015258316088076915
+          },
+          {
+            "lower": 0.12287966333186537,
+            "upper": 0.1407637166512289,
+            "n": 334,
+            "mean_predicted": 0.13206273561964388,
+            "observed_rate": 0.12874251497005987,
+            "gap": -0.0033202206495840103
+          },
+          {
+            "lower": 0.1407637166512289,
+            "upper": 0.16624963166250195,
+            "n": 334,
+            "mean_predicted": 0.15245754730459607,
+            "observed_rate": 0.18263473053892215,
+            "gap": 0.030177183234326083
+          },
+          {
+            "lower": 0.16624963166250195,
+            "upper": 0.1972899344382658,
+            "n": 334,
+            "mean_predicted": 0.18023796549395543,
+            "observed_rate": 0.1407185628742515,
+            "gap": -0.039519402619703936
+          },
+          {
+            "lower": 0.1972899344382658,
+            "upper": 0.2727915297572786,
+            "n": 334,
+            "mean_predicted": 0.230289825759861,
+            "observed_rate": 0.23652694610778444,
+            "gap": 0.006237120347923425
+          },
+          {
+            "lower": 0.2727915297572786,
+            "upper": 0.9984915250110898,
+            "n": 335,
+            "mean_predicted": 0.440313409008477,
+            "observed_rate": 0.49850746268656715,
+            "gap": 0.05819405367809016
+          }
+        ],
+        "bins": 10
+      },
+      "validation": {
+        "n": 717,
+        "n_positive": 108,
+        "observed_rate": 0.1506276150627615,
+        "reference_rate": 0.15409934171154996,
+        "brier": 0.12968004943768416,
+        "brier_reference": 0.12795098952918998,
+        "brier_skill_score": -0.013513454759954913,
+        "log_loss": 0.4334776269421248,
+        "log_loss_reference": 0.4238427257423961,
+        "ece": 0.0693976460556414,
+        "roc_auc": 0.6040868454661559,
+        "pr_auc": 0.25639311444861496,
+        "single_class_split": false,
+        "reliability": [
+          {
+            "lower": 0.012347475067293678,
+            "upper": 0.04608466408991481,
+            "n": 72,
+            "mean_predicted": 0.03612338445878197,
+            "observed_rate": 0.09722222222222222,
+            "gap": 0.06109883776344025
+          },
+          {
+            "lower": 0.04608466408991481,
+            "upper": 0.058879770063327744,
+            "n": 72,
+            "mean_predicted": 0.052903751990521,
+            "observed_rate": 0.013888888888888888,
+            "gap": -0.03901486310163211
+          },
+          {
+            "lower": 0.058879770063327744,
+            "upper": 0.06997762936022933,
+            "n": 71,
+            "mean_predicted": 0.0641219141771359,
+            "observed_rate": 0.16901408450704225,
+            "gap": 0.10489217032990635
+          },
+          {
+            "lower": 0.06997762936022933,
+            "upper": 0.08178755726131927,
+            "n": 72,
+            "mean_predicted": 0.07623687247485945,
+            "observed_rate": 0.125,
+            "gap": 0.048763127525140545
+          },
+          {
+            "lower": 0.08178755726131927,
+            "upper": 0.09151235385613939,
+            "n": 72,
+            "mean_predicted": 0.08628056488474826,
+            "observed_rate": 0.19444444444444445,
+            "gap": 0.10816387955969618
+          },
+          {
+            "lower": 0.09151235385613939,
+            "upper": 0.10682795751811835,
+            "n": 71,
+            "mean_predicted": 0.09851876531077348,
+            "observed_rate": 0.19718309859154928,
+            "gap": 0.0986643332807758
+          },
+          {
+            "lower": 0.10682795751811835,
+            "upper": 0.12242777620368679,
+            "n": 72,
+            "mean_predicted": 0.11436548598479963,
+            "observed_rate": 0.09722222222222222,
+            "gap": -0.01714326376257741
+          },
+          {
+            "lower": 0.12242777620368679,
+            "upper": 0.14747960028488055,
+            "n": 71,
+            "mean_predicted": 0.1344334015339206,
+            "observed_rate": 0.15492957746478872,
+            "gap": 0.02049617593086811
+          },
+          {
+            "lower": 0.14747960028488055,
+            "upper": 0.25833163517278324,
+            "n": 72,
+            "mean_predicted": 0.18471960466538428,
+            "observed_rate": 0.125,
+            "gap": -0.059719604665384285
+          },
+          {
+            "lower": 0.25833163517278324,
+            "upper": 0.984054051899067,
+            "n": 72,
+            "mean_predicted": 0.46957381215608496,
+            "observed_rate": 0.3333333333333333,
+            "gap": -0.13624047882275164
+          }
+        ],
+        "bins": 10
+      },
+      "feature_schema": {
+        "schema_version": "m10_pass_features_v2",
+        "decision_checkpoint": "ACTIVATION",
+        "include_identity": false,
+        "numeric": [
+          "attacker_tyre_life_laps",
+          "closing_rate_s_per_s",
+          "defender_tyre_life_laps",
+          "gap_at_checkpoint",
+          "p_eligible",
+          "speed_at_activation_kmh",
+          "track_temperature",
+          "tyre_life_delta_laps",
+          "wind_cross_component_mps",
+          "wind_head_component_mps"
+        ],
+        "categorical": [
+          "attacker_tyre_compound",
+          "corner_type",
+          "defender_tyre_compound",
+          "sector",
+          "tyre_compound_pair",
+          "wet_track_flag"
+        ],
+        "identity": [
+          "attacker",
+          "attacker_team",
+          "defender",
+          "defender_team"
+        ],
+        "label": "passed_by_outcome_horizon",
+        "n_features": 16,
+        "excluded": {
+          "attacker": "identity group, disabled for this run (section 17)",
+          "attacker_team": "identity group, disabled for this run (section 17)",
+          "battle_id": "interaction_group contains 'key'; an identifier, not signal",
+          "battle_join_status": "not in config/feature_registry.yaml (CP-02 owns the namespace)",
+          "crosses_lap_boundary": "structural column of the opportunity schema; never a feature",
+          "decision_checkpoint": "structural column of the opportunity schema; never a feature",
+          "defender": "identity group, disabled for this run (section 17)",
+          "defender_team": "identity group, disabled for this run (section 17)",
+          "distance_activation_to_brake": "rule/display/audit metadata; never a trainable feature",
+          "distance_detection_to_activation": "rule/display/audit metadata; never a trainable feature",
+          "distance_remaining_in_zone": "rule/display/audit metadata; never a trainable feature",
+          "eligibility_margin": "rule/display/audit metadata; never a trainable feature",
+          "event": "interaction_group contains 'key'; an identifier, not signal",
+          "feature_cutoff_distance_m": "structural column of the opportunity schema; never a feature",
+          "feature_cutoff_offset_m": "structural column of the opportunity schema; never a feature",
+          "gap_at_activation_s": "rule/display/audit metadata; never a trainable feature",
+          "label_definition": "structural column of the opportunity schema; never a feature",
+          "lap": "interaction_group contains 'key'; an identifier, not signal",
+          "opportunity_id": "structural column of the opportunity schema; never a feature",
+          "outcome_distance_m": "audit only (section 19); never a feature",
+          "outcome_horizon": "structural column of the opportunity schema; never a feature",
+          "pass_attempted": "audit only (section 19); never a feature",
+          "passed_by_outcome_horizon": "label",
+          "projected_gap_at_detection_s": "rule/display/audit metadata; never a trainable feature",
+          "projected_gap_sigma_s": "rule/display/audit metadata; never a trainable feature",
+          "regulation_era": "structural column of the opportunity schema; never a feature",
+          "schema_version": "structural column of the opportunity schema; never a feature",
+          "session": "interaction_group contains 'key'; an identifier, not signal",
+          "speed_at_braking_kmh": "decision_checkpoint=['BRAKING']; not knowable at ACTIVATION",
+          "unavailable_quantities": "rule/display/audit metadata; never a trainable feature",
+          "year": "interaction_group contains 'key'; an identifier, not signal",
+          "zone": "rule/display/audit metadata; never a trainable feature"
+        }
+      }
+    },
+    "model": {
+      "family": "logistic",
+      "params": {
+        "C": 1.0,
+        "solver": "lbfgs",
+        "max_iter": 2000,
+        "class_weight": null,
+        "random_state": 42
+      },
+      "seed": 42,
+      "threads": 2,
+      "deterministic": true,
+      "best_iteration": null,
+      "n_numeric": 10,
+      "n_categorical": 6,
+      "categorical_levels": {
+        "attacker_tyre_compound": 4,
+        "corner_type": 4,
+        "defender_tyre_compound": 4,
+        "sector": 1,
+        "tyre_compound_pair": 11,
+        "wet_track_flag": 1
+      }
+    },
+    "error": "test split is empty after dropping unlabelled rows",
+    "seconds": 0.119
+  },
+  "selection_rank": 4
+}

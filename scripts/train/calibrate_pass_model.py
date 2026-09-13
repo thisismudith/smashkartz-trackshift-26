@@ -284,6 +284,32 @@ def main() -> int:
             )
         except Exception as exc:
             raise SystemExit(f"final-mode C4 feature boundary rejected: {exc}") from exc
+    # Same split contract as CP-14: battle_id against a written C9 assignment,
+    # and rows C8 has no episode for are excluded rather than relabelled.
+    # Re-deriving the split here would let this stage disagree with the
+    # benchmark it is calibrating, with nothing in either artifact to say so.
+    require_unit = None if args.allow_event_split else "battle_id"
+    assignments = None
+    excluded_rows = {}
+    if require_unit:
+        assignments = load_assignments(args.split_assignments)
+        usable = frame[require_unit].notna() & (
+            frame[require_unit].astype(str).str.strip() != "")
+        dropped = int((~usable).sum())
+        if dropped:
+            excluded_rows = {
+                "rows_dropped_without_battle_id": dropped,
+                "rows_kept": int(usable.sum()),
+                "share_dropped": round(dropped / len(frame), 6),
+            }
+            print(f"excluding {dropped} of {len(frame)} rows with no battle_id "
+                  f"({dropped / len(frame):.1%})", flush=True)
+            frame = frame[usable].reset_index(drop=True)
+        if frame.empty:
+            raise SystemExit(
+                "every row was dropped for want of a battle_id; the A2 C8 join has "
+                "not been applied to this M07 build.")
+
     plan = plan_splits(frame, design=args.design, seed=args.seed,
                        demo_scope=DemoScope(args.demo_scope),
                        require_unit=require_unit, assignments=assignments)

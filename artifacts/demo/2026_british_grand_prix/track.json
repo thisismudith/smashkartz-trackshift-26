@@ -1,0 +1,115 @@
+{
+  "centreline": [
+    {
+      "distance_m": 0.0,
+      "provenance": "SIMULATED",
+      "x_m": 0.0,
+      "y_m": 0.0
+    },
+    {
+      "distance_m": 180.0,
+      "provenance": "SIMULATED",
+      "x_m": 10.0,
+      "y_m": 8.0
+    },
+    {
+      "distance_m": 360.0,
+      "provenance": "SIMULATED",
+      "x_m": 20.0,
+      "y_m": 0.0
+    }
+  ],
+  "event": "british_grand_prix",
+  "lap_length_m": {
+    "provenance": "SIMULATED",
+    "unit": "m",
+    "value": 5811.0
+  },
+  "lines": [
+    {
+      "distance_m": 5789.3,
+      "kind": "DETECTION",
+      "provenance": "DERIVED_TELEMETRY",
+      "source": "Aligned to official FIA 2026 British Grand Prix circuit map, Document 6, p. 2, OVERTAKE DETECTION 115m after T18, https://www.fia.com/system/files/decision-document/2026_british_grand_prix_-_competition_notes_-_circuit_map_pit_lane_drawing_emergency_exits_map_and_red_zone.pdf; T18 observed corner distance 5674.3m from geometry.corner_distances_m",
+      "zone": "A1"
+    },
+    {
+      "distance_m": 5739.3,
+      "kind": "ACTIVATION",
+      "provenance": "DERIVED_TELEMETRY",
+      "source": "Aligned to official FIA 2026 British Grand Prix circuit map, Document 6, p. 2, OVERTAKE ACTIVATION 65m after T18, https://www.fia.com/system/files/decision-document/2026_british_grand_prix_-_competition_notes_-_circuit_map_pit_lane_drawing_emergency_exits_map_and_red_zone.pdf; T18 observed corner distance 5674.3m from geometry.corner_distances_m",
+      "zone": "A1"
+    },
+    {
+      "distance_m": 1338.2,
+      "kind": "DETECTION",
+      "provenance": "DERIVED_TELEMETRY",
+      "source": "Aligned to official FIA 2026 British Grand Prix circuit map, Document 6, p. 2, OVERTAKE DETECTION 115m after T5, https://www.fia.com/system/files/decision-document/2026_british_grand_prix_-_competition_notes_-_circuit_map_pit_lane_drawing_emergency_exits_map_and_red_zone.pdf; T5 observed corner distance 1223.2m from geometry.corner_distances_m",
+      "zone": "A2"
+    },
+    {
+      "distance_m": 1278.2,
+      "kind": "ACTIVATION",
+      "provenance": "DERIVED_TELEMETRY",
+      "source": "Aligned to official FIA 2026 British Grand Prix circuit map, Document 6, p. 2, OVERTAKE ACTIVATION 55m after T5, https://www.fia.com/system/files/decision-document/2026_british_grand_prix_-_competition_notes_-_circuit_map_pit_lane_drawing_emergency_exits_map_and_red_zone.pdf; T5 observed corner distance 1223.2m from geometry.corner_distances_m",
+      "zone": "A2"
+    },
+    {
+      "distance_m": 2330.9,
+      "kind": "ACTIVATION",
+      "provenance": "DERIVED_TELEMETRY",
+      "source": "Aligned to official FIA 2026 British Grand Prix circuit map, Document 6, p. 2, OVERTAKE ACTIVATION 155m after T7, https://www.fia.com/system/files/decision-document/2026_british_grand_prix_-_competition_notes_-_circuit_map_pit_lane_drawing_emergency_exits_map_and_red_zone.pdf; T7 observed corner distance 2175.9m from geometry.corner_distances_m",
+      "zone": "A3"
+    },
+    {
+      "distance_m": 4104.6,
+      "kind": "DETECTION",
+      "provenance": "DERIVED_TELEMETRY",
+      "source": "Aligned to official FIA 2026 British Grand Prix circuit map, Document 6, p. 2, OVERTAKE DETECTION 125m after T14, https://www.fia.com/system/files/decision-document/2026_british_grand_prix_-_competition_notes_-_circuit_map_pit_lane_drawing_emergency_exits_map_and_red_zone.pdf; T14 observed corner distance 3979.6m from geometry.corner_distances_m",
+      "zone": "A4"
+    },
+    {
+      "distance_m": 4044.6,
+      "kind": "ACTIVATION",
+      "provenance": "DERIVED_TELEMETRY",
+      "source": "Aligned to official FIA 2026 British Grand Prix circuit map, Document 6, p. 2, OVERTAKE ACTIVATION 65m after T14, https://www.fia.com/system/files/decision-document/2026_british_grand_prix_-_competition_notes_-_circuit_map_pit_lane_drawing_emergency_exits_map_and_red_zone.pdf; T14 observed corner distance 3979.6m from geometry.corner_distances_m",
+      "zone": "A4"
+    }
+  ],
+  "provenance": "SIMULATED",
+  "segments": [
+    {
+      "distance_m": 0.0,
+      "kind": "STRAIGHT",
+      "lap": 31,
+      "provenance": "SIMULATED",
+      "segment_duration_s": 1.8,
+      "segment_id": 1,
+      "segment_index": 0,
+      "speed_kmh": 275.0
+    },
+    {
+      "distance_m": 180.0,
+      "kind": "BRAKING",
+      "lap": 31,
+      "provenance": "SIMULATED",
+      "segment_duration_s": 2.2,
+      "segment_id": 2,
+      "segment_index": 1,
+      "speed_kmh": 320.0
+    }
+  ],
+  "track": "silverstone",
+  "versions": {
+    "api_version": "1.0.0",
+    "git_commit": "synthetic-development",
+    "models": {
+      "planner": "m24_beam_development_v1",
+      "policies": "m27_rival_policies_v1",
+      "rival": "m09_rival_benchmark_v2",
+      "rules": "rules-2026-common-v2-fia-iss08-iss20",
+      "simulator": "m26_simulator_development_v1",
+      "value": "m22_dp_development_v2"
+    }
+  }
+}

@@ -1,0 +1,323 @@
+{
+  "schema_version": "m15_physics_calibration_v1",
+  "created_utc": "2026-09-12T22:35:41.163254+00:00",
+  "git_commit": "768a162fb554f94326145d847a4ebbeb32de9a66",
+  "year": "2026",
+  "sessions": [
+    "Practice 1",
+    "Qualifying"
+  ],
+  "clean_classes": [
+    "PUSH",
+    "LONG_RUN",
+    "RACE_PACE"
+  ],
+  "controls_joined": {
+    "segments_rows": 262221,
+    "weather": {
+      "keys": [
+        "year",
+        "event",
+        "session",
+        "driver",
+        "lap",
+        "segment_id"
+      ],
+      "columns": [
+        "air_density_proxy",
+        "wind_head_component_mps",
+        "wind_cross_component_mps",
+        "wet_track_flag"
+      ],
+      "coverage": 0.9095
+    },
+    "energy_twin": {
+      "keys": [
+        "year",
+        "event",
+        "session",
+        "driver",
+        "lap",
+        "segment_id"
+      ],
+      "columns": [
+        "ers_deploy_power_est_kw"
+      ],
+      "coverage": 0.9978
+    },
+    "fuel": {
+      "keys": [
+        "year",
+        "event",
+        "session",
+        "driver",
+        "lap"
+      ],
+      "columns": [
+        "fuel_load_kg_est"
+      ],
+      "coverage": 0.9984
+    },
+    "c2_speed_ceiling": {
+      "coverage": 0.9095
+    },
+    "aero_overtake_state": "PRESENT",
+    "normal_race_model_eligible": {
+      "status": "MISSING",
+      "sessions_without_it": [
+        "Qualifying"
+      ],
+      "sessions_available": [
+        "Practice 1",
+        "Race",
+        "Sprint Qualifying"
+      ],
+      "note": "Section 12 requires this filter. It is a race concept and the lake is built for Race only, so it neither exists nor strictly applies here; recorded so the gap is visible rather than assumed away."
+    },
+    "practice_lap_classes": "joined on ['year', 'event', 'session', 'driver', 'lap']"
+  },
+  "selection": {
+    "rows_before": 262221,
+    "rows_after": 107807,
+    "excluded_by_reason": {
+      "MISSING_TARGET_OR_GEOMETRY": 564,
+      "PRACTICE_LAP_NOT_CLEAN_AIR": 103212,
+      "INACCURATE_TIMING": 41101,
+      "BRITISH_GP_HELD_OUT": 9537
+    }
+  },
+  "split": {
+    "policy": "Ladder scored on held-out LAPS, stratified by circuit, because that is the only split on which all five rungs are applicable. Rungs 3 and 4 fit per-(team, circuit) cells, and circuit maps one-to-one onto event, so an event-held-out split leaves their cells with nothing to predict -- rung 4 silently returned rung 2's numbers under it.",
+    "holdout_unit": "lap",
+    "train_rows": 29981,
+    "test_rows": 10019,
+    "train_laps": 2990,
+    "test_laps": 991,
+    "circuits_in_both_sides": [
+      "australian",
+      "austrian",
+      "barcelona",
+      "belgian",
+      "canadian",
+      "chinese",
+      "dutch",
+      "hungarian",
+      "italian",
+      "japanese",
+      "miami",
+      "monaco",
+      "spanish"
+    ]
+  },
+  "generalisation_to_unseen_circuit": {
+    "policy": "whole events held out, so error measures transfer to an unseen circuit",
+    "holdout_events": [
+      "Australian Grand Prix",
+      "Italian Grand Prix",
+      "Japanese Grand Prix"
+    ],
+    "train_rows": 29800,
+    "test_rows": 10200,
+    "applicable_rungs": [
+      "analytical",
+      "global"
+    ],
+    "not_applicable_rungs": {
+      "team/event": "per-circuit cells cannot be evaluated on a circuit that was held out; they are scored on the lap split instead"
+    },
+    "analytical_mae_s": 0.268437364948873,
+    "global_mae_s": 0.20349951163015667,
+    "global_parameters": {
+      "cda_m2": 0.6000000000000004,
+      "crr": 0.005000000000001811,
+      "eta_drivetrain": 0.9799999999626812,
+      "p_ice_max_kw": 499.9999999412898
+    },
+    "global_at_bound": [
+      "cda_m2=0.6 at a bound. A fit that runs to a bound means the model is missing physics, not that the bound should move.",
+      "crr=0.005 at a bound. A fit that runs to a bound means the model is missing physics, not that the bound should move.",
+      "eta_drivetrain=0.98 at a bound. A fit that runs to a bound means the model is missing physics, not that the bound should move.",
+      "p_ice_max_kw=500 at a bound. A fit that runs to a bound means the model is missing physics, not that the bound should move."
+    ]
+  },
+  "mae_targets": {
+    "global": 0.15,
+    "event": 0.08,
+    "physics_residual": 0.06
+  },
+  "parameter_bounds": {
+    "cda_m2": [
+      0.6,
+      1.8
+    ],
+    "crr": [
+      0.005,
+      0.025
+    ],
+    "eta_drivetrain": [
+      0.85,
+      0.98
+    ],
+    "p_ice_max_kw": [
+      300.0,
+      500.0
+    ]
+  },
+  "rungs": [
+    {
+      "rung": "analytical",
+      "mae_s": 0.32499445461474324,
+      "rmse_s": 0.7043451309518608,
+      "n_segments": 10019,
+      "parameters": {
+        "cda_m2": 1.2,
+        "crr": 0.012,
+        "eta_drivetrain": 0.92,
+        "p_ice_max_kw": 400.0
+      },
+      "at_bound": [],
+      "violations": [],
+      "cells_fitted": 1,
+      "cells_fallen_back": 0,
+      "applicable": true,
+      "residual_share": null,
+      "accepted": true,
+      "rejection_reason": null
+    },
+    {
+      "rung": "global",
+      "mae_s": 0.2738434467537347,
+      "rmse_s": 0.7286972877841204,
+      "n_segments": 10019,
+      "parameters": {
+        "cda_m2": 0.6000000000000137,
+        "crr": 0.005000000000066358,
+        "eta_drivetrain": 0.9799999999994727,
+        "p_ice_max_kw": 499.99999999911137
+      },
+      "at_bound": [
+        "cda_m2=0.6 at a bound. A fit that runs to a bound means the model is missing physics, not that the bound should move.",
+        "crr=0.005 at a bound. A fit that runs to a bound means the model is missing physics, not that the bound should move.",
+        "eta_drivetrain=0.98 at a bound. A fit that runs to a bound means the model is missing physics, not that the bound should move.",
+        "p_ice_max_kw=500 at a bound. A fit that runs to a bound means the model is missing physics, not that the bound should move."
+      ],
+      "violations": [],
+      "cells_fitted": 1,
+      "cells_fallen_back": 0,
+      "applicable": true,
+      "residual_share": null,
+      "accepted": false,
+      "rejection_reason": "parameter at a bound: cda_m2=0.6 at a bound. A fit that runs to a bound means the model is missing physics, not that the bound should move.; crr=0.005 at a bound. A fit that runs to a bound means the model is missing physics, not that the bound should move.; eta_drivetrain=0.98 at a bound. A fit that runs to a bound means the model is missing physics, not that the bound should move.; p_ice_max_kw=500 at a bound. A fit that runs to a bound means the model is missing physics, not that the bound should move.; held-out MAE 0.2738 s misses the 0.15 s target"
+    },
+    {
+      "rung": "team",
+      "mae_s": 0.2738929250537584,
+      "rmse_s": 0.7251616709658805,
+      "n_segments": 10019,
+      "parameters": {
+        "cells_fitted": 11,
+        "test_rows_covered": 9133
+      },
+      "at_bound": [],
+      "violations": [],
+      "cells_fitted": 11,
+      "cells_fallen_back": 0,
+      "applicable": true,
+      "residual_share": null,
+      "accepted": false,
+      "rejection_reason": "held-out MAE 0.2739 s does not improve on the previous rung's 0.2738 s"
+    },
+    {
+      "rung": "event",
+      "mae_s": 0.2737719340224036,
+      "rmse_s": 0.7283590214360232,
+      "n_segments": 10019,
+      "parameters": {
+        "cells_fitted": 17,
+        "test_rows_covered": 1775
+      },
+      "at_bound": [],
+      "violations": [],
+      "cells_fitted": 17,
+      "cells_fallen_back": 126,
+      "applicable": true,
+      "residual_share": null,
+      "accepted": false,
+      "rejection_reason": "held-out MAE 0.2738 s misses the 0.08 s target"
+    },
+    {
+      "rung": "physics_residual",
+      "mae_s": 0.22880328024201818,
+      "rmse_s": 0.529361724218648,
+      "n_segments": 10019,
+      "parameters": {
+        "controls": [
+          "entry_speed_kmh",
+          "segment_length_m",
+          "tyre_life_laps",
+          "tyre_compound",
+          "fuel_load_kg_est",
+          "wind_head_component_mps",
+          "wind_cross_component_mps",
+          "wet_track_flag",
+          "air_density_proxy",
+          "ers_deploy_power_est_kw",
+          "gap_ahead_m_entry",
+          "segment_baseline_time_s",
+          "corner_id",
+          "sector"
+        ],
+        "categorical_controls": [
+          "corner_id",
+          "sector",
+          "wet_track_flag",
+          "wind_cross_component_mps",
+          "wind_head_component_mps"
+        ]
+      },
+      "at_bound": [],
+      "violations": [],
+      "cells_fitted": 1,
+      "cells_fallen_back": 0,
+      "applicable": true,
+      "residual_share": 0.0441488866672463,
+      "accepted": false,
+      "rejection_reason": "held-out MAE 0.2288 s misses the 0.06 s target"
+    }
+  ],
+  "naive_baselines": {
+    "c2_baseline_mae_s": 0.2772899320434777,
+    "best_constant_per_segment_mae_s": 0.21700196229876262,
+    "note": "The section 29 targets sit below the best-constant-per-segment floor, so reaching them requires explaining lap-to-lap variation within a segment, not just its geometry. No model predicting from segment identity plus physics can cross that floor, which makes the targets a question for section 29 rather than for the fit. Fuel is no longer the gap it once was: CP-19 now covers Practice 1 and Qualifying, and mass varies across training rows. The remaining named gap is the aero/Overtake state, absent for these sessions -- see controls_joined."
+  },
+  "envelope_violation_by_rung": {
+    "analytical": 0.002794690088831221,
+    "global": 0.0005988621618924045
+  },
+  "violation_note": "Section 55. The 2024 control measured a 10.9% false-positive rate for the override discriminator, which is this same over-estimate seen from the other side. A fit that lowers segment-time error by lowering CdA is attributing missing drag to electrical power the car may not legally use, so the rate is a rejection criterion here rather than a footnote.",
+  "calibration_meets_targets": false,
+  "best_mae_s": 0.22880328024201818,
+  "error_by_segment_kind": {
+    "CORNER": {
+      "n": 8839,
+      "mae_s": 0.2620864604330087,
+      "rmse_s": 0.6036566079816934
+    },
+    "EXIT": {
+      "n": 375,
+      "mae_s": 0.46045712305875736,
+      "rmse_s": 0.8943792160090557
+    },
+    "STRAIGHT": {
+      "n": 805,
+      "mae_s": 0.31600478026244644,
+      "rmse_s": 1.4949918278527763
+    }
+  },
+  "artefacts": {
+    "global_jacobian_shape": [
+      29981,
+      4
+    ]
+  }
+}

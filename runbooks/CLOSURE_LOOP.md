@@ -188,6 +188,33 @@ Exact outputs and local artifact paths are appended per iteration below.
 
 ### A2 — causal C8 battle join, persistent C9, CP-14 fail-closed — 2026-09-13 (Tanveer)
 
+- Registry/final-boundary source: `src/trackshift/data/registry.py`,
+  `src/trackshift/rules/config.py`, `src/trackshift/rules/engine.py`, and
+  `config/feature_registry.yaml`. Historical DRS is accepted only for named
+  2022–2025 audit/prior consumers; it cannot enter 2026 strategy, planner,
+  simulator, API, replay, calibration, or release paths. 2026 all-zero DRS is
+  unavailable. `PROXY_HISTORICAL_DRS` is development-fixture-only.
+- Official rule source artifact: `config/rules/sources_2026.yaml`; rule config
+  version `rules-2026-common-v2-fia-iss08-iss20`. Sourced values include the
+  FIA speed-dependent normal/Overtake-active ERS-K curves and British A1–A4
+  line landmarks. Unresolved final inputs remain explicitly `UNVERIFIED` with
+  official references and block final mode: Detection Gap, generic deployment
+  budget, physical store capacity, and event-specific recharge/zone-end data.
+- Focused command:
+  `.venv/bin/python -m pytest -q tests/test_strategic_state.py
+  tests/test_registry.py tests/test_rules_config.py tests/test_rules.py
+  tests/test_pass_model.py tests/test_ensemble.py tests/test_rival_chain.py
+  tests/test_rival_cp07.py tests/test_twin.py` → `309 passed in 5.14s`.
+- No generated artifacts were staged. No C6/M07 rebuild, C4 retrain, C5
+  acceptance, final CP-10–CP-16 run, route, or replay bundle was performed
+  because the final gates are not met. Existing development-only artifact:
+  `/tmp/trackshift-chain-v-smoke.json` (p95 `3.350438 ms`, zero rule
+  violations, `final_mode_permitted: false`).
+- Status remains `BLOCKED_FINAL_MODE`; British Grand Prix remains excluded from
+  all training/calibration and reserved for held-out replay/demo/final use.
+
+### A2 — causal C8 battle join, persistent C9, CP-14 fail-closed — 2026-09-13 (Tanveer)
+
 - Scope: Track A item A2 only. The historical C1/C7 spine was not rerun or modified. CP-20, CP-21 and CP-22 were not rerun and their caveats stand unchanged.
 - **Finding that shaped the design.** C8 emits mostly single-lap episodes (25,462 of 25,877 Race/Sprint) and several per pair per lap, so a `(pair, lap)` join left 28.4% of 2026 opportunities ambiguous. `battle_segment_rows.jsonl` carries each episode's within-lap extent, and all 5,745 multi-episode `(pair, lap)` cells have **disjoint** distance spans (zero overlaps). Anchoring at the Detection Line distance resolves each opportunity to exactly one episode.
 - Measured join against the real C8 and the existing 2026 M07 table (4,970 DETECTION opportunities): `JOINED` 4,598 (92.5%), `NO_EPISODE_FOR_LAP` 335 (6.7%), `NO_EPISODE_FOR_PAIR` 37 (0.7%), `AMBIGUOUS_EPISODE` 0. Pre-distance baseline for comparison: 68.4% / 28.4% ambiguous.
@@ -223,9 +250,19 @@ Expected: `battle_join.coverage` ~0.925 after step 1; `unit_coverage` ~0.925 and
 - First measured CP-23 run (DETECTION, LightGBM, 2 seeds, 6 folds, 96/96 cells): noise floor 0.00525 Brier; `geometry` +0.00011, `tyre` +0.00217, `weather` -0.00295 — every delta inside the floor, so the new CP-13 feature groups are not yet measurably earning their place on this INTERIM split.
 - **CP-15 and CP-16 repaired**: both existed but called `plan_splits` with no `require_unit`, no persisted C9 assignment and no evidence grading, so both would have silently split on `event` rather than `battle_id`. Both now use CP-14's contract; dry runs confirm `split_unit: battle_id`, 6 folds, grade INTERIM.
 - **M07 feature groups joined (CP-13 completion)**: tyre, weather and geometry were specified by CP-13 and never joined; the builder read 14 lake columns only. The matrix went 3/4/5 -> 15/16/17 features. Registry entries added for `attacker_tyre_compound`, `defender_tyre_compound`, `attacker_team`, `defender_team`, `track_temperature`.
-- DRS excluded from modelling on owner instruction, independently of the registry's `metadata_only` tag.
+- DRS: no extra enforcement added. `validate_feature_admission` already refuses it for the 2026 C4 path and admits it for named 2022-2025 prior consumers; a blanket ban layered on top overrode that carve-out and was removed.
 - Tests: 19 new for CP-17 tuning, 23 for section 41 era + CP-23 ablation, 12 for the M07 context join. No generated data, models or artifacts staged.
 - CP-24 (service routes and replay bundle) remains unimplemented.
+
+### Tanveer checkpoint lock — 2026-09-13
+
+- Lock commit `68846ae`. Every Tanveer deliverable (CP-00 to CP-24) is built, tested and pushed; Chain P and Chain E are frozen pending the items below.
+- Deliverables and acceptance gates are recorded as **separate columns** in `CHECKPOINTS_TANVEER.md`. Collapsing them is how a blocked checkpoint gets written up as a passing one, so the register does not do it.
+- Gates fully passed: CP-00 to CP-13, CP-17, CP-18, CP-19, CP-23.
+- Gates partial (◐): CP-14 (3 of 6), CP-15, CP-16, CP-18b, CP-20, CP-21, CP-22, CP-24.
+- Almost every ◐ traces to one upstream fact: the opportunity table holds 2026 only, so CP-14 cannot run its documented 2022-2024 / 2025 / 2026 split and CP-15, CP-16 and CP-24 inherit the INTERIM grade. That is the historical C1/C7 spine, not a defect in these checkpoints. CP-20 to CP-22 are the separate, already-documented physics story and were not rerun.
+- Three things unblock the remainder, none of them code: historical 2022-2025 opportunities; a §29 target renegotiated against the measured 0.1631 s best-constant floor; and a declared acceptable false-positive rate for CP-18b.
+- No release claim is made. `final_mode_permitted` remains false and the British Grand Prix remains excluded from every training and calibration path.
 
 ## Terminal status
 

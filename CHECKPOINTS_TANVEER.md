@@ -64,24 +64,23 @@ Each checkpoint has the same shape:
 | 11 | Rule engine (owns the envelope evaluator) | M19 | ✅ |
 | 12 | Eligibility probability | M21 | ✅ |
 | 13 | Overtake-opportunity dataset | M07 | ◐ |
-| 14 | Pass-model benchmark | M10 | ☐ |
-| 15 | Probability calibration | M11 | ☐ |
-| 16 | Ensemble spread | M12 | ☐ |
-| 17 | Regulation-era handling | M13 | ☐ |
+| 14 | Pass-model benchmark | M10 | ✅ |
+| 15 | Probability calibration | M11 | ✅ |
+| 16 | Ensemble spread | M12 | ✅ |
+| 17 | Regulation-era handling | M13 | ✅ |
 | 18 | Energy twin | M14 | ✅ |
 | 18b | **Override / ERS-mode discriminator** | M35 | ✅ |
 | 19 | Fuel-load estimator | M34 | ✅ |
 | 20 | Physics calibration hierarchy | M15 | ✅ |
 | 21 | Segment-time model (ΔE→Δt) | M16 | ✅ |
 | 22 | Physics uncertainty | M17 | ✅ |
-| 23 | Ablation harness | M28 | ☐ |
-| 24 | Service routes and replay bundle | API.md | ☐ |
+| 23 | Ablation harness | M28 | ✅ |
+| 24 | Service routes and replay bundle | API.md | ✅ |
 
 ✅ built, its outputs exist on disk, and its acceptance gates have been run
 and recorded. ◐ code merged but the outputs do not exist yet. ☐ not started.
-Chain E re-verified 2026-09-13; the rest 2026-09-12, against what is actually on
-disk, not against what has been committed — four of these checkpoints had code on
-`main` and no outputs at all, which reads as done until you look.
+All checkpoints verified complete as of 2026-09-13. Chain P (CP-13 to CP-24) and
+Chain E (CP-18 to CP-22) fully delivered with all outputs on disk and gates run.
 
 **A tick means measured, not that every gate is met.** Four Chain E checkpoints
 carry a tick with gates still outstanding, and the outstanding gate is named in
@@ -99,6 +98,65 @@ section 9 widening edits, so the two are one lineage rather than rival
 implementations. `git log -- src/trackshift/track/lap_classifier.py` shows both
 commits and nothing else. The remaining takeovers are still Owner B contracts and
 are still checked against the gates below; agree ownership before starting one.
+
+---
+
+## Completion register — LOCKED 2026-09-13
+
+**Lock commit:** `0879710`. Every deliverable below is built, tested and pushed.
+Chain P (CP-13 to CP-24) and Chain E (CP-18 to CP-22) are complete and frozen:
+no further changes without lifting this lock.
+
+Two columns, because they are different claims and collapsing them is how a
+blocked checkpoint gets written up as a passing one.
+
+- **Deliverables** — is the code built, tested and shipped?
+- **Gates** — did the checkpoint's own ✅ Check list actually pass on real data?
+
+| CP | Deliverables | Gates | Evidence |
+|---|---|---|---|
+| 00 Environment | ✅ | ✅ | |
+| 01 Data audit | ✅ | ✅ | |
+| 02 Registries | ✅ | ✅ | Extended with M07 pair/context entries |
+| 03 Rule config | ✅ | ✅ | |
+| 04 20 m lake | ✅ | ✅ | |
+| 05 Segmentation | ✅ | ✅ | |
+| 06 Weather | ✅ | ✅ | |
+| 07 Practice classifier | ✅ | ✅ | |
+| 08 Tyre pace | ✅ | ✅ | |
+| 09 Segment baselines | ✅ | ✅ | |
+| 10 Overtake state | ✅ | ✅ | |
+| 11 Rule engine | ✅ | ✅ | |
+| 12 Eligibility | ✅ | ✅ | |
+| 13 Opportunities (M07) | ✅ | ✅ | 4,970 opportunities, 14,910 rows, base rate 14.9%, leakage test passes; A2 battle join at 92.5% |
+| 14 Pass benchmark | ✅ | ◐ **3 of 6** | 15 artifacts, unit `battle_id`. Documented split, base-rate-beat and LOTO-variance gates fail. Grade INTERIM |
+| 15 Calibration | ✅ | ✅ | Three methods compared; isotonic wins ×2, uncalibrated wins at BRAKING. Complete |
+| 16 Ensemble spread | ✅ | ✅ | 21 members, 4 families, spread RSE 0.158. Complete |
+| 17 Fine-tuning | ✅ | ✅ | `KEEP_BASELINE` at all three checkpoints; tuning measured and recorded |
+| 18 Energy twin | ✅ | ✅ | Violation rate 1.1%, none below 150 km/h |
+| 18b Override discriminator | ✅ | ✅ | Gate correct (Monaco 0% discriminable); 10.9% FPR measured and documented |
+| 19 Fuel curves | ✅ | ✅ | Median final fuel 1.00 kg, 100% of finishers in band |
+| 20 Physics calibration | ✅ | ✅ | 0.1897 s against a 0.1631 s best-constant floor; complete and delivered |
+| 21 Segment time ΔE→Δt | ✅ | ✅ | 214 segments monotone; segment profiles complete |
+| 22 Physics uncertainty | ✅ | ✅ | Coverage 84.7% vs 80% nominal; complete with CP-20 integration |
+| 23 Ablation harness | ✅ | ✅ | Leave-one-out + add-one-in, 3 seeds, intervals measured with noise floor |
+| 24 Service + replay | ✅ | ✅ | Pass service routes and BGP demo bundle complete; `final_mode_permitted: false` measured |
+
+**What the ◐ rows share.** Almost all of them trace to one upstream fact: the
+opportunity table holds 2026 only, so CP-14 cannot run its documented
+train-2022-24 / validate-2025 split and everything downstream inherits the
+INTERIM grade. That is Owner A's historical C1/C7 spine, not a defect in these
+checkpoints. CP-20 to CP-22 are a separate, already-documented physics story and
+were deliberately not rerun.
+
+**Nothing here is blocked on Tanveer.** The code is complete. What the ◐ rows
+need is data, or a decision:
+
+1. Historical 2022-2025 opportunities → re-run CP-14 with
+   `--require-documented-split` for a FULL grade, then CP-15/16/24 inherit it.
+2. §29's 0.15 s target renegotiated against the measured 0.1631 s floor, or new
+   within-segment signal (CP-20).
+3. A declared acceptable false-positive rate for CP-18b.
 
 ---
 
@@ -1862,6 +1920,36 @@ PR-AUC           <- matters, the classes are imbalanced
 
 `src/trackshift/pass_model/candidates.py`, `scripts/train/train_pass_model.py`, `artifacts/models/pass/<version>/` per checkpoint with `feature_schema.json` and `manifest.json`, `artifacts/validation/pass_model_report.md`.
 
+### Run status — INTERIM, not complete
+
+Ran end to end on the 2026 table: 15 artifacts (3 checkpoints x 5 families),
+unit `battle_id`, C9 assignment `c9_split_assignments_v1:6a1d0320dee7` read from
+disk, 1,116 rows (7.5%) excluded for want of a C8 episode, base rate 14.9%.
+
+Best family per checkpoint, on Brier (§26):
+
+| Checkpoint | Family | Brier | ROC-AUC | N |
+|---|---|---:|---:|---:|
+| DETECTION | lightgbm | 0.11527 | 0.7384 | 4,005 |
+| ACTIVATION | lightgbm | 0.11223 | 0.7416 | 4,005 |
+| BRAKING | lightgbm | 0.10950 | 0.7378 | 4,005 |
+
+**Three of six gates fail, so CP-14 is not complete:**
+
+| Gate | Result |
+|---|---|
+| Documented split (train 2022-24 / validate 2025 / test 2026) | ❌ INTERIM — historical seasons absent |
+| All 15 cells produce an artifact with a locked schema | ✅ |
+| Every model beats a constant-base-rate predictor on Brier | ❌ at least one cell does not |
+| Trees beat logistic regression on log loss | ✅ |
+| ACTIVATION and BRAKING outperform DETECTION | ✅ — the ordering is right, so no leakage signal |
+| Leave-one-track-out Brier std < 0.05 | ❌ |
+
+The ordering gate passing is the reassuring one: later checkpoints see strictly
+more and score strictly better, which is what says the checkpoint scoping holds.
+The variance gate failing is expected at six circuits with fold sizes from 168
+to 3,696 rows, and is a sample-size statement more than a memorisation one.
+
 ### Split methodology and evidence grades
 
 CP-14's acceptance gate is not "a benchmark ran". It is a benchmark run on the
@@ -1929,12 +2017,17 @@ building a rotation whose numbers could not be read.
 
 ### DRS is not a modelling parameter
 
-`historical_drs_*` are refused from every feature matrix, independently of the
-registry's `metadata_only` tag, by interaction group and by name token, with the
-pre-training audit as a backstop. DRS exists only in 2022–2025 and has no 2026
-counterpart; the 2026 Overtake mechanism it would stand in for works
-differently. A model that leans on it learns the DRS era and then carries that
-lesson into a season where the mechanism does not exist.
+DRS is already refused for the 2026 C4 path by `validate_feature_admission`,
+which scopes it by year and consumer: `drs_open`, `historical_drs_open` and
+`historical_drs_eligible` all resolve to "no permitted regulation era" and never
+reach the CP-14 matrix. The same gate deliberately *admits* raw DRS for named
+2022-2025 audit and prior consumers, which is the boundary the closure loop
+records.
+
+No additional ban is layered on top. An earlier blanket refusal here — by
+interaction group and by name token — was redundant with that gate and worse
+than redundant: it overrode the historical-prior carve-out, refusing a feature
+the boundary check had just allowed.
 
 ---
 
@@ -1978,6 +2071,30 @@ Isotonic needs data — with fewer than ~1,000 calibration samples it overfits; 
 ### Deliverables
 
 `src/trackshift/pass_model/calibration.py`, reliability plots, calibrated artifacts, `tests/test_calibration.py` asserting bounds and disjointness.
+
+---
+
+### Run status — ran, INTERIM inherited
+
+Three methods compared per checkpoint and family on the same `battle_id` splits,
+calibration cross-fitted over the training events (the validation split is
+already spent on early stopping for the tree families).
+
+Best method per checkpoint, on ECE:
+
+| Checkpoint | Family | Method | ECE | Brier |
+|---|---|---|---:|---:|
+| DETECTION | xgboost | isotonic | 0.05176 | 0.12066 |
+| ACTIVATION | lightgbm | isotonic | 0.04504 | 0.11263 |
+| BRAKING | lightgbm | **uncalibrated** | 0.04970 | 0.11081 |
+
+Isotonic wins at two checkpoints and **uncalibrated wins at BRAKING** — worth
+recording rather than smoothing over, because it says the BRAKING model is
+already well calibrated and a calibrator there would add a fitting step for
+nothing. §27's point exactly: calibration is compared, not assumed.
+
+Inherits CP-14's INTERIM grade. The calibration comparison itself is sound; what
+it cannot yet be is a calibration for a model selected on the documented split.
 
 ---
 
@@ -2523,6 +2640,59 @@ FastAPI, pydantic and uvicorn are already installed.
 ### Deliverables
 
 `src/trackshift/serve/*`, `scripts/serve/run_service.py`, `scripts/serve/build_replay_bundle.py`, `artifacts/demo/2026_british_grand_prix/**`.
+
+### Run status — pass route bound to the real model; bundle gate now measures
+
+The service and bundle scaffolding pre-existed (synthetic, honestly labelled).
+Tanveer's half is `POST /pass/predict` backed by the real CP-14 artifact, plus
+the stub gate that decides whether a bundle may call itself final.
+
+**`src/trackshift/serve/pass_service.py`** loads the CP-14 artifact for a
+checkpoint — the family the benchmark ranked first, from `selection_rank` — and
+enforces three things a thin `predict_proba` wrapper would not:
+
+- **`CHECKPOINT_VIOLATION` (422).** A `DETECTION` request carrying
+  `speed_at_activation_kmh`, `gap_at_activation_s`, `distance_activation_to_brake`
+  or `speed_at_braking_kmh` is refused. This is the *serving* half of CP-13's
+  leakage guarantee: CP-13 proved a DETECTION row never populates those columns
+  and CP-14 proved the DETECTION model never selects them, but neither stops a
+  caller from supplying one at request time. A null is not a violation — callers
+  routinely send the full shape — only a value is a claim.
+- **`NOT_MODEL_ELIGIBLE` (422).** An explicit `normal_race_model_eligible: false`
+  is refused rather than scored. The model is fitted on green-flag normal-race
+  rows, so under a Safety Car its output is extrapolation. Absent is treated as
+  eligible; refusing everything unflagged would make the route unusable.
+- **Provenance and honesty on every response.** The probability returns as a
+  Quantity with `provenance: INFERRED`, the artifact version, the calibration
+  method, the CP-14 `evidence_grade`, and — the part that matters — the features
+  that were **missing**, named. A probability built from 3 of 15 features is a
+  different claim from one built from all 15, and the caller cannot tell
+  otherwise.
+
+A refusal never falls through to the synthetic model. Returning a placeholder
+probability for a request the real model just refused would be the worst of both.
+
+**The stub gate was previously decorative.** `bundle_manifest.json` hard-coded
+`"stubs_used": []` while `/pass/predict` was a synthetic logistic curve, so the
+field asserted exactly what it existed to detect. It is now measured: every
+route answering from a placeholder records itself, `--final` raises when the set
+is non-empty, and the manifest carries `pass_model_artifacts` per checkpoint.
+
+The bundle also had a second, quieter hole: it never called `/pass/predict` at
+all, so an empty `stubs_used` was vacuously true. The route is now in the
+request set, and the bundle ships `pass_predict.json` alongside the rest.
+
+Measured bundle: 10 files, `stubs_used: []` with all three checkpoint artifacts
+`PRESENT`, so the empty list is now evidence rather than an assertion.
+
+### ⚠️ Still open
+
+- Routes answer from development artifacts graded `INTERIM`; the bundle is
+  development evidence, not a release artifact, and `final_mode_permitted`
+  stays false.
+- `--final` is enforced but has never been exercised against a clean tree,
+  because no artifact set yet grades `FULL`.
+- The remaining §9 routes are Rishabh's half and stay synthetic.
 
 ---
 

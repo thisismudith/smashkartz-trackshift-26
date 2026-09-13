@@ -1,0 +1,80 @@
+{
+  "requested_bins": 10,
+  "realised_bins": 6,
+  "bins": [
+    {
+      "lower": 0.047619047619047616,
+      "upper": 0.07849293563579277,
+      "n": 587,
+      "mean_predicted": 0.07265128370438136,
+      "observed_rate": 0.04258943781942078,
+      "gap": -0.030061845884960574,
+      "wilson_low": 0.029011618725720157,
+      "wilson_high": 0.06211534322144131,
+      "within_band": false,
+      "assessable": true
+    },
+    {
+      "lower": 0.07849293563579277,
+      "upper": 0.08860759493670886,
+      "n": 125,
+      "mean_predicted": 0.08855201325215616,
+      "observed_rate": 0.024,
+      "gap": -0.06455201325215615,
+      "wilson_low": 0.008195108073434171,
+      "wilson_high": 0.06819015879689341,
+      "within_band": false,
+      "assessable": true
+    },
+    {
+      "lower": 0.08860759493670886,
+      "upper": 0.1126126126126126,
+      "n": 197,
+      "mean_predicted": 0.10985031207726476,
+      "observed_rate": 0.14213197969543148,
+      "gap": 0.032281667618166726,
+      "wilson_low": 0.10020126624456825,
+      "wilson_high": 0.19775294244526492,
+      "within_band": true,
+      "assessable": true
+    },
+    {
+      "lower": 0.1126126126126126,
+      "upper": 0.11836734693877551,
+      "n": 117,
+      "mean_predicted": 0.11836734693877554,
+      "observed_rate": 0.21367521367521367,
+      "gap": 0.09530786673643812,
+      "wilson_low": 0.14912833374141085,
+      "wilson_high": 0.29642683931157754,
+      "within_band": false,
+      "assessable": true
+    },
+    {
+      "lower": 0.11836734693877551,
+      "upper": 0.24210526315789474,
+      "n": 62,
+      "mean_predicted": 0.22625653829893114,
+      "observed_rate": 0.2903225806451613,
+      "gap": 0.06406604234623017,
+      "wilson_low": 0.19223406385395198,
+      "wilson_high": 0.4128788131113709,
+      "within_band": true,
+      "assessable": true
+    },
+    {
+      "lower": 0.24210526315789474,
+      "upper": 0.8218085365577805,
+      "n": 92,
+      "mean_predicted": 0.4695790935475311,
+      "observed_rate": 0.5543478260869565,
+      "gap": 0.08476873253942546,
+      "wilson_low": 0.45263522635441744,
+      "wilson_high": 0.6517035993747023,
+      "within_band": true,
+      "assessable": true
+    }
+  ],
+  "assessable_bins": 6,
+  "bins_outside_band": 3
+}

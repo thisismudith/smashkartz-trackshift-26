@@ -7,6 +7,7 @@ not promote synthetic values to observed telemetry or final release evidence.
 from __future__ import annotations
 
 import copy
+from pathlib import Path
 from typing import Any, Mapping
 
 from fastapi import FastAPI, HTTPException
@@ -17,9 +18,19 @@ from trackshift.rival.api import rival_state
 from trackshift.rules import api as rules_api
 from trackshift.rules.config import RuleConfigError
 from trackshift.rules.eligibility import eligibility_margin, project_gap_at_line
+from trackshift.serve.pass_service import (
+    CheckpointViolation,
+    NotModelEligible,
+    load_predictor,
+)
 from trackshift.sim.api import policy_registry, simulate
 from trackshift.value.api import DPConfig, shadow_price
 from trackshift.value.counterattack import evaluate_counterattack
+
+#: CP-14 artifacts. Resolved from this file rather than a working directory so
+#: a replay bundle built from any cwd finds the same models (section 5: the
+#: bundle must be self-contained, with no machine-specific paths).
+PASS_MODELS = Path(__file__).resolve().parents[3] / "artifacts" / "models" / "pass"
 
 from .fixture import (
     EVENT,
@@ -99,6 +110,23 @@ def _segments(payload: Mapping[str, Any]) -> list[dict[str, Any]]:
     return synthetic_segments()
 
 
+def _pass_predictor_factory(app: FastAPI):
+    """Cache one predictor per checkpoint; a miss is remembered, not retried.
+
+    Loading unpickles a model, so retrying on every request would make a missing
+    artifact cost real latency on the hot path.
+    """
+    def get(checkpoint: str):
+        cache = app.state.pass_predictors
+        if checkpoint not in cache:
+            try:
+                cache[checkpoint] = load_predictor(PASS_MODELS, checkpoint=checkpoint)
+            except Exception:
+                cache[checkpoint] = None
+        return cache[checkpoint]
+    return get
+
+
 def create_app(*, mode: str = "service", final_mode: bool = False) -> FastAPI:
     """Create the deterministic development service.
 
@@ -115,6 +143,13 @@ def create_app(*, mode: str = "service", final_mode: bool = False) -> FastAPI:
     app.state.synthetic = True
     app.state.fixture_version = SYNTHETIC_FIXTURE_VERSION
     app.state.rival_model = synthetic_rival_model()
+
+    app.state.pass_predictors = {}
+    # Every route that answers from a placeholder adds its name here, so the
+    # replay bundle can report what it actually shipped instead of asserting an
+    # empty list.
+    app.state.stubs_used = set()
+    _pass_predictor = _pass_predictor_factory(app)
 
     @app.get("/api/v1/meta")
     def meta() -> dict[str, Any]:
@@ -188,10 +223,25 @@ def create_app(*, mode: str = "service", final_mode: bool = False) -> FastAPI:
     @app.post("/api/v1/pass/predict")
     def pass_predict(payload: dict[str, Any]) -> dict[str, Any]:
         _guard_payload(payload, "C4 API", final_mode=bool(app.state.final_mode))
+        checkpoint = str(payload.get("checkpoint", "DETECTION")).upper()
+
+        # The real CP-14 artifact when one is on disk. Its refusals --
+        # CHECKPOINT_VIOLATION and NOT_MODEL_ELIGIBLE -- are answers, not
+        # failures, so they propagate rather than falling through to the stub:
+        # returning a synthetic probability for a request the real model just
+        # refused would be the worst of both.
+        predictor = _pass_predictor(checkpoint)
+        if predictor is not None:
+            try:
+                return {**predictor.predict(payload), "versions": _versions()}
+            except (CheckpointViolation, NotModelEligible) as exc:
+                raise HTTPException(status_code=422, detail=exc.as_error()["error"]) from exc
+
         gap = float(payload.get("gap_s", 0.72))
         deploy = float(payload.get("deploy_level", 0.5))
         probability = 1.0 / (1.0 + __import__("math").exp(4.0 * (gap - 0.35) - deploy))
-        return {"p_pass_by_outcome_horizon": {"value": probability, "provenance": "SIMULATED"}, "checkpoint": payload.get("checkpoint", "DETECTION"), "calibration": "synthetic-development", "versions": _versions()}
+        app.state.stubs_used.add(f"pass/predict:{checkpoint}")
+        return {"p_pass_by_outcome_horizon": {"value": probability, "provenance": "SIMULATED"}, "checkpoint": checkpoint, "calibration": "synthetic-development", "is_stub": True, "versions": _versions()}
 
     @app.post("/api/v1/twin/segment_time")
     def segment_time(payload: dict[str, Any]) -> dict[str, Any]:

@@ -1,0 +1,31 @@
+{
+  "battle_id": "synthetic_2026_GBR_Race_HAM_ANT",
+  "event": "british_grand_prix",
+  "files": {
+    "battles.json": "63b5fe0368ad1734f7ef47f2fba496ff8ea0ed1c198d765348ead5aa2905c2e3",
+    "meta.json": "70ee70adba5572d0b22ec552a31382bf2e5e586f8602500ba99206e2acc4b6b6",
+    "pass_predict.json": "1a1aad263643e0aabbd16d05b94045f3ac39dffaad8661232ebb965a7de887ae",
+    "plan.json": "58718da53ff53d096752fdcf5ba07ea3f4119506d431e5f4e455704d7b1e59e5",
+    "policies.json": "60fd5ee56bf72fc027c4f14511d00a236a6dac48fe4c8c7227f57c6c310862c2",
+    "rules.json": "1938ebf4d4c664df6c77e3aa580b127f95ab8129e66e33e9d573b743fcb924ae",
+    "simulate.json": "72fb77378086506ff6c393ae0eeb0bb3f10f9cbb347af6cdfabe88c7fe5a47c1",
+    "timeline.json": "df1baddf1e10ced1ba50467508b753a8f2895727301fe62c59c37a11e1d4a9be",
+    "track.json": "79e11695ffaf2ef83e2735c0791a656864403051bfe83251f96a29f8f3d4fe3f",
+    "validation.json": "62b801daa5c55f70a79a0c96922da0f273ce58c1bb917a47ec3f3c619254171d"
+  },
+  "final_mode_permitted": false,
+  "mode": "replay",
+  "pass_model_artifacts": {
+    "ACTIVATION": "C:\\Trackshift\\artifacts\\models\\pass\\v1\\activation\\lightgbm",
+    "BRAKING": "C:\\Trackshift\\artifacts\\models\\pass\\v1\\braking\\lightgbm",
+    "DETECTION": "C:\\Trackshift\\artifacts\\models\\pass\\v1\\detection\\lightgbm"
+  },
+  "provenance": "SIMULATED",
+  "reason": "development synthetic replay; not a final release artifact",
+  "release_ready": false,
+  "rule_violations": 0,
+  "schema_version": "trackshift_replay_manifest_v1",
+  "stub_reason": null,
+  "stubs_used": [],
+  "synthetic_fixture": "trackshift-synthetic-closure-v1"
+}

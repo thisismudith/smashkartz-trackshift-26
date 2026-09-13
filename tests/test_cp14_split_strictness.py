@@ -172,54 +172,6 @@ def test_the_default_path_still_works_for_callers_that_want_the_event_unit(tmp_p
     assert plan.unit == "event"
 
 
-# --- DRS is not a modelling parameter --------------------------------------
-
-def test_drs_features_are_refused_even_if_the_registry_stops_calling_them_metadata():
-    """DRS exists only in 2022-2025 and has no 2026 counterpart.
-
-    A model that leans on it learns the DRS era and then carries that lesson
-    into a season where the mechanism does not exist. The registry currently
-    also tags these ``metadata_only``; this pins the independent refusal so
-    dropping that tag cannot quietly re-admit them.
-    """
-    from trackshift.pass_model.features import (
-        EXCLUDED_GROUPS,
-        FORBIDDEN_MODEL_TOKENS,
-        select_features,
-    )
-
-    assert "historical_drs" in EXCLUDED_GROUPS
-    assert "drs" in FORBIDDEN_MODEL_TOKENS
-
-    columns = ["gap_at_checkpoint", "historical_drs_open", "historical_drs_eligible",
-               "drs_open", "passed_by_outcome_horizon"]
-    selection = select_features("DETECTION", columns, include_identity=False)
-
-    for name in ("historical_drs_open", "historical_drs_eligible", "drs_open"):
-        assert name not in selection.columns, f"{name} reached the feature matrix"
-        assert name in selection.excluded
-
-
-def test_the_audit_is_a_backstop_for_a_drs_column_that_slips_through():
-    """Even if selection were bypassed, the pre-training audit must refuse."""
-    import pandas as pd
-    from trackshift.pass_model.features import (
-        FeatureSelection,
-        FeatureSelectionError,
-        audit_feature_matrix,
-    )
-
-    smuggled = FeatureSelection(
-        checkpoint="DETECTION",
-        numeric=("gap_at_checkpoint", "historical_drs_open"),
-        categorical=(), identity=(), include_identity=False, excluded={},
-    )
-    frame = pd.DataFrame({"gap_at_checkpoint": [0.4, 0.9, 1.2],
-                          "historical_drs_open": [1.0, 0.0, 1.0]})
-    with pytest.raises(FeatureSelectionError, match="forbidden"):
-        audit_feature_matrix(frame, smuggled)
-
-
 # --- evidence grading -------------------------------------------------------
 
 def multi_year_frame():

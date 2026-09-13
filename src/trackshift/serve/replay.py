@@ -8,7 +8,8 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlsplit
 
-from .app import create_app
+from .app import PASS_MODELS, create_app
+from .pass_service import available_checkpoints
 from .fixture import BATTLE_ID, EVENT, SYNTHETIC_FIXTURE_VERSION
 
 
@@ -81,6 +82,15 @@ def build_replay_bundle(out: str | Path, *, event: str = EVENT, battle_id: str =
         "policies": ("GET", "/api/v1/simulate/policies", None),
         "plan": ("POST", "/api/v1/plan", {"include_baselines": True}),
         "simulate": ("POST", "/api/v1/simulate", {"n_episodes": 8, "seed": 17, "rival_policy": "DEFEND_CONSERVE"}),
+        # Exercised so stubs_used measures something. A bundle that never calls
+        # the pass route reports an empty stub list vacuously, which is exactly
+        # the false assurance the gate exists to prevent.
+        "pass_predict": ("POST", "/api/v1/pass/predict", {
+            "checkpoint": "DETECTION",
+            "gap_at_checkpoint": 0.72,
+            "closing_rate_s_per_s": 0.03,
+            "p_eligible": 0.61,
+        }),
     }
     files: dict[str, str] = {}
     for name, (method, path, body) in requests.items():
@@ -90,6 +100,11 @@ def build_replay_bundle(out: str | Path, *, event: str = EVENT, battle_id: str =
         destination = root / ("timeline.json" if name == "timeline" else f"{name}.json")
         _write_json(destination, payload)
         files[str(destination.relative_to(root))] = hashlib.sha256(destination.read_bytes()).hexdigest()
+    # Read after every route has run, so it reflects what answered rather than
+    # what was configured.
+    stubs_used = sorted(getattr(app.state, "stubs_used", set()) or [])
+    artifacts = available_checkpoints(PASS_MODELS)
+
     manifest = {
         "schema_version": "trackshift_replay_manifest_v1",
         "event": event,
@@ -97,14 +112,28 @@ def build_replay_bundle(out: str | Path, *, event: str = EVENT, battle_id: str =
         "mode": "replay",
         "synthetic_fixture": SYNTHETIC_FIXTURE_VERSION,
         "provenance": "SIMULATED",
-        "stubs_used": [],
+        # Measured from what the routes actually did, never asserted. A
+        # hard-coded empty list defeats the gate it exists to enforce: the
+        # whole point is to catch a demo built on a placeholder.
+        "stubs_used": stubs_used,
+        "pass_model_artifacts": artifacts,
         "final_mode_permitted": False,
         "release_ready": False,
         "rule_violations": 0,
         "files": files,
+        "stub_reason": (
+            None if not stubs_used else
+            "one or more routes answered from a synthetic development model; "
+            "see stubs_used"),
         "reason": "development synthetic replay; not a final release artifact",
     }
     _write_json(root / "bundle_manifest.json", manifest)
+    if final_mode and stubs_used:
+        raise RuntimeError(
+            "--final was given but the bundle was built with stubs: "
+            f"{stubs_used}. A final demo must be answered by real artifacts "
+            "end to end; ship the models or drop --final and ship it labelled "
+            "as development evidence.")
     return manifest
 
 
