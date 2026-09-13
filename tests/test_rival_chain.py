@@ -54,3 +54,22 @@ def test_era_harness_does_not_claim_complete_without_predictive_evidence():
     )
     assert report["status"] == "BLOCKED"
     assert "predictive likelihood" in report["reason"]
+
+
+def test_era_harness_reports_existing_c10_evidence_without_unblocking_history():
+    report = evaluate_era_strategies(
+        [{"year": 2026, "event": "Australian Grand Prix", "rule_configuration_version": "rules-v1"}],
+        split_version="c9",
+        rule_configuration_version="rules-v1",
+        materialisation={"status": "BLOCKED", "reason": "historical M08 unavailable"},
+        prediction_evidence={"2026_only": [{
+            "posterior": {"BALANCED": 0.6, "DEPLOYING": 0.4},
+            "perturbed_posterior": {"BALANCED": 0.55, "DEPLOYING": 0.45},
+            "observation_log_likelihood": -0.4,
+            "model_version": "c10-test",
+            "fold_id": "fold_0",
+        }]},
+    )
+    assert report["status"] == "BLOCKED"
+    assert report["metrics"]["2026_only"]["status"] == "MEASURED"
+    assert report["metrics"]["2026_only"]["mean_nll"] == 0.4
