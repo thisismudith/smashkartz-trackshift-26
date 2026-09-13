@@ -14,6 +14,12 @@
   min-width: 0;
 }
 
+/* A quiet acknowledgement before the reader starts interrogating individual values. */
+.figure:hover .plotWrap,
+.figure:focus-within .plotWrap {
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.13), 0 8px 24px rgba(0, 0, 0, 0.16);
+}
+
 .head {
   display: flex;
   align-items: baseline;
@@ -93,6 +99,14 @@
   font: inherit;
   color: inherit;
   cursor: pointer;
+  transition: color 150ms ease, opacity 150ms ease, transform 150ms ease;
+}
+
+.legendItem:hover,
+.legendItem:focus-visible {
+  color: var(--haas-white);
+  outline: none;
+  transform: translateY(-1px);
 }
 
 .legendItem[aria-pressed="false"] {
@@ -116,6 +130,7 @@
 .plotWrap {
   position: relative;
   width: 100%;
+  transition: box-shadow 180ms ease;
 }
 
 .plot {
@@ -123,6 +138,28 @@
   width: 100%;
   height: auto;
   overflow: visible;
+  animation: chartReveal 360ms cubic-bezier(0.22, 0.85, 0.28, 1) both;
+  transition: filter 160ms ease;
+}
+
+.plot[data-interactive="true"] {
+  cursor: crosshair;
+}
+
+.plot[data-hovered="true"] {
+  filter: drop-shadow(0 3px 8px rgba(218, 41, 28, 0.13));
+}
+
+@keyframes chartReveal {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .tickLabel {
@@ -142,6 +179,11 @@
   stroke: #2a2a2a;
   stroke-width: 1;
   shape-rendering: crispEdges;
+  transition: stroke 160ms ease, opacity 160ms ease;
+}
+
+.plot[data-hovered="true"] .gridLine {
+  stroke: #353535;
 }
 
 .axisLine {
@@ -171,6 +213,95 @@
   stroke: var(--haas-black);
   stroke-width: 3px;
   stroke-linejoin: round;
+}
+
+/* --- banded (one-row-per-entity) charts --------------------------------- */
+
+/* One step off the surface. Loud enough to walk a row from its label to its estimate,
+   quiet enough not to read as a gridline. */
+.rowBand {
+  fill: transparent;
+  animation: rowReveal 280ms ease-out both;
+}
+
+.rowBand[data-alt="true"] {
+  fill: #ffffff;
+  fill-opacity: 0.022;
+}
+
+/* The row the chart is about. Still a wash, not a block -- the data stays the loudest thing. */
+.rowBandOn {
+  fill: var(--haas-white);
+  fill-opacity: 0.055;
+  animation: rowReveal 280ms ease-out both;
+}
+
+@keyframes rowReveal {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+/* Point and interval arrive together, so the eye reads one estimate rather than a sequence of
+   disconnected pieces. Delays are set per row in ErrorBarsH. */
+.effectMark {
+  animation: markReveal 340ms cubic-bezier(0.2, 0.8, 0.25, 1) both;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+@keyframes markReveal {
+  from {
+    opacity: 0;
+    transform: scaleX(0.72);
+  }
+
+  to {
+    opacity: 1;
+    transform: scaleX(1);
+  }
+}
+
+/* An emphasised band label: white instead of grey. Never a series colour (UI.md 7.2). */
+.bandLabelOn {
+  fill: var(--haas-white);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
+/* The right-gutter value column. Tabular so the decimal points line up down the chart --
+   this is a table column that happens to be drawn in the SVG. */
+.rowValue {
+  fill: var(--haas-white);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The status word beside a value ("ns"). Status never travels as colour alone. */
+.rowTag {
+  fill: var(--haas-grey);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+}
+
+.rowMeta {
+  fill: #6f6f6f;
+  font-size: 8.5px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+}
+
+/* Row hit targets, so the <title> tooltip fires on the whole band rather than on the 7px dot.
+   `.plot *` blanket-disables pointer events further down this file for the hover-capture
+   surface; this has to out-specify it, not merely follow it, so it is scoped to .plot. */
+.plot .rowHit {
+  fill: transparent;
+  pointer-events: auto;
 }
 
 /* --- empty / gated states ----------------------------------------------- */
@@ -278,6 +409,18 @@
   color: var(--haas-white);
   white-space: nowrap;
   z-index: 2;
+  animation: tooltipIn 150ms cubic-bezier(0.2, 0.8, 0.25, 1) both;
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.3);
+}
+
+@keyframes tooltipIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
 }
 
 .tooltipRow {
@@ -303,6 +446,34 @@
   stroke-width: 1;
   stroke-dasharray: 2 2;
   pointer-events: none;
+  animation: crosshairDash 700ms linear infinite;
+}
+
+@keyframes crosshairDash {
+  to {
+    stroke-dashoffset: -8;
+  }
+}
+
+.hoverPoint {
+  animation: hoverPointIn 160ms cubic-bezier(0.2, 0.8, 0.25, 1) both;
+  filter: drop-shadow(0 0 3px currentColor);
+}
+
+@keyframes hoverPointIn {
+  from {
+    opacity: 0;
+    transform: scale(0.55);
+    transform-box: fill-box;
+    transform-origin: center;
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+    transform-box: fill-box;
+    transform-origin: center;
+  }
 }
 
 /* --- hover layer --------------------------------------------------------- */
@@ -326,6 +497,40 @@
 /* The capture surface is the <svg> itself, so marks must not eat the pointer. */
 .plot * {
   pointer-events: none;
+}
+
+/* These marks are shared by rules, telemetry, session and Insights charts. When a hoverable
+   chart is being read, they step back slightly so the crosshair is the clear focal point. */
+.lineMark,
+.dotMark,
+.bandMark,
+.barMark {
+  transition: opacity 160ms ease, filter 160ms ease;
+}
+
+.plot[data-hovered="true"] .lineMark,
+.plot[data-hovered="true"] .dotMark,
+.plot[data-hovered="true"] .bandMark,
+.plot[data-hovered="true"] .barMark {
+  opacity: 0.76;
+}
+
+.barMark {
+  animation: barReveal 360ms cubic-bezier(0.2, 0.8, 0.25, 1) both;
+  transform-box: fill-box;
+  transform-origin: left center;
+}
+
+@keyframes barReveal {
+  from {
+    opacity: 0;
+    transform: scaleX(0.35);
+  }
+
+  to {
+    opacity: 1;
+    transform: scaleX(1);
+  }
 }
 
 /* A dashed swatch for a dashed series (the second car of a team). */
@@ -363,4 +568,27 @@
   stroke: var(--haas-grey);
   stroke-width: 1;
   pointer-events: none;
+}
+
+/* Motion is polish, never required to understand a value. */
+@media (prefers-reduced-motion: reduce) {
+  .plot,
+  .rowBand,
+  .rowBandOn,
+  .effectMark,
+  .crosshair,
+  .hoverPoint,
+  .tooltip,
+  .barMark {
+    animation: none;
+  }
+
+  .plot,
+  .plotWrap,
+  .lineMark,
+  .dotMark,
+  .bandMark,
+  .barMark {
+    transition: none;
+  }
 }

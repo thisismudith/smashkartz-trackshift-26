@@ -9,6 +9,7 @@ import {
   stepPath,
   bandPath,
   resolveBrush,
+  resolveMargins,
 } from "./scale";
 
 describe("linearScale", () => {
@@ -183,5 +184,44 @@ describe("resolveBrush", () => {
 
   it("returns null for non-finite input rather than an invalid range", () => {
     expect(resolveBrush(NaN, 50, domain, toPx)).toBeNull();
+  });
+});
+
+describe("resolveMargins", () => {
+  /** What the ranked circuit chart asks for: 104px to seat "Australian" left of its row. */
+  const banded = { left: 104, right: 76, top: 8, bottom: 38 };
+
+  it("leaves an explicit label gutter intact at a normal width", () => {
+    expect(resolveMargins(720, banded)).toEqual({ left: 104, right: 76, top: 8, bottom: 38 });
+  });
+
+  it("keeps the label gutter on a narrow chart", () => {
+    // The regression this guards: a fixed 44px cap below a 520px breakpoint threw the gutter
+    // away, and every circuit name was drawn from x = 37 outwards, spilling out of the plot.
+    const m = resolveMargins(480, banded);
+    expect(m.left).toBe(104);
+    expect(m.right).toBe(76);
+  });
+
+  it("still caps a gutter that would leave no plotting area", () => {
+    const m = resolveMargins(200, banded);
+    expect(m.left).toBeLessThan(104);
+    expect(200 - m.left - m.right).toBeGreaterThan(200 * 0.34);
+  });
+
+  it("applies the documented defaults when no margin is given", () => {
+    expect(resolveMargins(720)).toEqual({ left: 48, right: 16, top: 12, bottom: 34 });
+  });
+
+  it("falls back to the pre-measure width rather than producing a negative gutter", () => {
+    expect(resolveMargins(0, banded).left).toBe(104);
+    expect(resolveMargins(Number.NaN, banded).left).toBe(104);
+  });
+
+  it("never returns a gutter wider than the chart", () => {
+    for (const w of [120, 200, 320, 480, 720, 1200]) {
+      const m = resolveMargins(w, banded);
+      expect(m.left + m.right).toBeLessThan(w);
+    }
   });
 });

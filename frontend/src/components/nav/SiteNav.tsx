@@ -22,14 +22,20 @@ interface Entry {
   pending?: string;
 }
 
-const ENTRIES: Entry[] = [
+/** The working path through observed evidence. These remain prominent on every analytical page. */
+const PRIMARY_ENTRIES: Entry[] = [
   { href: "/sessions", label: "Sessions" },
-  { href: "/rules", label: "Regulation" },
   { href: "/insights", label: "Insights" },
+  { href: "/rules", label: "Rules" },
+  { href: "/decision", label: "Decision", pending: "awaiting strategic replay artifacts" },
+];
+
+/** Secondary evidence and parameter surfaces. They are useful, but not the first lap of analysis. */
+const TOOL_ENTRIES: Entry[] = [
   { href: "/league", label: "League" },
   { href: "/lab", label: "Lab" },
-  { href: "/decision", label: "Decision", pending: "awaiting M22" },
-  { href: "/sim", label: "Simulator" },
+  // This is only a link. The simulator itself owns its route and remains out of this workstream.
+  { href: "/sim", label: "Replay" },
   { href: "/about", label: "About" },
 ];
 
@@ -45,24 +51,34 @@ export default function SiteNav() {
       <Link href="/" className={s.brand}>
         Smash<em>Kartz</em>
       </Link>
-      <ul className={s.list}>
-        {ENTRIES.map((e) => {
-          const active = pathname === e.href || pathname.startsWith(e.href + "/");
-          return (
-            <li key={e.href}>
-              <Link
-                href={e.href}
-                className={s.link}
-                aria-current={active ? "page" : undefined}
-                title={e.pending}
-              >
-                {e.label}
-                {e.pending ? <span className={s.pendingDot} aria-hidden="true" /> : null}
-              </Link>
-            </li>
-          );
-        })}
-      </ul>
+      <div className={s.routes}>
+        <NavLinks entries={PRIMARY_ENTRIES} pathname={pathname} className={s.list} />
+        <span className={s.divider} aria-hidden="true" />
+        <NavLinks entries={TOOL_ENTRIES} pathname={pathname} className={s.tools} />
+      </div>
     </nav>
+  );
+}
+
+function NavLinks({ entries, pathname, className }: { entries: Entry[]; pathname: string; className: string }) {
+  return (
+    <ul className={className}>
+      {entries.map((e) => {
+        const active = pathname === e.href || pathname.startsWith(e.href + "/");
+        return (
+          <li key={e.href}>
+            <Link
+              href={e.href}
+              className={s.link}
+              aria-current={active ? "page" : undefined}
+              title={e.pending}
+            >
+              {e.label}
+              {e.pending ? <span className={s.pendingDot} aria-hidden="true" /> : null}
+            </Link>
+          </li>
+        );
+      })}
+    </ul>
   );
 }

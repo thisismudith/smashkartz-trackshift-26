@@ -53,6 +53,15 @@ const GATES = [
   },
 ];
 
+const DEPENDENCIES = [
+  { label: "Session state", status: "Available", detail: "Manifest-backed timing, drivers and context." },
+  { label: "Rule mask", status: "Available", detail: "Configuration is inspectable; verification is shown on Rules." },
+  { label: "Energy twin", status: "Waiting", detail: "Estimated energy output is not published for this decision route." },
+  { label: "Pass model", status: "Waiting", detail: "Checkpoint-labelled opportunities are not available yet." },
+  { label: "Rival belief", status: "Waiting", detail: "No inferred rival-state stream is published." },
+  { label: "Planner", status: "Waiting", detail: "Requires DP value tables and legal candidate actions." },
+];
+
 export default function DecisionView() {
   return (
     <main className={s.main}>
@@ -69,6 +78,22 @@ export default function DecisionView() {
           change at the data seam and nothing else.
         </p>
       </header>
+
+      <section className={s.readiness} aria-label="Decision readiness">
+        <div className={s.readinessHeader}>
+          <div><span className={s.readinessKicker}>Readiness gate</span><h2>Evidence chain</h2></div>
+          <span className={s.readinessCount}>2 / {DEPENDENCIES.length} available</span>
+        </div>
+        <div className={s.readinessTrack} aria-hidden="true"><span style={{ width: `${(2 / DEPENDENCIES.length) * 100}%` }} /></div>
+        <div className={s.dependencyGrid}>
+          {DEPENDENCIES.map((d) => (
+            <div key={d.label} className={`${s.dependency} ${d.status === "Available" ? s.available : s.waiting}`}>
+              <div className={s.dependencyTop}><strong>{d.label}</strong><span>{d.status}</span></div>
+              <p>{d.detail}</p>
+            </div>
+          ))}
+        </div>
+      </section>
 
       <div className={s.grid}>
         {GATES.map((g) => (

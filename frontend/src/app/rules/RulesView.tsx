@@ -167,6 +167,20 @@ export default function RulesView() {
         </section>
       ) : null}
 
+      <section className={s.snapshot} aria-label="Rule snapshot status">
+        <div className={s.snapshotIntro}>
+          <span className={s.snapshotEyebrow}>Configuration snapshot</span>
+          <strong>{rules.competition.configuration_version}</strong>
+          <p>{rules.regulation_snapshot.note}</p>
+        </div>
+        <div className={s.snapshotGrid}>
+          <SnapshotItem label="Season" value={String(rules.regulation_snapshot.season)} />
+          <SnapshotItem label="Schema" value={`v${rules.schema_version}`} />
+          <SnapshotItem label="Snapshot" value={rules.regulation_snapshot.verified ? "Verified" : "Unverified"} tone={rules.regulation_snapshot.verified ? "ok" : "warn"} />
+          <SnapshotItem label="Legal mask" value={rules.compliance.legal_by_construction ? "Enabled" : "Not enabled"} tone={rules.compliance.legal_by_construction ? "ok" : "warn"} />
+        </div>
+      </section>
+
       <section className={s.block}>
         <ChartFrame
           title="Speed-dependent power envelope"
@@ -371,6 +385,10 @@ export default function RulesView() {
       </section>
     </main>
   );
+}
+
+function SnapshotItem({ label, value, tone = "neutral" }: { label: string; value: string; tone?: "ok" | "warn" | "neutral" }) {
+  return <div className={`${s.snapshotItem} ${tone === "warn" ? s.snapshotWarn : tone === "ok" ? s.snapshotOk : ""}`}><span>{label}</span><strong>{value}</strong></div>;
 }
 
 function budgetsOf(rules: RuleSet) {

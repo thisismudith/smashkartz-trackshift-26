@@ -163,6 +163,8 @@ export default function SessionView({
         <h1 className={s.title}>{manifest.event.replace(/\s+Grand Prix$/i, "")}</h1>
       </header>
 
+      <SessionReadiness manifest={manifest} />
+
       <div className={s.controls}>
         <Segmented label="View" options={VIEWS} value={view} onChange={setView} />
 
@@ -193,6 +195,19 @@ export default function SessionView({
         />
       </div>
 
+      <div className={s.handoff}>
+        <div>
+          <span className={s.readinessEyebrow}>Next evidence layer</span>
+          <p>Compare two drivers on a shared distance axis with measured telemetry channels.</p>
+        </div>
+        <Link
+          className={s.handoffLink}
+          href={`/sessions/${track}/${encodeURIComponent(session)}/telemetry`}
+        >
+          Open telemetry comparison →
+        </Link>
+      </div>
+
       {shown.length === 0 ? (
         <NoData title="No drivers selected" reason="Pick at least one driver above." />
       ) : view === "pace" ? (
@@ -203,6 +218,40 @@ export default function SessionView({
         <EnergyView shown={shown} styleOf={styleOf} />
       )}
     </main>
+  );
+}
+
+function SessionReadiness({ manifest }: { manifest: RawSessionManifest }) {
+  const timedLaps = manifest.drivers.reduce(
+    (sum, driver) => sum + driver.laps.filter((lap) => lap.time !== null).length,
+    0,
+  );
+  const maxLap = Math.max(...manifest.drivers.flatMap((driver) => driver.laps.map((lap) => lap.lap)), 0);
+  const cards = [
+    { label: "Track length", value: `${(manifest.trackLengthMetres / 1000).toFixed(3)} km`, note: "artifact geometry" },
+    { label: "Cars represented", value: `${manifest.drivers.length}`, note: "session manifest" },
+    { label: "Timed laps", value: `${timedLaps}`, note: `through lap ${maxLap}` },
+    { label: "Race control", value: `${manifest.raceControl.length}`, note: manifest.raceControl.length ? "messages available" : "no messages" },
+    { label: "Neutralisation", value: `${manifest.neutralisation.length}`, note: manifest.neutralisation.length ? "windows marked" : "none marked" },
+    { label: "Weather", value: manifest.weather ? "Available" : "Unavailable", note: manifest.weather ? "session feed" : "not in artifact" },
+  ];
+
+  return (
+    <section className={s.readiness} aria-label="Session data readiness">
+      <div className={s.readinessIntro}>
+        <span className={s.readinessEyebrow}>Evidence surface</span>
+        <p>Everything below is scoped to this published session manifest.</p>
+      </div>
+      <div className={s.readinessGrid}>
+        {cards.map((card) => (
+          <div className={s.readinessCard} key={card.label}>
+            <span className={s.readinessLabel}>{card.label}</span>
+            <strong>{card.value}</strong>
+            <small>{card.note}</small>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 

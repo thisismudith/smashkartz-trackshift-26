@@ -53,6 +53,26 @@ a {
   text-decoration: none;
 }
 
+.skipLink {
+  position: fixed;
+  z-index: 1000;
+  left: 0.75rem;
+  top: 0.75rem;
+  padding: 0.55rem 0.8rem;
+  color: var(--haas-black);
+  background: var(--haas-white);
+  transform: translateY(-180%);
+  transition: transform 0.16s ease;
+}
+
+.skipLink:focus-visible {
+  transform: translateY(0);
+  outline: 2px solid var(--haas-red);
+  outline-offset: 2px;
+}
+
+#main-content:focus { outline: none; }
+
 ::selection {
   background: var(--haas-red);
   color: var(--haas-white);

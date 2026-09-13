@@ -257,3 +257,30 @@ export function resolveBrush(
   if (Math.abs(toPx(b) - toPx(a)) < minPx) return null;
   return [a, b];
 }
+
+/**
+ * Resolve a chart's margins against the width it actually rendered at.
+ *
+ * The horizontal gutters are capped as a FRACTION of the width, not at a fixed pixel count.
+ * The previous fixed cap (44px below a 520px breakpoint) silently discarded a gutter the
+ * caller had explicitly sized: the circuit chart asks for 104px to seat "Australian" beside
+ * its row, and on a narrow screen every one of those labels was drawn from x = 37 outwards
+ * and spilled left out of the plot. Labels are the one thing that must not be sacrificed to
+ * make room for the plotting area -- an unlabelled row is not a smaller chart, it is an
+ * unreadable one.
+ *
+ * Capping proportionally keeps at least ~35% of the width as plotting area at every size
+ * while leaving a wide gutter intact wherever there is room for it.
+ */
+export function resolveMargins(
+  width: number,
+  margin?: { left?: number; right?: number; top?: number; bottom?: number },
+): { left: number; right: number; top: number; bottom: number } {
+  const w = Number.isFinite(width) && width > 0 ? width : 720;
+  return {
+    left: Math.min(margin?.left ?? 48, Math.max(32, w * 0.42)),
+    right: Math.min(margin?.right ?? 16, Math.max(12, w * 0.23)),
+    top: margin?.top ?? 12,
+    bottom: margin?.bottom ?? 34,
+  };
+}

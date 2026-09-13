@@ -40,6 +40,43 @@
   flex-wrap: wrap;
 }
 
+.routes {
+  display: flex;
+  align-items: center;
+  gap: clamp(0.7rem, 1.6vw, 1.25rem);
+  min-width: 0;
+  flex: 1;
+  flex-wrap: wrap;
+}
+
+/* Secondary tools stay reachable, but their quieter token preserves the evidence-first reading
+   order: sessions → insights/rules → decision readiness. */
+.tools {
+  display: flex;
+  align-items: center;
+  gap: clamp(0.6rem, 1.5vw, 1.1rem);
+  list-style: none;
+  flex-wrap: wrap;
+}
+
+.tools .link {
+  color: #777777;
+  font-size: 0.67rem;
+}
+
+.tools .link:hover,
+.tools .link:focus-visible,
+.tools .link[aria-current="page"] {
+  color: var(--haas-grey);
+}
+
+.divider {
+  width: 1px;
+  height: 1rem;
+  background: #3a3a3a;
+  flex: none;
+}
+
 .link {
   position: relative;
   display: inline-flex;
@@ -72,4 +109,25 @@
   border-radius: 50%;
   background: #a88606;
   flex: none;
+}
+
+@media (max-width: 48rem) {
+  .bar {
+    gap: 0.55rem 1rem;
+  }
+
+  .routes {
+    width: 100%;
+    flex-basis: 100%;
+    gap: 0.45rem 0.9rem;
+  }
+
+  .list,
+  .tools {
+    gap: 0.45rem 0.9rem;
+  }
+
+  .divider {
+    display: none;
+  }
 }

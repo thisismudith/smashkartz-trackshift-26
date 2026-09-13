@@ -30,7 +30,8 @@ import {
 } from "react";
 import s from "./charts.module.css";
 import {
-  linearScale, niceTicks, linePath, stepPath, bandPath, resolveBrush, type LinearScale,
+  linearScale, niceTicks, linePath, stepPath, bandPath, resolveBrush, resolveMargins,
+  type LinearScale,
 } from "./scale";
 
 interface PlotCtx {
@@ -149,18 +150,9 @@ export function Plot({
   // 720 is the SSR / pre-measure fallback: it renders a sane chart before the observer fires.
   const width = fixedWidth ?? measured ?? 720;
 
-  // Margins shrink on a narrow chart, or the plotting area vanishes into the axis gutters.
-  const tight = width < 520;
-  const m = {
-    left: margin?.left ?? 48,
-    right: margin?.right ?? 16,
-    top: margin?.top ?? 12,
-    bottom: margin?.bottom ?? 34,
-  };
-  if (tight) {
-    m.left = Math.min(m.left, 44);
-    m.right = Math.min(m.right, 12);
-  }
+  // Margins shrink on a narrow chart, or the plotting area vanishes into the axis gutters --
+  // but proportionally, so an explicitly sized label gutter survives. See resolveMargins.
+  const m = resolveMargins(width, margin);
   const rawId = useId();
   const clipId = `plotclip-${rawId.replace(/[^a-zA-Z0-9_-]/g, "")}`;
   const ctx = useMemo<PlotCtx>(() => {
@@ -311,6 +303,8 @@ export function Plot({
           role="img"
           aria-label={ariaLabel}
           tabIndex={hover || brush ? 0 : undefined}
+          data-interactive={hover || brush ? "true" : undefined}
+          data-hovered={readout ? "true" : undefined}
           data-brushable={brush ? "true" : undefined}
           onPointerDown={brush ? onDown : undefined}
           onPointerMove={hover || brush ? onMove : undefined}
@@ -353,6 +347,7 @@ export function Plot({
                 {readout.rows.map((r) => (
                   <circle
                     key={r.label}
+                    className={s.hoverPoint}
                     cx={readout.px}
                     cy={r.y}
                     r={4}
@@ -550,6 +545,7 @@ export function Line({
   return (
     <g>
       <path
+        className={s.lineMark}
         clipPath={`url(#${clipId})`}
         d={d}
         fill="none"
@@ -590,7 +586,7 @@ export function Band({
   const { xs, ys, clipId } = usePlot();
   const d = bandPath(x.map((v) => xs(v)), lo.map((v) => ys(v)), hi.map((v) => ys(v)));
   if (!d) return null;
-  return <path clipPath={`url(#${clipId})`} d={d} fill={colour} fillOpacity={opacity} stroke="none" />;
+  return <path className={s.bandMark} clipPath={`url(#${clipId})`} d={d} fill={colour} fillOpacity={opacity} stroke="none" />;
 }
 
 /** Shaded x-range, e.g. a safety-car window or a "mode not discriminable" region. */
@@ -690,7 +686,7 @@ export function Dots({
       {x.map((v, i) =>
         Number.isFinite(v) && Number.isFinite(y[i]) ? (
           // 2px surface ring so overlapping points stay countable
-          <circle key={i} cx={xs(v)} cy={ys(y[i])} r={r} fill={colour} stroke="#111111" strokeWidth={1.5} />
+          <circle className={s.dotMark} key={i} cx={xs(v)} cy={ys(y[i])} r={r} fill={colour} stroke="#111111" strokeWidth={1.5} />
         ) : null,
       )}
     </g>
@@ -726,7 +722,9 @@ export function HBars({
         const w = Math.abs(x1 - x0);
         return (
           <rect
+            className={s.barMark}
             key={i}
+            style={{ animationDelay: `${i * 18}ms` }}
             x={left}
             y={inner.top + step * i + gap / 2}
             width={Math.max(1, w)}
@@ -740,23 +738,45 @@ export function HBars({
   );
 }
 
-/** Point + confidence interval, one row per entity. The forest plot for params.json leaves. */
+/**
+ * Point + confidence interval, one row per entity. The forest plot for params.json leaves.
+ *
+ * `stem` draws a low-opacity connector from the baseline to the estimate. A forest plot is
+ * statistically honest but hard to SCAN -- thirteen dots at thirteen x positions give the eye
+ * no length to compare, so ranking one circuit against another means reading the axis for each
+ * row. The stem restores that length cue without promoting the estimate to a bar, which would
+ * draw a hard edge at a number that has a 95% interval around it (the dynamite-plot mistake).
+ * It is deliberately faint: a guide, not a mark.
+ *
+ * `caps` puts a short tick on each interval end, so a whisker that runs under the dot of the
+ * row above is still readable as an interval rather than as a stray rule.
+ */
 export function ErrorBarsH({
   values,
   lo,
   hi,
   colour,
   r = 3.5,
+  stem = false,
+  caps = false,
+  baseline = 0,
 }: {
   values: readonly number[];
   lo: readonly number[];
   hi: readonly number[];
   colour: string | ((i: number) => string);
   r?: number;
+  stem?: boolean;
+  caps?: boolean;
+  baseline?: number;
 }) {
   const { xs, inner, clipId } = usePlot();
   const n = values.length;
   const step = n > 0 ? (inner.bottom - inner.top) / n : 0;
+  const x0 = xs(baseline);
+  // Caps scale with the row height so they stay proportional on a 23-row driver chart and a
+  // 4-row one alike, but never grow tall enough to touch the neighbouring row.
+  const cap = Math.min(4, Math.max(2, step * 0.18));
   return (
     <g clipPath={`url(#${clipId})`}>
       {values.map((v, i) => {
@@ -765,12 +785,26 @@ export function ErrorBarsH({
         const c = typeof colour === "function" ? colour(i) : colour;
         const a = Number.isFinite(lo[i]) ? xs(lo[i]) : null;
         const b = Number.isFinite(hi[i]) ? xs(hi[i]) : null;
+        const px = xs(v);
         return (
-          <g key={i}>
-            {a !== null && b !== null ? (
-              <line x1={a} x2={b} y1={cy} y2={cy} stroke={c} strokeWidth={1.5} strokeOpacity={0.7} />
+          <g key={i} className={s.effectMark} style={{ animationDelay: `${i * 24}ms` }}>
+            {stem ? (
+              <line x1={x0} x2={px} y1={cy} y2={cy} stroke={c} strokeWidth={3} strokeOpacity={0.22} />
             ) : null}
-            <circle cx={xs(v)} cy={cy} r={r} fill={c} stroke="#111111" strokeWidth={1.5} />
+            {a !== null && b !== null ? (
+              <>
+                <line x1={a} x2={b} y1={cy} y2={cy} stroke={c} strokeWidth={1.5} strokeOpacity={0.7} />
+                {caps ? (
+                  <>
+                    <line x1={a} x2={a} y1={cy - cap} y2={cy + cap} stroke={c} strokeWidth={1.5} strokeOpacity={0.7} />
+                    <line x1={b} x2={b} y1={cy - cap} y2={cy + cap} stroke={c} strokeWidth={1.5} strokeOpacity={0.7} />
+                  </>
+                ) : null}
+              </>
+            ) : null}
+            {/* 2px surface ring, so a dot stays countable where it sits on its own whisker
+                or overlaps the row above at a shared x. */}
+            <circle cx={px} cy={cy} r={r} fill={c} stroke="#111111" strokeWidth={2} />
           </g>
         );
       })}
@@ -778,23 +812,169 @@ export function ErrorBarsH({
   );
 }
 
-/** Category labels down the left of a banded chart (one per bar). */
-export function BandLabels({ labels }: { labels: readonly string[] }) {
+/**
+ * Category labels down the left of a banded chart (one per bar).
+ *
+ * `swatch` puts a colour chip beside the label. It exists so a chart whose rows carry entity
+ * colour -- the driver chart, where the hue is the team -- states identity as text AND colour
+ * instead of asking the reader to match a hue against a legend for twenty-three rows. The text
+ * itself always stays in a text token; the chip carries the colour (UI.md section 7.2).
+ *
+ * `emphasis` promotes a row to white. Use it for the row the chart is about (the extreme, the
+ * selected entity) and nothing else -- emphasis stops working the moment it is on every row.
+ */
+export function BandLabels({
+  labels,
+  swatch,
+  emphasis,
+}: {
+  labels: readonly string[];
+  swatch?: (i: number) => string | null;
+  emphasis?: (i: number) => boolean;
+}) {
   const { inner } = usePlot();
   const n = labels.length;
   const step = n > 0 ? (inner.bottom - inner.top) / n : 0;
+  const chip = 5;
   return (
     <g>
-      {labels.map((l, i) => (
-        <text
-          key={l + i}
-          className={s.tickLabel}
-          x={inner.left - 7}
-          y={inner.top + step * i + step / 2 + 3.5}
-          textAnchor="end"
+      {labels.map((l, i) => {
+        const cy = inner.top + step * i + step / 2;
+        const c = swatch?.(i) ?? null;
+        return (
+          <g key={l + i}>
+            {c ? (
+              <rect x={inner.left - 7 - chip} y={cy - chip / 2} width={chip} height={chip} fill={c} />
+            ) : null}
+            <text
+              className={emphasis?.(i) ? s.bandLabelOn : s.tickLabel}
+              x={inner.left - 7 - (c ? chip + 5 : 0)}
+              y={cy + 3.5}
+              textAnchor="end"
+            >
+              {l}
+            </text>
+          </g>
+        );
+      })}
+    </g>
+  );
+}
+
+/**
+ * Alternating row stripes behind a banded chart.
+ *
+ * With one dot per row and nothing between them, the eye loses the line between a label on the
+ * far left and its estimate on the far right -- the longer the chart, the worse it gets, and the
+ * driver chart is twenty-three rows. The stripe is one step off the surface, so it separates
+ * rows without competing with the data or reading as a gridline.
+ */
+export function RowBands({ n, highlight }: { n: number; highlight?: (i: number) => boolean }) {
+  const { inner } = usePlot();
+  const step = n > 0 ? (inner.bottom - inner.top) / n : 0;
+  return (
+    <g aria-hidden="true">
+      {Array.from({ length: n }, (_, i) => (
+        <rect
+          key={i}
+          className={highlight?.(i) ? s.rowBandOn : s.rowBand}
+          data-alt={i % 2 === 1 ? "true" : undefined}
+          style={{ animationDelay: `${i * 18}ms` }}
+          x={inner.left}
+          y={inner.top + step * i}
+          width={inner.right - inner.left}
+          height={step}
+        />
+      ))}
+    </g>
+  );
+}
+
+/**
+ * The value column in the right gutter of a banded chart.
+ *
+ * A forest plot with no numbers on it forces every read through the axis, and "roughly 0.18"
+ * is not what a race engineer writes down. This is a table column that happens to live inside
+ * the SVG -- right-aligned, tabular figures, one row per band -- so the exact estimate is on
+ * screen without a number floating beside every dot out in the plotting area.
+ *
+ * `tag` is the short status word that rides after the value ("ns"). Status is never carried by
+ * colour alone, so the word ships with the muted hue rather than instead of it.
+ */
+export function RowValues({
+  values,
+  format,
+  tag,
+  meta,
+}: {
+  values: readonly number[];
+  format: (v: number) => string;
+  tag?: (i: number) => string | null;
+  /** Secondary figure, set below the value in the muted token -- sample size, usually. */
+  meta?: (i: number) => string | null;
+}) {
+  const { inner } = usePlot();
+  const n = values.length;
+  const step = n > 0 ? (inner.bottom - inner.top) / n : 0;
+  const twoLine = step >= 22;
+  return (
+    <g>
+      {values.map((v, i) => {
+        if (!Number.isFinite(v)) return null;
+        const cy = inner.top + step * i + step / 2;
+        const t = tag?.(i) ?? null;
+        const m = meta?.(i) ?? null;
+        return (
+          <g key={i}>
+            <text
+              className={s.rowValue}
+              x={inner.right + 8}
+              y={cy + (twoLine && m ? 0 : 3.5)}
+              textAnchor="start"
+            >
+              {format(v)}
+              {t ? <tspan className={s.rowTag}> {t}</tspan> : null}
+            </text>
+            {m && twoLine ? (
+              <text className={s.rowMeta} x={inner.right + 8} y={cy + 10} textAnchor="start">
+                {m}
+              </text>
+            ) : null}
+          </g>
+        );
+      })}
+    </g>
+  );
+}
+
+/**
+ * Invisible per-row hit targets carrying a native SVG <title>.
+ *
+ * Every number in these charts is already on screen or in the table view, so the tooltip is
+ * genuinely an enhancement and not the only way to read a value -- which is what lets it be a
+ * <title> rather than a positioned HTML layer with its own state. It costs nothing, it is
+ * announced by screen readers, and it carries the long form (interval, n, what was fitted)
+ * that will not fit in the gutter.
+ *
+ * The rect spans the full row height, so the hit target is the band rather than the 7px dot.
+ */
+export function RowHover({ titles }: { titles: readonly string[] }) {
+  const { inner } = usePlot();
+  const n = titles.length;
+  const step = n > 0 ? (inner.bottom - inner.top) / n : 0;
+  return (
+    <g>
+      {titles.map((t, i) => (
+        <rect
+          key={i}
+          className={s.rowHit}
+          x={inner.left}
+          y={inner.top + step * i}
+          width={inner.right - inner.left}
+          height={step}
         >
-          {l}
-        </text>
+          <title>{t}</title>
+        </rect>
       ))}
     </g>
   );

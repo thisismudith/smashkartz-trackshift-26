@@ -33,10 +33,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className={display.variable}>
       <body>
+        <a className="skipLink" href="#main-content">Skip to main content</a>
         {/* Lives in the root layout: renders once per full load, persists across client navigation. */}
         <RaceLoader />
         <SiteNav />
-        {children}
+        <div id="main-content" tabIndex={-1}>{children}</div>
       </body>
     </html>
   );
