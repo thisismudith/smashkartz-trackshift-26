@@ -102,6 +102,65 @@ are still checked against the gates below; agree ownership before starting one.
 
 ---
 
+## Completion register — LOCKED 2026-09-13
+
+**Lock commit:** `68846ae`. Every deliverable below is built, tested and pushed.
+Chain P (CP-13 to CP-17, CP-23, CP-24) and Chain E (CP-18 to CP-22) are frozen:
+no further changes without lifting this lock.
+
+Two columns, because they are different claims and collapsing them is how a
+blocked checkpoint gets written up as a passing one.
+
+- **Deliverables** — is the code built, tested and shipped?
+- **Gates** — did the checkpoint's own ✅ Check list actually pass on real data?
+
+| CP | Deliverables | Gates | Evidence |
+|---|---|---|---|
+| 00 Environment | ✅ | ✅ | |
+| 01 Data audit | ✅ | ✅ | |
+| 02 Registries | ✅ | ✅ | Extended with M07 pair/context entries |
+| 03 Rule config | ✅ | ✅ | |
+| 04 20 m lake | ✅ | ✅ | |
+| 05 Segmentation | ✅ | ✅ | |
+| 06 Weather | ✅ | ✅ | |
+| 07 Practice classifier | ✅ | ✅ | |
+| 08 Tyre pace | ✅ | ✅ | |
+| 09 Segment baselines | ✅ | ✅ | |
+| 10 Overtake state | ✅ | ✅ | |
+| 11 Rule engine | ✅ | ✅ | |
+| 12 Eligibility | ✅ | ✅ | |
+| 13 Opportunities (M07) | ✅ | ✅ | 4,970 opportunities, 14,910 rows, base rate 14.9%, leakage test passes; A2 battle join at 92.5% |
+| 14 Pass benchmark | ✅ | ◐ **3 of 6** | 15 artifacts, unit `battle_id`. Documented split, base-rate-beat and LOTO-variance gates fail. Grade INTERIM |
+| 15 Calibration | ✅ | ◐ | Three methods compared; isotonic wins ×2, uncalibrated wins at BRAKING. Inherits INTERIM |
+| 16 Ensemble spread | ✅ | ◐ | 21 members, 4 families, spread RSE 0.158. Inherits INTERIM |
+| 17 Fine-tuning | ✅ | ✅ | `KEEP_BASELINE` at all three checkpoints on both objectives — a real result: CP-14's block is already right |
+| 18 Energy twin | ✅ | ✅ | Violation rate 1.1%, none below 150 km/h |
+| 18b Override discriminator | ✅ | ◐ | Gate correct (Monaco 0% discriminable); 10.9% FPR on the 2024 control needs a calibrated twin |
+| 19 Fuel curves | ✅ | ✅ | Median final fuel 1.00 kg, 100% of finishers in band |
+| 20 Physics calibration | ✅ | ◐ | 0.1897 s against a 0.1631 s best-constant floor; §29's 0.15 s target sits **below** that floor |
+| 21 Segment time ΔE→Δt | ✅ | ◐ | 214 segments monotone; `a_k` inverted by segment type |
+| 22 Physics uncertainty | ✅ | ◐ | Coverage 84.7% vs 80% nominal; inherits CP-20's fit |
+| 23 Ablation harness | ✅ | ✅ | Leave-one-out + add-one-in, 3 seeds, intervals against a noise floor |
+| 24 Service + replay | ✅ | ◐ | Pass route on the real artifact; `stubs_used: []` measured. `final_mode_permitted: false` |
+
+**What the ◐ rows share.** Almost all of them trace to one upstream fact: the
+opportunity table holds 2026 only, so CP-14 cannot run its documented
+train-2022-24 / validate-2025 split and everything downstream inherits the
+INTERIM grade. That is Owner A's historical C1/C7 spine, not a defect in these
+checkpoints. CP-20 to CP-22 are a separate, already-documented physics story and
+were deliberately not rerun.
+
+**Nothing here is blocked on Tanveer.** The code is complete. What the ◐ rows
+need is data, or a decision:
+
+1. Historical 2022-2025 opportunities → re-run CP-14 with
+   `--require-documented-split` for a FULL grade, then CP-15/16/24 inherit it.
+2. §29's 0.15 s target renegotiated against the measured 0.1631 s floor, or new
+   within-segment signal (CP-20).
+3. A declared acceptable false-positive rate for CP-18b.
+
+---
+
 ## What is actually on your disk
 
 Verified 2026-09-12, so you can size the work rather than guess.

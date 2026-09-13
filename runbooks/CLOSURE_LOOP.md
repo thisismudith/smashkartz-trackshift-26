@@ -254,6 +254,16 @@ Expected: `battle_join.coverage` ~0.925 after step 1; `unit_coverage` ~0.925 and
 - Tests: 19 new for CP-17 tuning, 23 for section 41 era + CP-23 ablation, 12 for the M07 context join. No generated data, models or artifacts staged.
 - CP-24 (service routes and replay bundle) remains unimplemented.
 
+### Tanveer checkpoint lock — 2026-09-13
+
+- Lock commit `68846ae`. Every Tanveer deliverable (CP-00 to CP-24) is built, tested and pushed; Chain P and Chain E are frozen pending the items below.
+- Deliverables and acceptance gates are recorded as **separate columns** in `CHECKPOINTS_TANVEER.md`. Collapsing them is how a blocked checkpoint gets written up as a passing one, so the register does not do it.
+- Gates fully passed: CP-00 to CP-13, CP-17, CP-18, CP-19, CP-23.
+- Gates partial (◐): CP-14 (3 of 6), CP-15, CP-16, CP-18b, CP-20, CP-21, CP-22, CP-24.
+- Almost every ◐ traces to one upstream fact: the opportunity table holds 2026 only, so CP-14 cannot run its documented 2022-2024 / 2025 / 2026 split and CP-15, CP-16 and CP-24 inherit the INTERIM grade. That is the historical C1/C7 spine, not a defect in these checkpoints. CP-20 to CP-22 are the separate, already-documented physics story and were not rerun.
+- Three things unblock the remainder, none of them code: historical 2022-2025 opportunities; a §29 target renegotiated against the measured 0.1631 s best-constant floor; and a declared acceptable false-positive rate for CP-18b.
+- No release claim is made. `final_mode_permitted` remains false and the British Grand Prix remains excluded from every training and calibration path.
+
 ## Terminal status
 
 `IN_PROGRESS`
