@@ -209,7 +209,7 @@ Every `ers_*_est_*` field is an estimate from the energy twin (M14), never a mea
 { "era": "2026", "historical_drs_eligible": null, "historical_drs_open": null, "overtake_eligible": true, "overtake_state": "ARMED" }
 ```
 
-For 2022–2025 rows `historical_drs_*` are populated and `overtake_*` are `null`; for 2026 the reverse. `overtake_*` come only from the rule engine (§12, §20), never from the raw DRS channel.
+For 2022–2025 rows `historical_drs_*` are populated and `overtake_*` are `null`; for 2026 the reverse. `overtake_*` come only from the rule engine (§12, §20), never from the raw DRS channel. Raw `drs`, historical DRS fields, and `PROXY_HISTORICAL_DRS` are not accepted as 2026 request inputs; a route rejects them as a feature-schema mismatch rather than inferring a default Overtake state.
 
 ---
 
@@ -777,6 +777,7 @@ What the UI may and may not send to live routes.
 | `OFFLINE_ONLY` | no → `OFFLINE_ONLY_FEATURE` | uses future information |
 | identity (`attacker_driver`, `defender_team`) | yes, but the registry records whether the model uses them | §17 identity caution |
 | raw `x_m`, `y_m`, driver number, timestamps | no | §36 |
+| raw `drs`, `historical_drs_*`, `PROXY_HISTORICAL_DRS` on a 2026 request | no → `FEATURE_SCHEMA_MISMATCH` | historical-era audit/prior data cannot define 2026 Overtake, power, or legality |
 | a feature from a later decision checkpoint than the one requested | no → `CHECKPOINT_VIOLATION` | §19 |
 | source-gated channels (`brake_pressure`, `steering_angle`, `tyre_temperature`, `tyre_pressure`, `brake_temperature`, `damage`, `fuel_consumption`) | only when the registry marks a documented continuous source; never zero-filled | §11 |
 | `pit_stop_duration_s_offline`, `pass_attempted`, outcome distance | no — audit / label only | §11, §19 |
@@ -823,6 +824,7 @@ Rules:
 - `shadow_price/index.json` enumerates the precomputed grid so the UI slider snaps to available points.
 - `plan/segNNN.json` is precomputed for every segment in the timeline so scrubbing shows a plan instantly.
 - `bundle_manifest.json` follows §53 (git commit, source datasets, model versions, seeds).
+- Any file whose state or rule snapshot contains `PROXY_HISTORICAL_DRS` is ineligible for a final bundle; the generator must fail rather than serialize a development proxy.
 - Generator: `scripts/serve/build_replay_bundle.py --event british_grand_prix --battle 2026_GBR_Race_HAM_ANT_Battle03 --out artifacts/demo`.
 
 ---

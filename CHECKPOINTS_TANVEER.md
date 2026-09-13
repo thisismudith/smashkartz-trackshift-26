@@ -461,7 +461,7 @@ Three tiers of value, and the config must distinguish them, because §57/§58 go
 |---|---|---|---|
 | **A** | `RULE_FIA` | Cited to an FIA Sporting/Technical Regulation article or event note | Everything. "Legal by construction" claims. |
 | **B** | `OBSERVED_RCM` | Derived from `rcm.json` race-control messages in the raw mirror | Race-control state. Genuinely observed. |
-| **C** | `PROXY_HISTORICAL_DRS` | Inferred from where DRS was active at the same circuit in 2022–2025 | Development and DP shape only. **Never** in a demo claim. |
+| **C** | `PROXY_HISTORICAL_DRS` | Inferred from where DRS was active at the same circuit in 2022–2025 | Versioned development fixture/DP-shape work only. It is rejected from final C3/C4/C5, planner, simulator, route, replay, calibration, and demo claims. |
 
 Every key gets `value_source` and `source`. The rule engine (CP-11) refuses to start if any Tier-C value is used while `strict_mode: true`.
 
@@ -560,7 +560,7 @@ race_control:
 
 **3. `scripts/data/extract_race_control.py`** — parse every 2026 `rcm.json`, emit per event/session a timeline of `OVERTAKE ENABLED` / `OVERTAKE DISABLED` windows with session times, plus SC/VSC/flag windows. This is Tier B and needs no FIA document. Write to `artifacts/race_control/<year>_<event>.json`.
 
-**4. `scripts/data/derive_drs_zones.py`** — Tier C fallback. For each circuit, take 2022–2025 Race laps at that track, find distance ranges where `drs != 0` for a meaningful share of laps, and emit candidate activation zones. Mark every output `PROXY_HISTORICAL_DRS`. This gives the DP realistic zone geometry to develop against while the FIA values are still `UNVERIFIED`. **Silverstone's zones from 2022 DRS are a proxy for 2026 Overtake zones, not a substitute** (§41).
+**4. `scripts/data/derive_drs_zones.py`** — Tier C fallback. For each circuit, take 2022–2025 Race laps at that track, find distance ranges where `drs != 0` for a meaningful share of laps, and emit candidate activation zones. Mark every output `PROXY_HISTORICAL_DRS`. This may seed an explicitly development-only geometry fixture while FIA values are `UNVERIFIED`; it must not reach final C3/C4/C5, calibration, route, replay, or demo paths. **Silverstone's zones from 2022 DRS are a historical proxy, not 2026 Overtake zones.**
 
 **5. Sourcing task** (do this in parallel, it is research not code): FIA 2026 Sporting Regulations and Technical Regulations from `fia.com`; per-event "Event Notes" from the race director, which historically carry the DRS/Overtake zone definitions. Record the document title, date, and article number in each `source` field. Convert `UNVERIFIED` → `RULE_FIA` one key at a time.
 
@@ -1357,7 +1357,7 @@ DISABLED ──(race control OVERTAKE ENABLED)───────────�
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| Nothing ever arms | Line positions still `null` from CP-03 | Use the Tier-C DRS-proxy zones so development can continue; the state machine logic is testable independent of the values |
+| Nothing ever arms | Line positions still `null` from CP-03 | Use Tier-C DRS-proxy zones only in an explicitly development-only fixture; test the state-machine logic independently of the values and fail final mode |
 | Everything arms | `detection_gap_s` too large, or gap computed in metres not seconds | `DistanceToDriverAhead` is **metres**. Convert: `gap_s = gap_m / speed_mps`. This is a very easy mistake and it will silently ruin Chain P. |
 | `ACTIVE` without `ARMED` | Transition order wrong when both lines fall in one segment | Evaluate at 20 m resolution inside the segment, not once per segment |
 | Disabled windows do not line up | Session-time vs lap-time confusion | `rcm.json` `time` is a timestamp; `laptimes.json` `sesT`/`lST` are session-relative seconds. Align on session time, and unit-test the conversion. |

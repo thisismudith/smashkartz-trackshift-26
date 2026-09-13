@@ -178,6 +178,7 @@ The integration layer keeps these fields separate:
 - Energy Store state, deployed energy, harvested energy, and recharge budget
 - observed tyre context and inferred tyre-performance state
 - historical DRS covariates and 2026 Overtake state
+- raw historical DRS/proxy geometry and final 2026 rule configuration
 - rule threshold/provenance and modelled eligibility probability
 - observed values, inferred values, simulated values, and rule values
 
@@ -293,6 +294,7 @@ The integration layer keeps these fields separate:
 | Post-pass state | counterattack and role switch are considered |
 | High uncertainty | planner returns decision stability and risk-sensitive output |
 | Historical DRS row | historical covariate is not shown as 2026 Overtake |
+| 2026 raw DRS or `PROXY_HISTORICAL_DRS` input | gateway rejects it; only a sourced C3 event configuration may define Overtake geometry/envelope |
 
 ### Acceptance gates
 
@@ -343,7 +345,7 @@ The integration layer keeps these fields separate:
 3. Store checksums and stubs_used in bundle_manifest.
 4. Validate replay files against the same schemas as service responses.
 5. Give Owner C one bundle root and one API-compatible route map.
-6. Render all display obligations from API.md: provenance, uncertainty, rule sources, energy labels, DRS-era distinction, normal-race gate, simulation assumptions, and checkpoint labels.
+6. Render all display obligations from API.md: provenance, uncertainty, rule sources, energy labels, DRS-era distinction, normal-race gate, simulation assumptions, and checkpoint labels. Fail final bundle generation if any state, rule snapshot, or response carries `PROXY_HISTORICAL_DRS`.
 
 ### Acceptance gates
 
