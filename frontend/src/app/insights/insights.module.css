@@ -235,3 +235,50 @@
   max-width: 46ch;
 }
 
+
+/* --- section framing ----------------------------------------------------- */
+
+/*
+ * The head-to-head section carries two charts and a set of counts that describe both, so it needs
+ * a name of its own. The page title names the whole page and a ChartFrame caption names one
+ * chart; this sits deliberately between the two in weight, close enough to the display face to
+ * read as structure rather than as a stray heading inside a figure.
+ */
+.sectionHead {
+  max-width: 60rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.sectionTitle {
+  font-family: var(--font-display), Impact, "Arial Narrow", sans-serif;
+  font-weight: 900;
+  font-stretch: 118%;
+  font-size: clamp(1.35rem, 3vw, 2rem);
+  line-height: 1.05;
+  letter-spacing: 0.015em;
+  text-transform: uppercase;
+  color: var(--haas-white);
+}
+
+.sectionLede {
+  margin-top: 0.35rem;
+  max-width: 48rem;
+  font-size: 0.84rem;
+  line-height: 1.55;
+  color: var(--haas-grey);
+}
+
+/*
+ * The micro-label in front of a chart-local Segmented. ChartFrame's own `.controls` row already
+ * lays the pieces out and wraps them, so this only has to say what the control is FOR -- two
+ * segmented controls side by side with no labels is a puzzle, and "10 / 25 / 50" means nothing
+ * on its own.
+ */
+.controlLabel {
+  font-size: 0.62rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--haas-grey);
+}

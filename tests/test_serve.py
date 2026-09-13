@@ -47,9 +47,21 @@ def test_final_service_and_replay_fail_closed():
         create_app(final_mode=True)
 
 
-def test_replay_calls_shared_routes_and_records_no_stubs(tmp_path: Path):
+def test_replay_records_every_stub_the_bundle_actually_shipped(tmp_path: Path):
+    """This used to assert `stubs_used == []`, and it passed for the wrong reason.
+
+    Only the pass route ever recorded itself, so the empty list was a measurement
+    of one route, presented as a statement about all of them -- while the bundle
+    shipped a generated battle index, a synthetic timeline, a validation report
+    built entirely from the fixture, and a plan and simulation rolled out through
+    the synthetic C5 transition. The gate exists to catch a demo built on
+    placeholders, so the correct assertion is that each of those names itself,
+    and that the manifest carries the reason a reader needs.
+    """
     manifest = build_replay_bundle(tmp_path)
-    assert manifest["stubs_used"] == []
+    assert manifest["stubs_used"] == sorted([
+        "battles", f"battles/{BATTLE_ID}/timeline", "plan", "simulate", "validation"])
+    assert manifest["stub_reason"] is not None
     assert manifest["final_mode_permitted"] is False
     assert manifest["rule_violations"] == 0
     assert (tmp_path / "bundle_manifest.json").exists()

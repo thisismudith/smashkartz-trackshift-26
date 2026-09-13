@@ -57,7 +57,7 @@ function afterTimelineReady() {
   // a fresh timeline always starts paused; announce it, or the UI keeps showing
   // "Pause" from the previous session and its next click looks like a dead button
   setPlaying(false);
-  post({ type: "ready", driverList: driverOrder, totalLaps: timeline.totalLaps, duration: timeline.duration });
+  post({ type: "ready", driverList: driverOrder, totalLaps: timeline.totalLaps, duration: timeline.duration, clockOffsetS: timeline.clockOffsetS ?? 0 });
   post({
     type: "meta",
     events: timeline.events(),

@@ -11,9 +11,9 @@ function makeTrack(): TrackModel {
     x: new Float32Array(1), y: new Float32Array(1), z: new Float32Array(1),
     halfWidth: new Float32Array([6]), widthBinMetres: length,
     timingLines: { sf: 0, s1: 1000, s2: 2000 },
-    corners: [], grid: { order: [], pitchMetres: 8 },
+    corners: [], grid: { order: [], pitchMetres: 8, anchorMetres: null },
     pitLanePath: null,
-    pitLane: { entryStation: null, exitStation: null, mergeStation: null, loopLateral: null },
+    pitLane: { entryStation: null, exitStation: null, mergeStation: null, loopLateral: null, exitLateral: null },
     referenceProfile: { binMetres: 10, speedKph: new Float32Array([250]), gear: new Uint8Array([7]) },
   };
 }

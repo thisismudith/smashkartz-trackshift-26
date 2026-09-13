@@ -35,8 +35,9 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from simdata.glb_surface import (Fit, TriangleIndex, bake_surface, load_surface,
-                                 registry_entry, sha256_file, surface_block)
+from simdata.glb_surface import (Fit, TriangleIndex, bake_path_z, bake_surface,
+                                 load_surface, registry_entry, sha256_file,
+                                 surface_block)
 from simdata.paths import ROOT as REPO_ROOT, data_root
 from simdata.rawio import MIN_SAMPLES, LapTable, SentinelIndex, load_lap
 from simdata.track import (build_ring, corner_stations, grid, pick_geometry_laps,
@@ -741,14 +742,76 @@ def _no_surface(slug: str, why: str) -> None:
     return None
 
 
+"""Loaded models, keyed by asset path. A build reads each circuit's model for the ring
+bake and again for the pit lane's; the asset is 158 MB and its triangle index costs
+seconds, so the second reader gets the first one's. Cleared with the process."""
+_SURFACE_INDEX_CACHE: dict[Path, TriangleIndex] = {}
+
+
+def _surface_index(glb_path: Path) -> TriangleIndex:
+    hit = _SURFACE_INDEX_CACHE.get(glb_path)
+    if hit is None:
+        hit = TriangleIndex(load_surface(glb_path))
+        _SURFACE_INDEX_CACHE[glb_path] = hit
+    return hit
+
+
 def _bake_surface_for(entry: dict, glb_path: Path, ring):
     """Read the asset and bake the drive surface under `ring`. The IO and the geometry.
 
     Split out from `_surface_for` so the admission decisions above it are testable
     without a 158 MB asset, and so a test can prove a declined circuit never reaches it.
     """
-    surface = load_surface(glb_path)
-    return bake_surface(TriangleIndex(surface), ring, Fit.from_dict(entry["fit"]))
+    return bake_surface(_surface_index(glb_path), ring, Fit.from_dict(entry["fit"]))
+
+
+def _nearest_ring_z(ring, x, y):
+    """Height of the racing surface nearest each (x, y), telemetry metres.
+
+    The prior `bake_path_z` starts its walk from, and the value the renderer uses today
+    for the whole pit lane. Plain nearest-vertex in plan: a pit-lane point's nearest ring
+    vertex is metres away, so nothing subtler would change the answer.
+    """
+    x = np.asarray(x, dtype=np.float64)[:, None]
+    y = np.asarray(y, dtype=np.float64)[:, None]
+    d2 = (ring.x[None, :] - x) ** 2 + (ring.y[None, :] - y) ** 2
+    return ring.z[np.argmin(d2, axis=1)]
+
+
+def _bake_pit_path_surface(pit_path: dict | None, ring, slug: str) -> None:
+    """Add the MODEL's own height under each pit-lane vertex, in place.
+
+    Only called for a circuit that already produced a `surface` block, so the registry
+    entry, the asset and the fit are all known good by the time this runs.
+
+    Why this is a separate measurement from the ring bake: the pit lane is a different
+    road at a different height, and the renderer has until now drawn both the lane and
+    the cars on it at the height of the nearest RACING surface. Measured at Silverstone
+    that is wrong by +1.2 to -3.4 m along one lane -- the pit-lane start stood a car
+    3.3 m in the air. Points the walk finds no drive surface under keep a null, and the
+    renderer falls back to the racing surface exactly as it does today.
+    """
+    if not pit_path:
+        return
+    entry = registry_entry(slug)
+    if not entry or not entry.get("fit") or not entry.get("glb"):
+        return
+    glb_path = REPO_ROOT / entry["glb"]
+    if not glb_path.is_file():
+        return
+    index = _surface_index(glb_path)
+    fit = Fit.from_dict(entry["fit"])
+    for seg in pit_path["segments"]:
+        x = np.array(seg["xCm"], dtype=np.float64) / 100.0
+        y = np.array(seg["yCm"], dtype=np.float64) / 100.0
+        bake = bake_path_z(index, fit, x, y, _nearest_ring_z(ring, x, y))
+        seg["surfaceZCm"] = [(int(round(v * 100)) if np.isfinite(v) else None)
+                             for v in bake.z_m]
+        seg["surfaceCoverage"] = round(bake.coverage, 4)
+    pit_path["provenance"]["surfaceElevation"] = (
+        "DERIVED: the registered circuit model's own drive surface, raycast under each "
+        "pit-lane vertex under the same fit the ring surface was baked with; null per "
+        "vertex where the model has no drive surface there")
 
 
 def _surface_for(slug: str, ring) -> dict | None:
@@ -827,7 +890,12 @@ def build_track_model(event: str) -> dict:
     # The grid is read from the session that HAS one, projected onto the winning ring.
     gdir, gname = grid_session(event_dir, sdir)
     gtable = table if gdir == sdir else LapTable(gdir)
-    grid_model = grid(gdir, gtable, ring, 0.0)
+    # The timing line AS PUBLISHED, not 0.0. The ring is rotated so start/finish is
+    # station 0 and the line is then re-measured in that frame, which lands 0.44 m short
+    # of the seam at Silverstone. `anchorMetres` is defined against the timing line and
+    # the renderer adds it to the published `timingLines.sf`, so measuring it from a
+    # different origin here would draw the grid and publish its slots half a metre apart.
+    grid_model = grid(gdir, gtable, ring, tl["sf"]["station"])
     grid_field = len({r["drv"] for r in gtable.rows() if r["lap"] == 1})
 
     width = width_estimate(sdir, table, ring, laps, corners, pit)
@@ -851,6 +919,10 @@ def build_track_model(event: str) -> dict:
     # After the ring is final AND after the emission check: a ring the build is about to
     # reject must not first spend a minute reading a 158 MB model.
     surface = _surface_for(slugify(event), ring)
+    # Only a circuit that produced a surface has a model to measure the lane against;
+    # everything else keeps the drape onto the adjacent racing surface.
+    if surface:
+        _bake_pit_path_surface(pit_path, ring, slugify(event))
 
     return {
         "schemaVersion": SCHEMA_VERSION,

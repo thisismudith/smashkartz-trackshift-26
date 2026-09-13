@@ -35,17 +35,26 @@ function bounds(geom: THREE.BufferGeometry) {
 const trueSize = bounds(buildF1CarGeometry(1));
 const drawn = bounds(buildF1CarGeometry());
 
+/** An explicitly INFLATED build. The shipped CAR_VISUAL_SCALE is 1.0 -- the drawn car is
+ * its true size, so that the 8 m grid pitch shows the 2.4 m of air a real grid has -- and
+ * at 1.0 the two halves of the split coincide and several of these properties become
+ * vacuous. They are the properties that break when someone raises the scale again, so
+ * they are exercised at a scale that is raised. */
+const INFLATED = 1.3;
+const inflated = bounds(buildF1CarGeometry(INFLATED));
+
 describe("CAR_VISUAL_SCALE: drawn size and true size are separate numbers", () => {
   it("inflates the DRAWN geometry and nothing else", () => {
-    // the scale is a presentation choice, but it is not a licence to draw a bus
-    expect(CAR_VISUAL_SCALE).toBeGreaterThan(1);
+    // the scale is a presentation choice, but it is not a licence to draw a bus, nor to
+    // draw a car smaller than it is
+    expect(CAR_VISUAL_SCALE).toBeGreaterThanOrEqual(1);
     expect(CAR_VISUAL_SCALE).toBeLessThanOrEqual(1.5);
 
-    // the drawn car is bigger than the true car, in both plan dimensions
-    expect(drawn.length).toBeGreaterThan(CAR_RENDER_LENGTH_M);
-    expect(drawn.width).toBeGreaterThan(CAR_RENDER_WIDTH_M);
+    // whatever the scale, the drawn car IS the true car times it, in both plan dimensions
     expect(drawn.length).toBeCloseTo(CAR.lengthM * CAR_VISUAL_SCALE, 6);
     expect(drawn.width).toBeCloseTo(CAR.widthM * CAR_VISUAL_SCALE, 6);
+    expect(inflated.length).toBeCloseTo(CAR.lengthM * INFLATED, 6);
+    expect(inflated.width).toBeCloseTo(CAR.widthM * INFLATED, 6);
   });
 
   it("leaves the TRUE metres alone, so spacing logic is unchanged", () => {
@@ -56,9 +65,9 @@ describe("CAR_VISUAL_SCALE: drawn size and true size are separate numbers", () =
     expect(CAR_RENDER_WIDTH_M).toBe(CAR.widthM);
     expect(CAR_RENDER_LENGTH_M).toBeCloseTo(5.6, 12);
     expect(CAR_RENDER_WIDTH_M).toBeCloseTo(2.0, 12);
-    // and they must NOT have been quietly set to the drawn size
-    expect(CAR_RENDER_LENGTH_M).not.toBeCloseTo(drawn.length, 3);
-    expect(CAR_RENDER_WIDTH_M).not.toBeCloseTo(drawn.width, 3);
+    // and they must NOT follow the drawn size when that is raised
+    expect(CAR_RENDER_LENGTH_M).not.toBeCloseTo(inflated.length, 3);
+    expect(CAR_RENDER_WIDTH_M).not.toBeCloseTo(inflated.width, 3);
   });
 
   it("scales UNIFORMLY: the silhouette is the same shape, just larger", () => {
@@ -109,17 +118,21 @@ describe("the contact patch stays on the road at any visual scale", () => {
   });
 
   it("catches the sink a stale, unscaled lift would cause", () => {
-    // the failure mode this test exists for: lift the car by the TRUE-SIZE geometry's
-    // extent while drawing the SCALED geometry
+    // The failure mode this test exists for: lift the car by the TRUE-SIZE geometry's
+    // extent while drawing the SCALED geometry. Exercised at INFLATED rather than at the
+    // shipped scale, because at 1.0 there is no sink to catch and the test would pass by
+    // meaning nothing -- it has to keep failing for whoever raises the scale next.
     const staleLift = carInstanceY(0, trueSize.min.y);
-    const sunkBy = staleLift + drawn.min.y;     // where the scaled tyres would end up
+    const sunkBy = staleLift + inflated.min.y;  // where the scaled tyres would end up
     expect(sunkBy).toBeCloseTo(               // float32 vertices: 6 places is the floor
-      CAR_GROUND_CLEARANCE_M - (CAR_VISUAL_SCALE - 1) * -trueSize.min.y, 6,
+      CAR_GROUND_CLEARANCE_M - (INFLATED - 1) * -trueSize.min.y, 6,
     );
     expect(sunkBy).toBeLessThan(0);             // i.e. underground
 
-    // what the render path actually does instead
+    // what the render path actually does instead, at any scale
     expect(carInstanceY(0, drawn.min.y) + drawn.min.y).toBeCloseTo(CAR_GROUND_CLEARANCE_M, 12);
+    expect(carInstanceY(0, inflated.min.y) + inflated.min.y)
+      .toBeCloseTo(CAR_GROUND_CLEARANCE_M, 12);
   });
 
   it("keeps the focus ghost's underside on the car's contact patch", () => {

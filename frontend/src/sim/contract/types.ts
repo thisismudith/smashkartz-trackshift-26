@@ -219,13 +219,38 @@ export interface TrackModel {
     entryStation: number | null;
     exitStation: number | null;
     mergeStation: number | null;
+    /** Lateral of the BOX LOOP, i.e. the stopped car's own offset from the ring. It
+     * belongs to `loopStation`, NOT to `exitStation`, and the two differ: at Silverstone
+     * the loop measures -34.95 m while the exit road at its own station is -19.33 m.
+     * Pairing this with `exitStation` put the pit-lane start 15.6 m off the pit road. */
     loopLateral: number | null;
+    /** Lateral of the pit road AT `exitStation` -- the one to place a car released from
+     * the lane at. Null on an artifact built before the field was carried through. */
+    exitLateral: number | null;
   };
   /** The pit lane as SEPARATE roads (entry, exit) in the ring's own frame, metres.
    * Never one stitched path: the two are different pieces of tarmac and joining
-   * them folds the ribbon back on itself. Null when too few pit laps to trace. */
-  pitLanePath: { role: string; x: Float32Array; y: Float32Array; z: Float32Array }[] | null;
-  grid: { order: string[]; pitchMetres: number; unplaced?: string[] | null };
+   * them folds the ribbon back on itself. Null when too few pit laps to trace.
+   *
+   * `z` is the FEED's own elevation channel, which is held flat through most of the
+   * lane (NaN where the producer refused to publish a held value as a measurement).
+   * `surfaceZ` is the circuit MODEL's own drive surface under the same vertex, present
+   * only for a circuit that carries a baked `surface`, NaN per vertex where the model
+   * has no drive surface there. Prefer surfaceZ: see pitPathElevation. */
+  pitLanePath: {
+    role: string; x: Float32Array; y: Float32Array; z: Float32Array;
+    surfaceZ: Float32Array | null;
+  }[] | null;
+  grid: {
+    order: string[];
+    pitchMetres: number;
+    unplaced?: string[] | null;
+    /** Signed metres from the timing line to the FRONT BOX along travel, as fitted from
+     * the cars' own stationary lap-1 stations. Null when this session's cars do not
+     * resolve a box lattice -- then, and only then, pole falls back to one pitch behind
+     * the line. Read it through gridSlotStation(), never directly. */
+    anchorMetres: number | null;
+  };
   referenceProfile: { binMetres: number; speedKph: Float32Array; gear: Uint8Array };
   /** The drive surface baked from a real circuit model, when this artifact carries one.
    * Undefined on a TrackModel built from a pre-schemaVersion-2 artifact, null when the
@@ -259,6 +284,16 @@ export interface RaceTimeline {
   totalLaps: number | null;
   /** The session-time domain this timeline covers, seconds. */
   duration: number;
+  /**
+   * Seconds this timeline's clock is shifted from ABSOLUTE session time.
+   *
+   * A replay starts at 0, not at the feed's own timestamp, so `sampleAt(0)` is
+   * the race start and not second zero of the session. Anything carrying an
+   * absolute timestamp -- the evidence reel's overtake moments come straight out
+   * of the telemetry parquet, which is absolute -- must subtract this before
+   * seeking. A generated race has no shift and reports 0.
+   */
+  clockOffsetS?: number;
   sampleAt(sessionTime: number, withGaps?: boolean): Map<string, CarState>;
   events(): RaceEvent[];
   neutralisations(): NeutralisationInterval[];

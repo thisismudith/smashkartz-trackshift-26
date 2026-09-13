@@ -4,7 +4,9 @@ import { describe, expect, it } from "vitest";
 import { SAMPLE_BYTES } from "../data/codec";
 import type { RawLapEntry, RawSessionManifest, RawTrackModel } from "../data/manifest";
 import type { GridSlot } from "../data/manifest";
-import { gridSlotsOf, halfWidthAt, measuredLateralRoomM, parseTrackModel } from "../data/manifest";
+import {
+  gridSlotStation, gridSlotsOf, halfWidthAt, measuredLateralRoomM, parseTrackModel,
+} from "../data/manifest";
 import type { CarState, TrackModel } from "../contract/types";
 import { CAR_RENDER_WIDTH_M } from "../render/presentation";
 import { ReplayTimeline } from "./timeline";
@@ -27,8 +29,8 @@ function makeTrack(): TrackModel {
     halfWidth: new Float32Array([6]), widthBinMetres: TRACK_LENGTH,
     timingLines: { sf: 0, s1: 333, s2: 666 },
     corners: [],
-    pitLane: { entryStation: null, exitStation: null, mergeStation: null, loopLateral: null },
-    grid: { order: ["AAA", "BBB"], pitchMetres: 8 },
+    pitLane: { entryStation: null, exitStation: null, mergeStation: null, loopLateral: null, exitLateral: null },
+    grid: { order: ["AAA", "BBB"], pitchMetres: 8, anchorMetres: null },
     pitLanePath: null,
     referenceProfile: { binMetres: TRACK_LENGTH, speedKph: new Float32Array([250]), gear: new Uint8Array([6]) },
   };
@@ -403,7 +405,7 @@ function buildRaceManifest(): { manifest: RawSessionManifest; bin: ArrayBuffer; 
 }
 
 function raceTrack(): TrackModel {
-  return { ...makeTrack(), grid: { order: [...RACE_DRIVERS], pitchMetres: 8 } };
+  return { ...makeTrack(), grid: { order: [...RACE_DRIVERS], pitchMetres: 8, anchorMetres: null } };
 }
 
 /** Measured distance covered, in laps, as the board itself reports it. `lapProgress` is
@@ -1290,4 +1292,365 @@ describe.skipIf(allPacks.length === 0)("placements against the real 2026 packs",
       expect(placed).toBeGreaterThan(100);
     }
   }, 300_000);
+});
+
+/* ===========================================================================
+ * A car released from the pit lane
+ * ======================================================================== */
+
+/** A ring with a measured grid anchor and a pit lane whose exit road and box loop sit
+ * at DIFFERENT laterals, which is the shape the real artifacts have. */
+function pitStartTrack(): TrackModel {
+  const t = makeTrack();
+  return {
+    ...t,
+    grid: { order: ["AAA", "BBB"], pitchMetres: 8, unplaced: [], anchorMetres: 110 },
+    pitLane: {
+      entryStation: 400, exitStation: 300, mergeStation: 500,
+      loopLateral: -34.95, exitLateral: -19.33,
+    },
+  };
+}
+
+/** AAA and BBB start on the grid; CCC is released from the pit lane -- its lap 1 carries
+ * a `pout`, and its telemetry is live and ALREADY PAST THE LINE from t=0, which is what
+ * the real pack looks like (ALO at ring station 351 m while the grid sits at 110 m). */
+function pitStartManifest(): { manifest: RawSessionManifest; bin: ArrayBuffer } {
+  const { manifest, bin } = buildManifest();
+  const lane = new ArrayBuffer(4 * SAMPLE_BYTES);
+  const view = new DataView(lane);
+  for (let i = 0; i < 4; i++) {
+    const o = i * SAMPLE_BYTES;
+    view.setUint16(o, i === 0 ? 0 : 1000, true);
+    view.setFloat32(o + 2, 300 + i, true);       // well ahead of the grid, in the lane
+    view.setInt16(o + 6, -1897, true);           // -18.97 m: on the pit road
+    view.setUint16(o + 8, i === 1 ? 0 : 8, true); // stops at the pit-exit light
+    view.setUint8(o + 10, 1);
+    view.setUint8(o + 11, 0);
+  }
+  const merged = new Uint8Array(bin.byteLength + lane.byteLength);
+  merged.set(new Uint8Array(bin), 0);
+  merged.set(new Uint8Array(lane), bin.byteLength);
+  manifest.drivers.push({
+    driver: "CCC", team: "Team C",
+    laps: [{
+      lap: 1, byteOffset: bin.byteLength, sampleCount: 4,
+      positionFrame: "A", lST: SESSION_ABSOLUTE_OFFSET,
+      sesT: SESSION_ABSOLUTE_OFFSET + 120, time: 120,
+      pin: null, pout: SESSION_ABSOLUTE_OFFSET + 10,
+      status: "1", pos: null, compound: "MEDIUM", stint: 1, life: 1, fresh: true,
+      iacc: true, del: false, ff1G: false, energy: null,
+    }],
+  } as RawSessionManifest["drivers"][number]);
+  return { manifest, bin: merged.buffer };
+}
+
+describe("a car released from the pit lane", () => {
+  const track = pitStartTrack();
+  const { manifest, bin } = pitStartManifest();
+  const timeline = new ReplayTimeline(manifest, track, bin);
+
+  it("does not lead the race just because the pit lane projects further down the ring", () => {
+    // Measured at the 2026 British GP: ALO sits in the lane at ring station 351.2 m
+    // while the stationary field is on its boxes at 110.8 m and behind, so ranking the
+    // two on one axis showed the one car that had not started the race as P1.
+    const s = timeline.sampleAt(0);
+    expect(s.get("CCC")!.status).toBe("pit");
+    expect(s.get("CCC")!.position).toBe(s.size);
+    expect(s.get("AAA")!.position).toBe(1);
+  });
+
+  it("keeps drawing it at its own measured position while it is held there", () => {
+    // The ranking is a rule; the POSITION is a measurement and stays one.
+    const car = timeline.sampleAt(0).get("CCC")!;
+    expect(car.positionProvenance).toBe("OBSERVED");
+    expect(car.stationM).toBeCloseTo(300, 0);
+    expect(car.lateralM).toBeCloseTo(-18.97, 2);
+  });
+
+  it("is never snapped onto a grid box when it stops at the pit-exit light", () => {
+    // The lap-1 stationary hold used to fire on ANY car below 1 km/h and index straight
+    // into gridOrder, which for a pit starter is a slot past the last published box: a
+    // phantom 22nd grid box, on the racing line, that ALO then sat in for the whole race.
+    for (let t = 0; t <= 3; t += 0.25) {
+      const car = timeline.sampleAt(t, false).get("CCC")!;
+      expect(car.status, `t=${t}`).not.toBe("grid");
+      expect(Math.abs(car.lateralM), `t=${t}`).toBeGreaterThan(5);
+    }
+  });
+
+  it("rejoins the race on its own measured progress once it is released", () => {
+    // `pout` is the measurement that says the hold is over. After it the car is ranked
+    // by where it actually is, like everyone else.
+    const before = timeline.sampleAt(9, false).get("CCC")!;
+    const after = timeline.sampleAt(11, false).get("CCC")!;
+    expect(before.position).toBe(3);
+    expect(after.position).toBeLessThan(3);
+  });
+
+  it("places a pit starter at the pit ROAD before its telemetry begins, not at the box", () => {
+    // exitStation paired with loopLateral put the car 15.6 m beyond the pit road at
+    // Silverstone, because loopLateral is the offset of the BOX and belongs to a
+    // different station.
+    const early = new ReplayTimeline(
+      manifest, track,
+      bin,
+    );
+    // drive the pre-telemetry branch by asking before this driver's lap 1 exists
+    const solo = { ...manifest, drivers: manifest.drivers.map((d) => (
+      d.driver === "CCC" ? { ...d, laps: d.laps.map((l) => ({ ...l, lST: l.lST! + 50 })) } : d
+    )) };
+    const tl = new ReplayTimeline(solo as RawSessionManifest, track, bin);
+    const car = tl.sampleAt(0, false).get("CCC")!;
+    expect(car.status).toBe("pit");
+    expect(car.positionProvenance).toBe("RULE");
+    expect(car.stationM).toBeCloseTo(300, 6);
+    expect(car.lateralM).toBeCloseTo(-19.33, 6);
+    expect(early.duration).toBeGreaterThan(0);
+  });
+});
+
+describe("the grid and the parked queue sit in the same measured boxes", () => {
+  it("draws the grid from the anchor, not from one pitch behind the line", () => {
+    const track = pitStartTrack();
+    const { manifest, bin } = pitStartManifest();
+    // Push the two grid cars' lap 1 out of reach so they take the pre-launch placement.
+    // CCC keeps the original lST, which is what the race-start normalisation is measured
+    // from -- shifting every driver would simply move t=0 with them.
+    const later = { ...manifest, drivers: manifest.drivers.map((d) => (
+      d.driver === "CCC" ? d : { ...d, laps: d.laps.map((l) => ({ ...l, lST: l.lST! + 50 })) }
+    )) };
+    const tl = new ReplayTimeline(later as RawSessionManifest, track, bin);
+    const s = tl.sampleAt(0, false);
+    expect(s.get("AAA")!.status).toBe("grid");
+    expect(s.get("AAA")!.stationM).toBeCloseTo(110, 6);
+    expect(s.get("BBB")!.stationM).toBeCloseTo(102, 6);
+  });
+
+  it("parks finishers in the boxes behind pole rather than behind the timing line", () => {
+    const track = pitStartTrack();
+    const { manifest, bin } = buildManifest();
+    const tl = new ReplayTimeline(manifest, track, bin);
+    const s = tl.sampleAt(tl.duration, false);
+    const stations = [...s.values()]
+      .filter((c) => c.status === "finished" || c.status === "retired")
+      .map((c) => c.stationM);
+    expect(stations.length).toBeGreaterThan(0);
+    for (const st of stations) {
+      // within the grid's own 22-box span measured back from the anchor
+      const back = ((110 - st) % TRACK_LENGTH + TRACK_LENGTH) % TRACK_LENGTH;
+      expect(back).toBeGreaterThan(0);
+      expect(back).toBeLessThanOrEqual(22 * 8);
+    }
+  });
+});
+
+describe.skipIf(allPacks.length === 0)("the drawn grid is the grid the cars were on", () => {
+  /** Each driver's own lap-1 stationary station, decoded straight out of the pack --
+   * the measurement the drawn box has to agree with. Taken from the leading, not-yet-
+   * launched run, the same window scripts/simdata/track.py's _grid_box_sample uses:
+   * a zero reported after the car has gone is a stop somewhere down the lap, not a box. */
+  function stationaryStations(pack: PackFiles): Map<string, number> {
+    const out = new Map<string, number>();
+    const view = new DataView(pack.bin);
+    for (const d of pack.manifest.drivers) {
+      const lap1 = d.laps.find((l) => l.lap === 1);
+      if (!lap1 || !lap1.sampleCount || lap1.pout !== null) continue;
+      let idx = 0;
+      for (let i = 0; i < Math.min(lap1.sampleCount, 2000); i++) {
+        const o = lap1.byteOffset + i * SAMPLE_BYTES;
+        const kph = view.getUint16(o + 8, true);
+        if (kph >= 10) break;
+        if (kph === 0) { idx = i; break; }
+      }
+      const st = view.getFloat32(lap1.byteOffset + idx * SAMPLE_BYTES + 2, true);
+      if (Number.isFinite(st)) out.set(d.driver, st);
+    }
+    return out;
+  }
+
+  it("places every box within a car length or two of where that car actually stood", () => {
+    // THE REGRESSION THIS EXISTS FOR. Pole was drawn one grid pitch behind the timing
+    // line, which is not where a grid is: measured across the 2026 packs the front box
+    // sits -53.3 m (Austria) to +288.1 m (Monza) from the line. At Silverstone the error
+    // was 118.8 m, and every one of the 21 cars' first lap-1 samples came out 109.5-122.6 m
+    // ahead of the slot it was drawn in -- which on the real circuit model laid two thirds
+    // of the field around the exit of Club instead of along the straight.
+    //
+    // The residual this allows is the grid PITCH, which is still the 8.0 m rule while the
+    // fitted lattice measures 7.6-8.2 m; over 21 boxes that accumulates. Measured across
+    // the nine anchored packs after the fix: worst 9.75 m, median 0.68-5.36 m per circuit.
+    const lines: string[] = [];
+    let anchored = 0;
+    for (const pack of allPacks) {
+      if (pack.session !== "Race") continue;
+      if (pack.track.grid.anchorMetres === null) continue;   // no lattice, no claim
+      anchored++;
+      const stationary = stationaryStations(pack);
+      const tl = new ReplayTimeline(pack.manifest, pack.track, pack.bin);
+      const L = pack.track.lengthMetres;
+      let worst = 0, worstWho = "-";
+      const drawn = tl.sampleAt(0, false);
+      for (const [i, driver] of pack.track.grid.order.entries()) {
+        const measured = stationary.get(driver);
+        const car = drawn.get(driver);
+        if (measured === undefined || !car || car.status !== "grid") continue;
+        const err = Math.abs((((gridSlotStation(pack.track, i) - measured) % L) + L * 1.5) % L - L / 2);
+        if (err > worst) { worst = err; worstWho = driver; }
+      }
+      lines.push(`${pack.slug}: worst box error ${worst.toFixed(2)} m (${worstWho})`);
+      expect(worst, `${pack.slug} (${worstWho})`).toBeLessThan(12);
+    }
+    console.log(lines.join("\n"));
+    expect(anchored).toBeGreaterThanOrEqual(8);
+  }, 120_000);
+
+  it("hands the lateral back to the feed once the field is past the first corner", () => {
+    // THE REGRESSION THIS EXISTS FOR. The launch stagger is eased out over the run to
+    // turn 1; the arithmetic that decided "how far is this car from its box" was a SIGNED
+    // difference clamped at zero, which maps every car more than half a lap from its box
+    // back onto "still in its box". So the blend never switched off: measured at the 2026
+    // British GP, the whole field was drawn 2.0-9.0 m off the racing line for the WHOLE of
+    // lap 1 (mean 5.67 m at t=60 s) while the feed itself was reporting 0.03-0.15 m.
+    //
+    // The check is deliberately about the FIELD, not one car: a stagger that has failed to
+    // decay moves everybody, and a single car legitimately running wide does not.
+    // The MEDIAN, not the mean or the max: a stagger that has failed to decay moves every
+    // car at once, so it moves the median. One car legitimately tens of metres off the
+    // racing line does not -- and there are such cars, because a car driving down the pit
+    // ENTRY road before its own recorded `pin` timestamp is still status "track" while its
+    // station/lateral are honest pit-lane coordinates. That is a separate, pre-existing
+    // defect; this test must fail for the stagger and not for that.
+    let checked = 0;
+    for (const pack of allPacks) {
+      const tl = new ReplayTimeline(pack.manifest, pack.track, pack.bin);
+      for (const t of [45, 60, 90, 150]) {
+        if (t > tl.duration) continue;
+        const running = [...tl.sampleAt(t, false).values()].filter((c) => c.status === "track");
+        if (running.length < 5) continue;
+        checked++;
+        const abs = running.map((c) => Math.abs(c.lateralM))
+          .filter(Number.isFinite).sort((a, b) => a - b);
+        const median = abs[abs.length >> 1];
+        // measured at the 2026 British GP: 5.67 m with the stagger stuck on, 0.06 m without
+        expect(median, `${pack.slug}/${pack.session} median |lateral| at t=${t}`)
+          .toBeLessThan(1);
+      }
+    }
+    expect(checked).toBeGreaterThan(10);
+  }, 120_000);
+
+  it("still staggers the field at the moment it launches", () => {
+    // the other half: the fix above must not simply switch the stagger off. At t=0 the
+    // cars are in their boxes and the columns are metres apart.
+    const pack = allPacks.find((p) => p.slug === "british-grand-prix" && p.session === "Race");
+    if (!pack) return;
+    const tl = new ReplayTimeline(pack.manifest, pack.track, pack.bin);
+    const at = (t: number) => [...tl.sampleAt(t, false).values()]
+      .filter((c) => c.status === "grid" || c.status === "track")
+      .map((c) => Math.abs(c.lateralM));
+    const start = at(0);
+    expect(Math.max(...start)).toBeGreaterThan(4);
+    const later = at(60);
+    expect(Math.max(...later)).toBeLessThan(1);
+  }, 120_000);
+
+  it("calls a car in the pit lane a pit car, from the entry and not from the clock", () => {
+    // `pin` is the LANE's timing point, not its entrance. Measured over all 52 in-laps of
+    // the 2026 British GP race: the car is already more than 15 m off the ring 3.0-4.9 s
+    // BEFORE its own `pin` (median 3.7 s), at station 5326-5336 against a published pit
+    // entry of 5322.1 -- every lap, no exceptions. For those seconds it was drawn at
+    // honest pit-lane coordinates while being called an on-circuit car: it took the racing
+    // surface's elevation instead of the lane's, declutterLanes was free to shove it
+    // sideways, and it read as a car that had left the track.
+    //
+    // Asserted where the defect lives -- the seconds before `pin` on a lap that pits --
+    // rather than as a global outlier bound, so a circuit whose position feed is corrupt
+    // elsewhere (Hungary's stale hold, Monaco's sentinel) cannot mask or fake it.
+    let windows = 0, offLine = 0;
+    for (const pack of allPacks) {
+      if (pack.track.pitLane.entryStation === null) continue;
+      const tl = new ReplayTimeline(pack.manifest, pack.track, pack.bin);
+      const base = Math.min(...pack.manifest.drivers.flatMap(
+        (d) => d.laps.map((l) => (l.lST === null ? Infinity : l.lST))));
+      for (const d of pack.manifest.drivers) {
+        for (const lap of d.laps) {
+          if (lap.pin === null) continue;
+          const pin = lap.pin - base;
+          windows++;
+          for (let t = pin - 4; t <= pin; t += 0.5) {
+            if (t < 0 || t > tl.duration) continue;
+            const car = tl.sampleAt(t, false).get(d.driver);
+            if (!car || !Number.isFinite(car.lateralM)) continue;
+            // more than 15 m off the racing line is not a place a car on the circuit is;
+            // the lane is 19.3-35.0 m off at Silverstone
+            if (Math.abs(car.lateralM) > 15) {
+              offLine++;
+              expect(car.status, `${pack.slug}/${pack.session} ${d.driver} lap ${lap.lap}`
+                + ` at t=${t.toFixed(1)} is ${Math.abs(car.lateralM).toFixed(1)} m off the line`)
+                .toBe("pit");
+            }
+          }
+        }
+      }
+    }
+    // the window has to actually contain the case, or this asserts nothing
+    expect(windows).toBeGreaterThan(100);
+    expect(offLine).toBeGreaterThan(50);
+  }, 300_000);
+
+  it("never leaves a pit-lane starter leading the race it has not started", () => {
+    // ALO at the 2026 British GP: its lap 1 is already rolling at t=0, so it took the
+    // measured branch and its pit-lane station (351 m, projected onto the racing ring)
+    // outranked a whole field still standing on its boxes.
+    let checked = 0;
+    for (const pack of allPacks) {
+      const starters = new Set(
+        pack.manifest.drivers
+          .filter((d) => d.laps.find((l) => l.lap === 1)?.pout != null)
+          .map((d) => d.driver),
+      );
+      if (!starters.size) continue;
+      const tl = new ReplayTimeline(pack.manifest, pack.track, pack.bin);
+      for (let t = 0; t <= 5; t += 0.5) {
+        const s = tl.sampleAt(t, false);
+        const onGrid = [...s.values()].filter((c) => c.status === "grid").length;
+        if (onGrid === 0) continue;          // the field has launched; ranking is measured
+        for (const driver of starters) {
+          const car = s.get(driver);
+          if (!car) continue;
+          checked++;
+          expect(car.position, `${pack.slug}/${pack.session} ${driver} t=${t}`)
+            .toBeGreaterThan(onGrid);
+        }
+      }
+    }
+    expect(checked).toBeGreaterThan(20);
+  }, 120_000);
+
+  it("never parks a pit-lane starter in a grid box", () => {
+    // The lap-1 stationary hold indexed straight into gridOrder, which for a pit starter
+    // is a slot PAST the last published box: a phantom extra grid box, on the racing
+    // line, that the car then sat in for the rest of the race.
+    let checked = 0;
+    for (const pack of allPacks) {
+      const starters = new Set(
+        pack.manifest.drivers
+          .filter((d) => d.laps.find((l) => l.lap === 1)?.pout != null)
+          .map((d) => d.driver),
+      );
+      if (!starters.size) continue;
+      const tl = new ReplayTimeline(pack.manifest, pack.track, pack.bin);
+      for (let t = 0; t <= 120; t += 1) {
+        const s = tl.sampleAt(t, false);
+        for (const driver of starters) {
+          const car = s.get(driver);
+          if (!car) continue;
+          checked++;
+          expect(car.status, `${pack.slug}/${pack.session} ${driver} t=${t}`).not.toBe("grid");
+        }
+      }
+    }
+    expect(checked).toBeGreaterThan(100);
+  }, 120_000);
 });

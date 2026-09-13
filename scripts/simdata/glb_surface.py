@@ -1389,6 +1389,44 @@ def bake_surface(index: TriangleIndex, ring: Ring, fit: Fit, *,
                        primitives=dict(sorted(labels.items(), key=lambda kv: -kv[1])))
 
 
+@dataclass
+class PathBake:
+    """What the model measured under one off-ring polyline (today: a pit-lane segment)."""
+    z_m: np.ndarray          # (n,) telemetry-frame height, NaN where nothing was found
+    valid: np.ndarray        # (n,) bool
+    prim: np.ndarray         # (n,) int32, -1 where invalid
+    coverage: float
+
+
+def bake_path_z(index: TriangleIndex, fit: Fit, x, y, expected_z) -> PathBake:
+    """Height of the model's drive surface under an ARBITRARY telemetry-frame polyline.
+
+    `bake_surface` answers this for the ring, and only for the ring: everything it
+    computes is per-station and one-per-ring-vertex. A pit lane is a different road in a
+    different place, and its height is a different measurement -- which is the whole
+    point, because taking it from the ring is exactly the bug this exists to remove.
+    Measured at Silverstone: the model's pit road runs 1.2-1.4 m ABOVE the racing line
+    beside the boxes and 3.2-3.4 m BELOW it at the pit exit, so a pit lane drawn at ring
+    height (and a car drawn on it) is out by metres in both directions along one lane.
+
+    `expected_z` is the telemetry-frame height to start the hysteresis walk from, per
+    point -- the adjacent racing surface is the only prior available and is what the
+    renderer already drapes the lane onto, so the walk starts from today's answer and
+    moves off it only where the model actually has a different road. Points the walk
+    finds nothing under stay NaN: a pit lane that leaves the modelled ground (Shanghai's
+    export has no pit surface at all) reports absence rather than a fabricated height.
+    """
+    x = np.asarray(x, dtype=np.float64)
+    y = np.asarray(y, dtype=np.float64)
+    expected_z = np.asarray(expected_z, dtype=np.float64)
+    wx, wy_expected, wz = fit.to_world(x, y, np.nan_to_num(expected_z))
+    sample = sample_with_hysteresis(index, wx, wz, wy_expected)
+    z_m = np.full(len(x), np.nan)
+    z_m[sample.valid] = fit.telemetry_z(sample.world_y[sample.valid])
+    return PathBake(z_m=z_m, valid=sample.valid, prim=sample.prim,
+                    coverage=float(sample.valid.mean()) if len(x) else 0.0)
+
+
 def surface_block(bake: SurfaceBake, profile: str) -> dict:
     """The cm/permille JSON block a track artifact would carry.
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { TrackModel } from "../contract/types";
-import { buildGate, buildOvertakeLayer, buildZoneBand, overtakeGeometryFromRules } from "./overtakeZones";
+import { buildGate, buildGateMarker, buildOvertakeLayer, buildZoneBand, overtakeGeometryFromRules } from "./overtakeZones";
 
 /** A closed square-ish ring so a gate has a real heading to be perpendicular to. */
 function ringTrack(lengthMetres = 4000, n = 400): TrackModel {
@@ -19,9 +19,9 @@ function ringTrack(lengthMetres = 4000, n = 400): TrackModel {
     x, y, z,
     halfWidth: new Float32Array([6]), widthBinMetres: lengthMetres,
     timingLines: { sf: 0, s1: null, s2: null },
-    corners: [], grid: { order: [], pitchMetres: 8 },
+    corners: [], grid: { order: [], pitchMetres: 8, anchorMetres: null },
     pitLanePath: null,
-    pitLane: { entryStation: null, exitStation: null, mergeStation: null, loopLateral: null },
+    pitLane: { entryStation: null, exitStation: null, mergeStation: null, loopLateral: null, exitLateral: null },
     referenceProfile: {
       binMetres: 10, speedKph: new Float32Array(400).fill(200), gear: new Uint8Array(400).fill(6),
     },
@@ -127,7 +127,8 @@ describe("buildOvertakeLayer", () => {
   it("draws the detection line solid and each activation line dashed", () => {
     const layer = buildOvertakeLayer(ringTrack(), {
       detectionM: 3000, detectionSource: "DERIVED_TELEMETRY",
-      zones: [{ zone: 1, activationM: 1000, endM: 1500, source: "PROXY_HISTORICAL_DRS" }],
+      zones: [{ zone: 1, label: "A1", detectionM: 3000, detectionSource: "DERIVED_TELEMETRY",
+                activationM: 1000, endM: 1500, source: "PROXY_HISTORICAL_DRS" }],
     });
     expect(layer).not.toBeNull();
     const names = layer!.children.map((c) => c.name);
@@ -149,8 +150,82 @@ describe("buildOvertakeLayer", () => {
   it("draws the detection line even when no zone is sourced", () => {
     const layer = buildOvertakeLayer(ringTrack(), {
       detectionM: 3000, detectionSource: "DERIVED_TELEMETRY",
-      zones: [{ zone: 1, activationM: null, endM: null, source: null }],
+      zones: [{ zone: 1, label: "A1", detectionM: 3000, detectionSource: "DERIVED_TELEMETRY",
+                activationM: null, endM: null, source: null }],
     });
     expect(layer!.children.map((c) => c.name)).toEqual(["detection-line"]);
+  });
+});
+
+
+describe("buildGateMarker", () => {
+  it("draws a band plus two posts for a posted gate", () => {
+    const marker = buildGateMarker(ringTrack(), 1000, {
+      colour: "#EFEFEF", opacity: 0.75, posts: true,
+    });
+    expect(marker).not.toBeNull();
+    // one band mesh + two post lines
+    expect(marker!.children).toHaveLength(3);
+  });
+
+  it("draws the band alone when posts are off, so a proxy carries less weight", () => {
+    const marker = buildGateMarker(ringTrack(), 1000, {
+      colour: "#DA291C", opacity: 0.45, posts: false,
+    });
+    expect(marker!.children).toHaveLength(1);
+  });
+
+  it("makes the band wide enough along the track to read at racing speed", () => {
+    // A hairline is one pixel for one frame from a chase camera; the band has
+    // real along-track extent, which is the whole point of it.
+    const marker = buildGateMarker(ringTrack(), 1000, {
+      colour: "#EFEFEF", opacity: 0.75, posts: false,
+    })!;
+    const band = marker.children[0] as import("three").Mesh;
+    band.geometry.computeBoundingBox();
+    const box = band.geometry.boundingBox!;
+    const extent = Math.max(box.max.x - box.min.x, box.max.z - box.min.z);
+    expect(extent).toBeGreaterThan(4);
+  });
+});
+
+describe("overtakeGeometryFromRules, against the shape the service really sends", () => {
+  // config/rules/2026/*.yaml carries the Detection Line INSIDE each zone, labels
+  // zones "A1".."A4", and leaves zone_end_m null and UNVERIFIED on every 2026
+  // event. Reading detection_line_m at the top of the overtake block found
+  // nothing on every circuit, so the panel said "not sourced" for four lines
+  // that are measured and in the file.
+  const REAL = {
+    overtake: {
+      detection_gap_s: { value: 1.0 },
+      enabled: true,
+      zones: [
+        { zone: "A1", name: "Overtake A1",
+          detection_line_m: { value: 5789.3, value_source: "DERIVED_TELEMETRY" },
+          activation_line_m: { value: 5739.3, value_source: "DERIVED_TELEMETRY" },
+          zone_end_m: { value: null, value_source: "UNVERIFIED" } },
+        { zone: "A2", name: "Overtake A2",
+          detection_line_m: { value: 1338.2, value_source: "DERIVED_TELEMETRY" },
+          activation_line_m: { value: 1278.2, value_source: "DERIVED_TELEMETRY" },
+          zone_end_m: { value: null, value_source: "UNVERIFIED" } },
+      ],
+    },
+  };
+
+  it("finds the per-zone Detection Line instead of reporting none", () => {
+    const geometry = overtakeGeometryFromRules(REAL)!;
+    expect(geometry.detectionM).toBe(5789.3);
+    expect(geometry.detectionSource).toBe("DERIVED_TELEMETRY");
+    expect(geometry.zones.map((z) => z.detectionM)).toEqual([5789.3, 1338.2]);
+  });
+
+  it("keeps the config's own zone labels rather than renumbering them 1..n", () => {
+    expect(overtakeGeometryFromRules(REAL)!.zones.map((z) => z.label)).toEqual(["A1", "A2"]);
+  });
+
+  it("keeps a sourced activation line even though the zone end is unsourced", () => {
+    const zones = overtakeGeometryFromRules(REAL)!.zones;
+    expect(zones.map((z) => z.activationM)).toEqual([5739.3, 1278.2]);
+    expect(zones.every((z) => z.endM === null)).toBe(true);
   });
 });

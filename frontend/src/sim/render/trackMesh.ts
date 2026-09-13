@@ -250,6 +250,18 @@ export const PIT_DRAPE_MAX_M = 60;
  * the ribbon floating by that much on top of its own 0.200 m float. */
 export const PIT_SURFACE_DEPTH_M = 0.02;
 
+/**
+ * How far from the traced pit lane a car may be and still be placed ON it, metres.
+ *
+ * The lane is traced from real pit in/out telemetry and the BOX ITSELF IS NOT TRACED --
+ * the car is stopped there, so no run crosses it -- which leaves a real gap between the
+ * entry and exit polylines. Half the drawn ribbon's own width (the ribbon is built at
+ * the same PIT_WIDTH_M) would refuse a car standing beside the traced line in that gap;
+ * 25 m covers the gap and the box row without reaching the racing surface, which at
+ * Silverstone is 19-35 m away on the other side of the pit wall.
+ */
+export const PIT_LANE_SNAP_M = 25;
+
 export interface PitPathElevation {
   /** Drawn elevation per vertex, track-frame metres. */
   z: Float32Array;
@@ -292,7 +304,8 @@ export interface PitPathElevation {
  * other.
  */
 export function pitPathElevation(
-  track: TrackModel, path: { x: Float32Array; y: Float32Array },
+  track: TrackModel,
+  path: { x: Float32Array; y: Float32Array; surfaceZ?: Float32Array | null },
 ): PitPathElevation | null {
   const n = path.x.length;
   const rn = track.x.length;
@@ -333,7 +346,87 @@ export function pitPathElevation(
   }
   for (let k = prev + 1; k < n; k++) z[k] = z[prev];
 
+  // ...and where the circuit MODEL has been measured under this vertex, that beats the
+  // drape outright: it is the lane's own height instead of the height of the nearest
+  // piece of a different road. Measured at Silverstone the two differ by +1.56 m beside
+  // the boxes and -3.37 m at the pit exit, so the drape drew the lane -- and every car
+  // on it -- metres off the tarmac in both directions along one lane. A vertex the bake
+  // found nothing under keeps the drape, which is why this runs last rather than
+  // instead.
+  const baked = path.surfaceZ;
+  if (baked && baked.length === n) {
+    for (let i = 0; i < n; i++) if (Number.isFinite(baked[i])) z[i] = baked[i];
+  }
+
   return { z, ringDistance, anchored };
+}
+
+/**
+ * Height of the PIT LANE under a plan position, track-frame metres, or null when that
+ * position is not on a modelled piece of lane.
+ *
+ * For placing a CAR that is in the pit lane. Everywhere else the renderer takes a car's
+ * elevation from the ring at its station (carRenderPos), which is right to within the
+ * road's own camber for the +-3 m of lateral the feed ever reports on the circuit and
+ * badly wrong for the 19-35 m a pit-lane car sits at: at the 2026 British GP the pit
+ * road under the released car is 3.28 m BELOW the racing line at the same station, so
+ * the car stood in mid-air.
+ *
+ * Interpolates along the nearest SEGMENT of the lane rather than snapping to the nearest
+ * vertex: the published polyline is ~7 m per vertex and a snap would step the car's
+ * height at every one. Returns null past `maxDistM` from any lane vertex, which is the
+ * honest answer for a car the lane's traced geometry does not cover (nothing traces the
+ * box itself) -- the caller then keeps the ring's height, i.e. today's behaviour.
+ */
+export interface PitLaneHeightField {
+  segments: { x: Float32Array; y: Float32Array; z: Float32Array }[];
+}
+
+/**
+ * The lane's drawn elevation, prepared once per circuit so a per-frame lookup costs no
+ * nearest-ring search. Null when no segment has a usable elevation -- exactly the case
+ * where the ribbon itself is not drawn.
+ *
+ * Built beside the pit mesh from the same pitPathElevation, so a car placed through
+ * pitLaneHeightAt stands on the ribbon the viewer can see rather than near it.
+ */
+export function buildPitLaneHeightField(track: TrackModel): PitLaneHeightField | null {
+  const paths = track.pitLanePath;
+  if (!paths) return null;
+  const segments: PitLaneHeightField["segments"] = [];
+  for (const path of paths) {
+    const elevation = pitPathElevation(track, path);
+    if (elevation) segments.push({ x: path.x, y: path.y, z: elevation.z });
+  }
+  return segments.length ? { segments } : null;
+}
+
+export function pitLaneHeightAt(
+  field: PitLaneHeightField | null, x: number, y: number,
+  maxDistM = PIT_LANE_SNAP_M,
+): number | null {
+  if (!field) return null;
+  let best = Infinity;
+  let bestZ: number | null = null;
+  for (const seg of field.segments) {
+    const n = seg.x.length;
+    for (let i = 0; i < n - 1; i++) {
+      const ax = seg.x[i], ay = seg.y[i];
+      const dx = seg.x[i + 1] - ax, dy = seg.y[i + 1] - ay;
+      const len2 = dx * dx + dy * dy;
+      const t = len2 > 0
+        ? Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / len2))
+        : 0;
+      const px = ax + dx * t, py = ay + dy * t;
+      const d2 = (x - px) * (x - px) + (y - py) * (y - py);
+      if (d2 < best) {
+        best = d2;
+        bestZ = seg.z[i] + (seg.z[i + 1] - seg.z[i]) * t;
+      }
+    }
+  }
+  if (bestZ === null || !(best <= maxDistM * maxDistM)) return null;
+  return bestZ;
 }
 
 /**

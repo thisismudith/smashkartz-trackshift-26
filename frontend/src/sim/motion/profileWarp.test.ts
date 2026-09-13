@@ -29,9 +29,9 @@ function makeTrack(): TrackModel {
     slug: "warp-track", event: "Warp GP", lengthMetres: length, x, y, z,
     halfWidth: new Float32Array([6]), widthBinMetres: length,
     timingLines: { sf: 0, s1: 1000, s2: 2000 },
-    corners: [], grid: { order: [], pitchMetres: 8 },
+    corners: [], grid: { order: [], pitchMetres: 8, anchorMetres: null },
     pitLanePath: null,
-    pitLane: { entryStation: null, exitStation: null, mergeStation: null, loopLateral: null },
+    pitLane: { entryStation: null, exitStation: null, mergeStation: null, loopLateral: null, exitLateral: null },
     referenceProfile: { binMetres: bin, speedKph, gear },
   };
 }

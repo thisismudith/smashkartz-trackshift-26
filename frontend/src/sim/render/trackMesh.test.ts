@@ -7,9 +7,10 @@ import { halfWidthAt, parseTrackModel, type RawTrackModel } from "../data/manife
 import { buildF1CarGeometry } from "./carGeometry";
 import { carInstanceY, CAR_GROUND_CLEARANCE_M, CAR_VISUAL_SCALE } from "./presentation";
 import {
-  applyShadowPriceOverlay, buildPitLaneMesh, buildTrackMesh, carOrientation, fromRenderFrame,
-  PIT_DRAPE_MAX_M, PIT_LANE_WIDTH_M, PIT_SURFACE_DEPTH_M, PIT_TAPER_FRACTION,
-  pitLaneAvailability, pitPathElevation, renderForward, toRenderFrame,
+  applyShadowPriceOverlay, buildPitLaneHeightField, buildPitLaneMesh, buildTrackMesh,
+  carOrientation, fromRenderFrame, PIT_DRAPE_MAX_M, PIT_LANE_SNAP_M, PIT_LANE_WIDTH_M,
+  PIT_SURFACE_DEPTH_M, PIT_TAPER_FRACTION, pitLaneAvailability, pitLaneHeightAt,
+  pitPathElevation, renderForward, toRenderFrame,
 } from "./trackMesh";
 
 function makeTrack(over: Partial<TrackModel> = {}): TrackModel {
@@ -24,9 +25,9 @@ function makeTrack(over: Partial<TrackModel> = {}): TrackModel {
     slug: "mesh-track", event: "Mesh GP", lengthMetres: 3141,
     x, y, z, halfWidth: new Float32Array([6]), widthBinMetres: 3141,
     timingLines: { sf: 0, s1: 1000, s2: 2000 }, corners: [],
-    grid: { order: [], pitchMetres: 8 },
+    grid: { order: [], pitchMetres: 8, anchorMetres: null },
     pitLanePath: null,
-    pitLane: { entryStation: null, exitStation: null, mergeStation: null, loopLateral: null },
+    pitLane: { entryStation: null, exitStation: null, mergeStation: null, loopLateral: null, exitLateral: null },
     referenceProfile: { binMetres: 10, speedKph: new Float32Array([250]), gear: new Uint8Array([7]) },
     ...over,
   };
@@ -208,7 +209,7 @@ function makePitTrack(): TrackModel {
     py[i] = Math.sin(a) * (500 + off);
     pz[i] = 4; // held flat, as the position feed holds it through the pit stretch
   }
-  track.pitLanePath = [{ role: "entry", x: px, y: py, z: pz }];
+  track.pitLanePath = [{ role: "entry", x: px, y: py, z: pz, surfaceZ: null }];
   return track;
 }
 
@@ -524,10 +525,16 @@ describe.skipIf(!shipped.length)("across every readable shipped track model", ()
   });
 
   it("never draws a pit vertex at the polyline's own held elevation", () => {
-    // The point of pitPathElevation: the drawn z comes from the racing surface, so a car
-    // placed from the ring and the ribbon beneath it agree. Worst shipped gap between the
+    // The point of pitPathElevation: the drawn z is a MEASURED road, not the feed's own
+    // z channel, which is held flat through the lane. Worst shipped gap between the
     // polyline's own z and the ring's, per circuit: 0.09 m (Dutch) to 22.72 m (Japanese).
-    let worstHeld = 0, draped = 0;
+    //
+    // Which measured road depends on what the artifact carries. A circuit with a baked
+    // circuit model gives the LANE'S OWN surface, which is the right answer and is not
+    // the ring's -- at Silverstone the two differ by +1.56 m beside the boxes and
+    // -3.37 m at the exit. Everywhere else there is no lane measurement to be had and
+    // the adjacent racing surface is the closest thing to one.
+    let worstHeld = 0, draped = 0, baked = 0;
     for (const [, track] of shipped) {
       for (const path of track.pitLanePath ?? []) {
         const elevation = pitPathElevation(track, path);
@@ -535,13 +542,22 @@ describe.skipIf(!shipped.length)("across every readable shipped track model", ()
         for (let i = 0; i < path.x.length; i++) {
           const { d, z } = nearestRing(track, path.x[i], path.y[i]);
           if (d > PIT_DRAPE_MAX_M) continue;        // interpolated, not draped
-          expect(elevation.z[i]).toBeCloseTo(z, 4); // draped from the racing surface
+          if (path.surfaceZ && Number.isFinite(path.surfaceZ[i])) {
+            expect(elevation.z[i]).toBeCloseTo(path.surfaceZ[i], 4);   // the lane itself
+            baked++;
+          } else {
+            expect(elevation.z[i]).toBeCloseTo(z, 4);  // draped from the racing surface
+          }
           worstHeld = Math.max(worstHeld, Math.abs(path.z[i] - z));
           draped++;
         }
       }
     }
     expect(draped).toBeGreaterThan(1000);
+    // british-grand-prix is the one shipped circuit with a model to measure the lane
+    // against; if that ever stops being true the assertion above has stopped being
+    // exercised on the branch that matters.
+    expect(baked).toBeGreaterThan(100);
     // Same conditional as above: once the producer emits null for a held elevation there
     // is no held value left to be wrong, so worstHeld is NaN on a rebuilt model. The
     // draped assertion inside the loop is the one that must always hold.
@@ -593,5 +609,87 @@ describe("track surface geometry", () => {
     // red channel should rise and green/blue fall as the scalar goes 0 -> 1
     expect(highColor[0]).toBeGreaterThan(lowColor[0]);
     expect(highColor[1]).toBeLessThanOrEqual(lowColor[1]);
+  });
+});
+
+describe("the pit lane is drawn at its OWN height where the model measured one", () => {
+  /** A straight pit road running 30 m outside the ring, with the model's own surface a
+   * known distance below the racing line -- Silverstone's shape: the lane is 1.2-1.6 m
+   * ABOVE the ring beside the boxes and 3.2-3.4 m BELOW it at the exit. */
+  function laneTrack(surfaceOffsets: (number | null)[] | null): TrackModel {
+    const n = surfaceOffsets ? surfaceOffsets.length : 10;
+    const x = new Float32Array(n), y = new Float32Array(n);
+    const z = new Float32Array(n), surfaceZ = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+      const a = (i / 100) * 2 * Math.PI;
+      x[i] = Math.cos(a) * 530;          // 30 m outside the 500 m ring
+      y[i] = Math.sin(a) * 530;           // ...well inside PIT_DRAPE_MAX_M, so it drapes
+      z[i] = NaN;                        // the feed holds the lane's z; it is refused
+      surfaceZ[i] = surfaceOffsets && surfaceOffsets[i] !== null
+        ? (surfaceOffsets[i] as number) : NaN;
+    }
+    return makeTrack({
+      pitLanePath: [{ role: "exit", x, y, z, surfaceZ: surfaceOffsets ? surfaceZ : null }],
+    });
+  }
+
+  it("prefers the model's measured height over the drape from the racing surface", () => {
+    // The ring is flat at z=0 here, so the drape answers 0 everywhere. The bake says
+    // -3.3 m, which is the lane's own tarmac.
+    const track = laneTrack(new Array(10).fill(-3.3));
+    const elevation = pitPathElevation(track, track.pitLanePath![0])!;
+    expect(elevation).not.toBeNull();
+    for (let i = 0; i < elevation.z.length; i++) expect(elevation.z[i]).toBeCloseTo(-3.3, 6);
+  });
+
+  it("keeps the drape at a vertex the model had no drive surface under", () => {
+    // 5 of Silverstone's 80 entry vertices are in this state. Absence is not a height.
+    const offsets: (number | null)[] = new Array(10).fill(-3.3);
+    offsets[4] = null;
+    const track = laneTrack(offsets);
+    const elevation = pitPathElevation(track, track.pitLanePath![0])!;
+    expect(elevation.z[3]).toBeCloseTo(-3.3, 6);
+    expect(elevation.z[4]).toBeCloseTo(0, 6);       // the ring's own z, as before
+    expect(elevation.z[5]).toBeCloseTo(-3.3, 6);
+  });
+
+  it("is unchanged on a circuit whose artifact carries no baked lane surface", () => {
+    const track = laneTrack(null);
+    const elevation = pitPathElevation(track, track.pitLanePath![0])!;
+    for (let i = 0; i < elevation.z.length; i++) expect(elevation.z[i]).toBeCloseTo(0, 6);
+  });
+});
+
+describe("pitLaneHeightAt: what a car in the lane stands on", () => {
+  function laneTrack(): TrackModel {
+    const n = 10;
+    const x = new Float32Array(n), y = new Float32Array(n);
+    const z = new Float32Array(n), surfaceZ = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+      x[i] = 530; y[i] = i * 5;       // a straight lane just outside the 500 m ring
+      z[i] = NaN;
+      surfaceZ[i] = -3 - i * 0.1;     // sloping away, so interpolation is observable
+    }
+    return makeTrack({ pitLanePath: [{ role: "exit", x, y, z, surfaceZ }] });
+  }
+
+  it("interpolates ALONG the lane rather than snapping to the nearest vertex", () => {
+    // The published polyline is ~7 m per vertex; snapping would step a car's height at
+    // every one of them as it rolled down the lane.
+    const field = buildPitLaneHeightField(laneTrack());
+    expect(pitLaneHeightAt(field, 530, 0)).toBeCloseTo(-3, 6);
+    expect(pitLaneHeightAt(field, 530, 5)).toBeCloseTo(-3.1, 6);
+    expect(pitLaneHeightAt(field, 530, 2.5)).toBeCloseTo(-3.05, 6);
+  });
+
+  it("answers null well away from the lane, so the caller keeps the ring's height", () => {
+    const field = buildPitLaneHeightField(laneTrack());
+    expect(pitLaneHeightAt(field, 530 + PIT_LANE_SNAP_M / 2, 20)).not.toBeNull();
+    expect(pitLaneHeightAt(field, 530 + PIT_LANE_SNAP_M * 2, 20)).toBeNull();
+  });
+
+  it("answers null on a circuit with no traced lane at all", () => {
+    expect(buildPitLaneHeightField(makeTrack())).toBeNull();
+    expect(pitLaneHeightAt(null, 0, 0)).toBeNull();
   });
 });

@@ -273,6 +273,10 @@
 .badge[data-tone="warn"] { color: #d0a608; background: #2a2410; border: 1px solid #a88606; }
 .badge[data-tone="risk"] { color: var(--haas-red); background: #2a1414; border: 1px solid var(--haas-red); }
 .badge[data-tone="muted"] { color: var(--haas-grey); background: #1a1a1a; border: 1px solid #2a2a2a; }
+/* Unsourced but usable. Deliberately NOT the warning yellow that `risk` earns: this is an
+   open sourcing task, and colouring it as a fault made a whole page of workable values
+   read as broken. It stays visually distinct from `ok` so it can never pass for sourced. */
+.badge[data-tone="pending"] { color: var(--haas-grey); background: #191c22; border: 1px dashed #4a5260; }
 
 .resetButton {
   font-size: 0.66rem;
@@ -377,4 +381,18 @@
   font-size: 0.85rem;
   color: var(--haas-grey);
   padding: 1rem 0;
+}
+
+.sourceLegend {
+  font-size: 0.74rem;
+  line-height: 1.6;
+  color: var(--haas-grey);
+  max-width: 78ch;
+  padding: 0.5rem 0.7rem;
+  border-left: 2px solid #2a2a2a;
+}
+
+.sourceLegend strong {
+  color: var(--haas-white);
+  font-weight: 600;
 }

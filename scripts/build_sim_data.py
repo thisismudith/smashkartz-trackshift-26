@@ -40,6 +40,8 @@ from simdata.replay import build_replay_pack
 from simdata.rules import default_event_rules, event_rules_to_mapping
 
 OUT_DIR = Path(__file__).resolve().parent.parent / "frontend" / "public" / "sim"
+OPPORTUNITIES_DIR = (Path(__file__).resolve().parent.parent / "data" / "processed"
+                     / "overtake_opportunities")
 
 
 def _json_safe(o):
@@ -85,6 +87,44 @@ def build_rules() -> dict:
     thresholds are regulation fact.
     """
     return event_rules_to_mapping(default_event_rules())
+
+
+def build_rivalries() -> dict | None:
+    """Measured pass-conversion rate per circuit, or None when there is nothing to measure.
+
+    OPTIONAL on purpose. data/processed/overtake_opportunities is built by a separate,
+    much heavier pipeline (scripts/features/build_opportunities.py over the 20 m lake), and
+    a machine that has the raw mirror but not that table must still be able to build the
+    app. When the table is absent the key is simply left out of the index, exactly as a
+    pre-rule-engine artifact has no "rules" key, and the insights page renders the
+    measurement as missing rather than as zero.
+
+    Loaded by path rather than imported: scripts/features is a directory of scripts, not a
+    package, and adding an __init__.py to make one importable would put a dozen build_*
+    module names on sys.path for every run.
+    """
+    # The gate is a PARTITION, not the directory: build_opportunities.py creates its
+    # output root before it writes anything into it, so an interrupted or zero-event run
+    # leaves the directory there and empty. Gating on is_dir() alone let that state reach
+    # the exporter, which correctly refuses to measure nothing -- and the refusal, raised
+    # from an OPTIONAL step, aborted the whole sim build. Absent and half-written are the
+    # same thing to this caller: nothing to measure, key left out, build carries on. A
+    # partition that exists but is unreadable still raises, which is the point.
+    if not any(OPPORTUNITIES_DIR.glob("event=*/opportunities.parquet")):
+        return None
+    import importlib.util
+    path = Path(__file__).resolve().parent / "features" / "export_rivalries.py"
+    spec = importlib.util.spec_from_file_location("export_rivalries", path)
+    if spec is None or spec.loader is None:       # pragma: no cover - path is a constant
+        return None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    # Pass the gated path through. The exporter has its own default root, so calling
+    # this bare would let the gate guard one directory while the exporter globs another
+    # the moment either constant is re-pointed -- silently restoring the build abort the
+    # gate above exists to prevent. One path, checked and read.
+    return module.build_rivalries(OPPORTUNITIES_DIR)
 
 
 BUILD_CACHE = "build-cache.json"
@@ -248,7 +288,7 @@ def assert_year_matches(prev: dict, how: str) -> None:
 def referenced_files(manifest: dict, index_name: str) -> set:
     """Every artifact the freshly written index can reach, by filename."""
     live = {"index.json", index_name}
-    for key in ("catalogue", "params", "rules"):
+    for key in ("catalogue", "params", "rules", "rivalries"):
         if manifest.get(key):
             live.add(manifest[key])
     live.update(manifest.get("tracks", {}).values())
@@ -360,6 +400,13 @@ def main():
         print(f"  {manifest['catalogue']}")
         manifest["rules"] = write_json(build_rules(), OUT_DIR, "rules")
         print(f"  {manifest['rules']}")
+        # Re-emitted here too, cheap (eight small parquet files) and necessary: this
+        # branch also prunes, and an index that never learned the key would delete the
+        # artifact the full build just wrote. A None leaves the previous key in place.
+        rivalries = build_rivalries()
+        if rivalries is not None:
+            manifest["rivalries"] = write_json(rivalries, OUT_DIR, "rivalries")
+            print(f"  {manifest['rivalries']}")
         index_name = write_json(manifest, OUT_DIR, "index")
         (OUT_DIR / "index.json").write_bytes(
             json.dumps({"latest": index_name}, separators=(",", ":")).encode("utf-8"))
@@ -384,6 +431,17 @@ def main():
     params = build_params()
     manifest["params"] = write_json(params, OUT_DIR, "params")
     print(f"  {manifest['params']}")
+
+    # Optional: only where the opportunity table has been built. Skipped silently, with
+    # the key left out of the index, so a machine without it still produces a valid app.
+    rivalries = build_rivalries()
+    if rivalries is not None:
+        print("== measured pass conversion ==")
+        manifest["rivalries"] = write_json(rivalries, OUT_DIR, "rivalries")
+        totals = rivalries["totals"]
+        print(f"  {manifest['rivalries']}  ({totals['passes']}/{totals['labelled']} "
+              f"labelled opportunities converted over {totals['events']} event(s); "
+              f"{totals['unlabelled']} unlabelled excluded)")
 
     events = list(args.events)
     if args.all:

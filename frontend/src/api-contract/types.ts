@@ -433,6 +433,11 @@ export interface ShadowPriceQuery {
 }
 
 export interface PlanRequestBody {
+  /** Which event's rule config to plan against. The service reads it at the top level
+   *  (`payload.get("event", ...)`) and falls back to its default event when absent, so a
+   *  page with an event selector must send it or it plans somewhere else than it displays. */
+  event?: string;
+  year?: number;
   state: {
     ref: StateRef;
     energy: { energy_kj: number; deployed_kj: number; harvested_kj: number };
@@ -447,6 +452,10 @@ export interface PlanRequestBody {
     overtake_state: "NOT_ARMED" | "ARMED" | "ACTIVE" | "DISABLED";
     race_control: { overtake_disabled: boolean };
     power_envelope: { regime: "NORMAL" | "OVERRIDE" };
+    /** Required by the rule engine: the power cap is a function of speed, so an action
+     *  set built without it would silently apply a constant cap. C3 refuses rather than
+     *  assume one, and /plan comes back UNAVAILABLE saying so. */
+    speed_kmh?: number;
   };
   rival_state?: { p: Partial<Record<"CONSERVING" | "BALANCED" | "DEPLOYING" | "DERATING", number>> };
   horizon_laps: number;

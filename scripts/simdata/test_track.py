@@ -18,12 +18,13 @@ import pytest
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
 from simdata.rawio import DM_TO_M, Lap, LapTable
-from simdata.track import (GRID_DUP_STATION_M, LATERAL_REJECT_M, MAX_PIT_LAT_M,
-                            PIT_MIN_RUNS, _lap_axis, _lap_index, _line_stats,
-                            _plateau_speed, _reference_lap, _speed_limited_metres,
-                            _xy_at_lap_time, _z_held_mask, build_ring,
-                            geometry_lap_reject, grid, pick_geometry_laps, pit_lane,
-                            pit_lane_path, pit_runs, timing_lines)
+from simdata.track import (GRID_DUP_STATION_M, GRID_LAUNCH_KPH, LATERAL_REJECT_M,
+                            MAX_PIT_LAT_M, PIT_MIN_RUNS, _grid_box_sample, _lap_axis,
+                            _lap_index, _line_stats, _plateau_speed, _reference_lap,
+                            _speed_limited_metres, _xy_at_lap_time, _z_held_mask,
+                            build_ring, geometry_lap_reject, grid, grid_slot_station,
+                            pick_geometry_laps, pit_lane, pit_lane_path, pit_runs,
+                            timing_lines)
 
 # Support both the simulator's historical export and TrackShift's documented
 # raw-mirror layout.  These are real-data tests, not tests of a personal path.
@@ -480,3 +481,68 @@ def test_lateral_reject_is_shared_by_every_consumer():
     """timing_lines used to throw the projection lateral away entirely, so it was the
     one consumer with no lateral gate at all."""
     assert LATERAL_REJECT_M == 5.0
+
+
+# ---------------------------------------------------------------------------
+# The grid's position along the lap
+# ---------------------------------------------------------------------------
+
+def test_grid_slot_station_uses_the_measured_anchor():
+    """Pole goes where the fit says it is, and the rest of the field is laid back from
+    THERE at the grid pitch -- not from the timing line."""
+    L, pitch = 5825.74, 8.0
+    at = lambda i, anchor: grid_slot_station(0.0, L, anchor, pitch, i)
+    assert at(0, 110.815) == pytest.approx(110.815)
+    assert at(1, 110.815) == pytest.approx(102.815)
+    # the back of a 21-car grid is 160 m behind pole, which at Silverstone is BEHIND the
+    # timing line: it wraps onto the end of the lap rather than going negative
+    assert at(20, 110.815) == pytest.approx((110.815 - 20 * pitch) % L)
+    assert at(20, 110.815) > L / 2
+    # every slot stays on the lap, including one laid back across the line
+    assert all(0 <= at(i, 27.5) < L for i in range(22))
+    assert at(5, 27.5) == pytest.approx((27.5 - 5 * pitch) % L)
+
+
+def test_grid_slot_station_without_an_anchor_is_the_old_rule():
+    """A session whose cars do not resolve a lattice keeps pole one pitch behind the
+    line. It is the worse answer -- it is what put the British grid 120 m from its boxes
+    -- but it is the only one such a session has earned."""
+    L, pitch = 5825.74, 8.0
+    for i in range(5):
+        assert grid_slot_station(0.0, L, None, pitch, i) == pytest.approx(
+            (0.0 - (i + 1) * pitch) % L)
+    assert grid_slot_station(0.0, L, float("nan"), pitch, 0) == pytest.approx(L - pitch)
+
+
+def test_grid_box_sample_ignores_a_stop_the_car_made_after_launching():
+    """Measured at Spa 2026: RUS's lap 1 opens at 2 km/h -- a creep under a stationary
+    car -- and the first `speed == 0` in the whole lap is 298 samples later, 2.3 km down
+    the road. Searching the whole lap took that as RUS's grid box."""
+    creeping = np.array([2.0, 4.0, 40.0, 120.0, 0.0, 0.0, 90.0])
+    assert _grid_box_sample(creeping) == 0
+    # a genuine stationary start still reports the stationary sample
+    assert _grid_box_sample(np.array([3.0, 0.0, 0.0, 60.0, 0.0])) == 1
+    assert _grid_box_sample(np.array([0.0, 0.0, 5.0, 80.0])) == 0
+    # the threshold is a launch, not a creep
+    assert 1.0 < GRID_LAUNCH_KPH < 30.0
+
+
+@pytest.mark.parametrize("event,expected", [("British", 110.8), ("Dutch", 27.5),
+                                             ("Italian", 288.1)])
+def test_measured_anchors_survive(event, expected):
+    """These three resolve a clean lattice and their anchors are the numbers the grid
+    is actually drawn from, so a drift here moves a whole field."""
+    sdir, table, _, ring = _built(event)
+    g = grid(sdir, table, ring, 0.0)
+    assert g["anchorMetres"] == pytest.approx(expected, abs=0.6)
+    assert g["slots"][0]["station"] == pytest.approx(g["anchorMetres"] % ring.length, abs=1e-6)
+
+
+def test_belgian_anchor_is_refused_rather_than_shipped_2_km_out():
+    """Spa's lattice fits a textbook pitch at high coherence and is still pinned to the
+    wrong end of the lap by one car's bad stationary sample. With that sample fixed the
+    anchor is the real one; either way it may never be the 2455 m the artifact shipped."""
+    sdir, table, _, ring = _built("Belgian")
+    g = grid(sdir, table, ring, 0.0)
+    anchor = g["anchorMetres"]
+    assert anchor is None or abs(anchor - 101.9) < 15.0, g["anchorNote"]

@@ -23,6 +23,9 @@ export interface RawTrackModel {
   pitLane: {
     entryStation: number | null; exitStation: number | null;
     mergeStation: number | null; loopLateral: number | null;
+    /** Lateral of the pit EXIT, metres. Optional only because an artifact built
+     * before Python shipped it has none; every current model carries it. */
+    exitLateral?: number | null;
   };
   grid: {
     order: string[];
@@ -37,12 +40,19 @@ export interface RawTrackModel {
      * (12 of 13 with a full field, monaco-grand-prix with 2 and
      * chinese-grand-prix with 0, which is that pack's broken lap-1 positions). */
     slots?: RawGridSlot[] | null;
+    /** Metres past the timing line of pole's box, as Python measured it. Optional
+     * for the same reason as `slots`: older artifacts predate it. */
+    anchorMetres?: number | null;
   };
   /** zCm may be null per vertex once Python stops shipping the held pit-lane elevation
    * as if it were measured; parseTrackModel turns that into NaN and the renderer takes
    * the drawn elevation from the adjacent racing surface either way. */
   pitLanePath: {
-    segments: { role: string; xCm: number[]; yCm: number[]; zCm: (number | null)[] }[];
+    segments: {
+      role: string; xCm: number[]; yCm: number[]; zCm: (number | null)[];
+      /** Absent on every shipped artifact today; see parseTrackModel. */
+      surfaceZCm?: (number | null)[] | null;
+    }[];
   } | null;
   width: { binMetres: number; halfWidth: number[] };
   referenceProfile: { binMetres: number; speedKph: number[]; gear: number[] };
@@ -440,6 +450,43 @@ export function gridSlotsOf(track: TrackModel): GridSlot[] {
 }
 
 /**
+ * Ring station of the `slotIndex`-th grid box (0 = pole), metres.
+ *
+ * THE ONE PLACE THIS IS COMPUTED. Three callers need it -- the pre-launch grid, the
+ * stationary-car hold on lap 1, and the parked queue -- and they were each deriving it
+ * from `sf - (n + 1) * pitch`, i.e. pole one car pitch behind the timing line.
+ *
+ * That rule is not where a grid is. Pole's distance past the timing line is MEASURED per
+ * session, from the cars' own stationary lap-1 stations, and it is nowhere near constant:
+ * across the 2026 grids it runs -53.3 m (Austria) to +288.1 m (Monza). At Silverstone it
+ * is +110.8 m, so the old rule drew all 21 boxes 118.8 m short -- verified against the
+ * pack, where every car's first lap-1 sample sits 109.5-122.6 m ahead of the box it was
+ * drawn in. Silverstone's start straight only begins ~45 m before the line, so two
+ * thirds of that field was laid out around the exit of Club: the cars strung diagonally
+ * across a 45 deg bend, which is what put them off the road on the real model.
+ *
+ * `grid.anchorMetres` null means this session's cars did not resolve a box lattice at all
+ * (4 of the 13 shipped packs). The old rule is then the only answer available and is what
+ * this returns -- unchanged behaviour for those circuits, and legible as such because the
+ * artifact says the anchor is absent.
+ *
+ * The mirror of this function is `grid_slot_station` in scripts/simdata/track.py, which
+ * writes `grid.slots[].station` with the same arithmetic. The renderer reads its own copy
+ * rather than the published station so that a model with no `slots` block (the generated
+ * engine, a test fixture) still places a grid; the two must agree, and a test pins them
+ * against the shipped artifacts.
+ */
+export function gridSlotStation(track: TrackModel, slotIndex: number): number {
+  const L = track.lengthMetres;
+  const pitch = track.grid.pitchMetres;
+  const anchor = track.grid.anchorMetres;
+  const front = anchor !== null && anchor !== undefined && Number.isFinite(anchor)
+    ? anchor
+    : -pitch;
+  return (((track.timingLines.sf + front - slotIndex * pitch) % L) + L) % L;
+}
+
+/**
  * How many metres of drivable road THIS SIDE of the ring the ARTIFACT has MEASURED at
  * `stationM` -- or null when this circuit is drawn as the procedural ribbon (the
  * question does not arise there), or when this specific side's walk found no road.
@@ -512,11 +559,13 @@ export function parseTrackModel(raw: RawTrackModel): ParsedTrackModel {
       exitStation: raw.pitLane.exitStation,
       mergeStation: raw.pitLane.mergeStation,
       loopLateral: raw.pitLane.loopLateral,
+      exitLateral: raw.pitLane.exitLateral ?? null,
     },
     grid: {
       order: raw.grid.order,
       pitchMetres: raw.grid.pitchMetres,
       unplaced: Array.isArray(raw.grid.unplaced) ? raw.grid.unplaced : [],
+      anchorMetres: typeof raw.grid.anchorMetres === "number" ? raw.grid.anchorMetres : null,
     },
     pitLanePath: raw.pitLanePath
       ? raw.pitLanePath.segments.map((seg) => ({
@@ -526,6 +575,13 @@ export function parseTrackModel(raw: RawTrackModel): ParsedTrackModel {
           // an explicitly unavailable elevation stays unavailable (NaN), rather than
           // silently becoming 0 m above sea level
           z: Float32Array.from(seg.zCm, (v) => (v === null ? NaN : v / 100)),
+          // The circuit MODEL's own drive surface under each vertex, raycast by
+          // build_track._bake_pit_path_surface. Only a circuit that carries a baked
+          // `surface` has one; everywhere else this is null, which pitPathElevation
+          // treats as "fall back to the adjacent racing surface".
+          surfaceZ: seg.surfaceZCm
+            ? Float32Array.from(seg.surfaceZCm, (v) => (v === null ? NaN : v / 100))
+            : null,
         }))
       : null,
     referenceProfile: {

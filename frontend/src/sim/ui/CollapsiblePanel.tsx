@@ -6,15 +6,19 @@ import styles from "./sim.module.css";
 /** A HUD panel that can be folded away to a title bar, so the circuit is never
  * permanently hidden behind a table. Collapse state is per-panel and local. */
 export function CollapsiblePanel({
-  title, corner, children, defaultOpen = true, badge,
+  title, corner, children, defaultOpen = true, badge, hidden = false,
 }: {
   title: string;
   corner: "topRight" | "bottomRight" | "left";
   children: ReactNode;
   defaultOpen?: boolean;
   badge?: string;
+  /** Removed entirely, not folded. A folded dock still costs its title bar, and
+   * the modes that pass this want the circuit uncovered. */
+  hidden?: boolean;
 }) {
   const [open, setOpen] = useState(defaultOpen);
+  if (hidden) return null;
   return (
     <section className={`${styles.dock} ${styles[corner]}`} data-open={open}>
       <button

@@ -117,6 +117,12 @@ class DPResult:
     metadata: dict[str, Any]
     provenance: str
     reason: str | None = None
+    #: Per state key, the value of EVERY legal first action -- not just the argmax.
+    #: The recursion already computes these to pick a best; keeping them is what
+    #: lets a caller report an expected value and a regret for each alternative
+    #: instead of a column of "Unavailable". Deliberately NOT in ``to_dict``:
+    #: it is one entry per action per visited state and would dwarf the response.
+    action_values: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         payload = {"schema_version": self.schema_version, "status": self.status, "value": self.value, "policy": self.policy, "value_table": self.value_table, "excluded_actions": self.excluded_actions, "metadata": self.metadata, "provenance": self.provenance, "reason": self.reason}
@@ -261,6 +267,7 @@ def solve_dp(
     values: dict[str, float | None] = {}
     policy: dict[str, dict[str, Any]] = {}
     exclusions: dict[str, list[dict[str, Any]]] = {}
+    action_values: dict[str, list[dict[str, Any]]] = {}
     had_stub = False
 
     def recurse(index: int, energy: float, gap: float, eligibility: int) -> float | None:
@@ -293,6 +300,7 @@ def solve_dp(
             return None
         best_value: float | None = None
         best_action: dict[str, Any] | None = None
+        scored: list[dict[str, Any]] = []
         for action in actions:
             try:
                 next_state = transition_fn(state, dict(action), segment)
@@ -316,8 +324,10 @@ def solve_dp(
             except Exception as exc:
                 exclusions[state_key].append({"action": dict(action), "reason": f"C5 transition unavailable: {exc}", "provenance": "STUB"})
                 continue
+            scored.append({"action": dict(action), "value": candidate})
             if best_value is None or candidate > best_value:
                 best_value, best_action = candidate, dict(action)
+        action_values[state_key] = scored
         if best_action is not None:
             policy[state_key] = best_action
         values[state_key] = best_value
@@ -331,7 +341,7 @@ def solve_dp(
     else:
         status, provenance, reason = "COMPLETE", "DERIVED", None
     metadata["dependencies"] = {"C3": "PUBLIC", "C4": STUB_RESPONSE, "C5": "PUBLIC_TRANSITION" if not had_stub else STUB_RESPONSE}
-    result = DPResult(DP_SCHEMA_VERSION, status, value, policy, values, exclusions, metadata, provenance, reason)
+    result = DPResult(DP_SCHEMA_VERSION, status, value, policy, values, exclusions, metadata, provenance, reason, action_values)
     return result
 
 

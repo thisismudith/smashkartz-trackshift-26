@@ -46,25 +46,54 @@ export const PRESENTATION_SCALE = 1;
  * vertices buildF1CarGeometry emits and nothing else, so the picture changes and every
  * spatial decision stays at true metres.
  *
- * Why it is needed: on a circuit drawn from its real GLB (Silverstone) the tarmac is
+ * Why it was needed: on a circuit drawn from its real GLB (Silverstone) the tarmac is
  * visibly wider than the procedural ribbon it replaces -- and that ribbon is already
  * 12.17-15.00 m wide there (median 13.27 m, measured from the shipped width block) --
- * so a 2.0 m car reads as a speck. 1.3 reads clearly bigger (69 % more plan area) while
- * staying defensible against the spacing the simulation actually permits:
+ * so a 2.0 m car reads small. It was 1.3 for that reason.
  *
- *     drawn length 5.6 -> 7.28 m vs the 5.60 m launch minimum gap
- *     drawn width  2.0 -> 2.60 m vs the 2.30 m declutter lane step (CAR.widthM * 1.15)
+ * WHY IT IS BACK AT TRUE SIZE. A real F1 grid is 8.0 m of pitch holding a 5.6 m car,
+ * which leaves 2.4 m of air between one car's tail and the next one's nose -- 43 % of a
+ * car length, and what a starting grid looks like. At 1.3 the drawn car is 7.28 m in
+ * that same 8.0 m box, leaving 0.72 m: the field reads as a solid queue of touching
+ * cars, which is what "increase the gap between cars" is describing. The pitch itself
+ * cannot absorb it -- 8.0 m is where the boxes measurably are (grid.anchorMetres and
+ * gridSlotStation), and stretching it would put every car off the box painted for it.
  *
- * i.e. two cars held at exactly those minima now touch on screen (worst case: 1.68 m of
- * drawn overlap nose-to-tail at the launch minimum, 0.30 m flank-to-flank in a maximally
- * squeezed declutter cluster); past ~1.4 a tight pack visibly interpenetrates. Abreast,
- * a 13.27 m ribbon still takes 5.1 drawn cars where it took 6.6 true ones. The cost is
- * cosmetic and bounded; the benefit is that a car is legible on real tarmac.
+ * At 1.0 the drawn car is its true 5.6 x 2.0 m:
+ *
+ *     drawn length 5.60 m vs the 8.00 m grid pitch          -> 2.40 m of visible gap
+ *     drawn length 5.60 m vs the 5.60 m launch minimum gap  -> nose-to-tail, never through
+ *     drawn width  2.00 m vs the 2.30 m declutter lane step -> 0.30 m of flank clearance
+ *
+ * so nothing can interpenetrate at the minima the simulation actually permits, which was
+ * not true at 1.3 (1.68 m of nose-to-tail overlap at the launch minimum). Legibility is
+ * bought back with the camera, which costs no fidelity -- the rule the top of this file
+ * already states for PRESENTATION_SCALE.
  *
  * Anything that needs the DRAWN extent must measure the geometry (see carInstanceY)
  * rather than multiply by this constant, so it cannot go stale.
  */
-export const CAR_VISUAL_SCALE = 1.3;
+export const CAR_VISUAL_SCALE = 1.0;
+
+/**
+ * How far AHEAD of the drawn car's centre the feed's position point sits, metres.
+ *
+ * MEASURED, against the one thing that can settle it: the circuit model's own painted
+ * grid boxes. With the field placed on its measured boxes and the telemetry point drawn
+ * as the car's centre, a top-down render of the 2026 British GP grid (helicopter camera,
+ * 23.479 px/m, so a pixel is 4.3 cm) puts ANT 3.67 m and HAM 4.00 m in FRONT of the box
+ * painted under them -- pole's nose over the start line, with its box empty behind it.
+ * Both are within a few percent of half a car length, which is what a position reported
+ * at the front of the car rather than at its centre looks like.
+ *
+ * So it is expressed as half the car's TRUE length: the offset belongs to the FEED's
+ * choice of reference point, not to how large the car is drawn, and must not move when
+ * CAR_VISUAL_SCALE does.
+ *
+ * It moves the DRAWN car only. Stations, gaps, laps and every reported number are
+ * untouched -- see carPlanPos, which is the one place it is applied.
+ */
+export const CAR_REFERENCE_AHEAD_M = CAR.lengthM / 2;
 
 export const CAR_RENDER_LENGTH_M = CAR.lengthM * PRESENTATION_SCALE;
 export const CAR_RENDER_WIDTH_M = CAR.widthM * PRESENTATION_SCALE;

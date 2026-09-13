@@ -178,16 +178,130 @@ def test_a_valid_request_is_answered():
     assert 0.0 <= payload["p_pass_by_outcome_horizon"]["value"] <= 1.0
 
 
-def test_the_synthetic_fallback_records_itself_in_stubs_used(monkeypatch):
-    """The gate only works if a stub answer is visible afterwards."""
+def _without_artifacts(monkeypatch):
+    """An app whose CP-14 artifacts are all unreadable."""
     import trackshift.serve.app as app_module
 
     def refuse(*args, **kwargs):
         raise ModelUnavailable("no artifact in this test")
 
     monkeypatch.setattr(app_module, "load_predictor", refuse)
+    return app_module
+
+
+def test_without_an_artifact_the_counted_rate_answers_and_is_not_a_stub(monkeypatch):
+    """The measured rate is a real answer, so it must not be labelled a placeholder.
+
+    With no trained model the route still knows something true: how often a pass
+    was completed from this gap in the season's own telemetry. Calling that a
+    stub would understate it exactly as badly as calling the synthetic curve a
+    measurement overstates it.
+    """
+    _without_artifacts(monkeypatch)
     app = create_app(mode="replay")
+    status, payload = post(app, {"decision_checkpoint": "DETECTION", "gap_s": 0.7})
+    assert status == 200
+    if not app.state.pass_rate_tables:
+        pytest.skip("no artifacts/pass_fallback tables on this machine")
+    assert payload["is_stub"] is False
+    assert payload["p_pass_by_outcome_horizon"]["provenance"] == "DERIVED"
+    # A counted frequency is only readable with its sample size and interval.
+    assert payload["support"]["n"] > 0
+    assert payload["interval"]["low"] <= payload["p_pass_by_outcome_horizon"]["value"] <= payload["interval"]["high"]
+    assert "pass/predict:DETECTION" not in app.state.stubs_used
+
+
+def test_the_synthetic_fallback_records_itself_in_stubs_used(monkeypatch):
+    """The gate only works if a stub answer is visible afterwards.
+
+    Reached only when there is neither a trained artifact nor a counted rate --
+    the last tier, and the only one that is a placeholder.
+    """
+    _without_artifacts(monkeypatch)
+    app = create_app(mode="replay")
+    app.state.pass_rate_tables = {}
     status, payload = post(app, {"checkpoint": "DETECTION", "gap_s": 0.7})
     assert status == 200
     assert payload["is_stub"] is True
     assert "pass/predict:DETECTION" in app.state.stubs_used
+
+
+# --- the request contract ---------------------------------------------------
+
+def test_decision_checkpoint_selects_the_model_for_that_checkpoint():
+    """API.md 5.8 names the field `decision_checkpoint`.
+
+    Reading only `checkpoint` scored every ACTIVATION request with the DETECTION
+    model and then refused it for carrying activation speed -- a leakage refusal
+    raised against a request that leaked nothing.
+    """
+    status, payload = post(create_app(mode="replay"), {
+        "decision_checkpoint": "ACTIVATION", "gap_at_checkpoint": 0.7,
+        "speed_at_activation_kmh": 300.0})
+    assert status == 200
+    assert payload["decision_checkpoint"] == "ACTIVATION"
+
+
+def test_the_ui_field_names_reach_the_model():
+    """`time_gap_s` is the UI's name for `gap_at_checkpoint` (INTEGRATION.md 3).
+
+    Unmapped, the feature vector arrives empty and the model returns its base
+    rate for every request -- a number that looks like a prediction and does not
+    move when the gap does.
+    """
+    status, payload = post(create_app(mode="replay"),
+                           {"decision_checkpoint": "DETECTION", "time_gap_s": 0.7})
+    assert status == 200
+    assert "gap_at_checkpoint" in payload["features_supplied"]
+
+
+def test_features_may_be_nested_under_features_as_api_md_documents():
+    status, payload = post(create_app(mode="replay"), {
+        "decision_checkpoint": "DETECTION",
+        "features": {"gap_at_checkpoint": 0.7, "p_eligible": 0.9}})
+    assert status == 200
+    assert "gap_at_checkpoint" in payload["features_supplied"]
+    assert "p_eligible" in payload["features_supplied"]
+
+
+#: A populated DETECTION row, as the UI sends one once its field names are mapped.
+#: Deliberately complete: a tree given thirteen NaNs of fifteen is not obliged to
+#: be monotone in the two it has, and asserting a direction on a near-empty row
+#: would be testing noise.
+FULL_DETECTION_ROW = {
+    "closing_rate_s_per_s": -0.05, "p_eligible": 0.9, "track_temperature": 41.0,
+    "attacker_tyre_life_laps": 12, "defender_tyre_life_laps": 16,
+    "tyre_life_delta_laps": -4,
+    "wind_head_component_mps": -2.1, "wind_cross_component_mps": 3.4,
+    "attacker_tyre_compound": "MEDIUM", "defender_tyre_compound": "HARD",
+    "tyre_compound_pair": "MEDIUM|HARD", "corner_type": "MEDIUM_RIGHT",
+    "wet_track_flag": False,
+}
+
+
+def test_the_probability_moves_with_the_gap():
+    """The whole point of sending features.
+
+    A probability that does not move when the gap does is the signature of a
+    feature vector that never arrived -- and it is invisible in any single
+    response, because the constant it returns is a perfectly plausible number.
+    """
+    app = create_app(mode="replay")
+
+    def p(gap):
+        status, payload = post(app, {"decision_checkpoint": "DETECTION",
+                                     "gap_at_checkpoint": gap, **FULL_DETECTION_ROW})
+        assert status == 200
+        assert payload["features_missing"] == ["sector"], payload["features_missing"]
+        return payload["p_pass_by_outcome_horizon"]["value"]
+
+    close, distant = p(0.2), p(2.5)
+    assert close > distant, (
+        f"a pass is harder from further back, but 0.2 s gave {close} and 2.5 s gave {distant}")
+
+
+def test_an_unknown_checkpoint_is_refused_rather_than_silently_detection():
+    status, payload = post(create_app(mode="replay"),
+                           {"decision_checkpoint": "APEX", "gap_at_checkpoint": 0.7})
+    assert status == 422
+    assert payload["detail"]["code"] == "FEATURE_SCHEMA_MISMATCH"

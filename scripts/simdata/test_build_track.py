@@ -660,11 +660,34 @@ def test_british_gains_a_surface_and_changes_nothing_else():
     assert plain["schemaVersion"] == 2
     assert "surface" not in plain and "surface" not in plain["provenance"]
 
+    # A registered circuit ALSO measures the model's own height under the pit lane --
+    # the one other thing in the artifact that was being drawn at the racing surface's
+    # height for want of a measurement. It is a real measurement of a real road, so it
+    # must differ from that drape rather than reproduce it.
+    for seg in model["pitLanePath"]["segments"]:
+        assert len(seg["surfaceZCm"]) == len(seg["xCm"])
+        assert 0.0 <= seg["surfaceCoverage"] <= 1.0
+        assert any(v is not None for v in seg["surfaceZCm"]), seg["role"]
+    assert "surfaceElevation" in model["pitLanePath"]["provenance"]
+    assert all("surfaceZCm" not in s for s in plain["pitLanePath"]["segments"])
+
     stripped = dict(model)
     stripped.pop("surface")
     stripped["provenance"] = {k: v for k, v in model["provenance"].items()
                               if k != "surface"}
+    stripped["pitLanePath"] = _without_baked_pit_z(model["pitLanePath"])
     assert _canonical(stripped) == _canonical(plain)
+
+
+def _without_baked_pit_z(pit_path: dict) -> dict:
+    """`pitLanePath` as a circuit with no model would emit it: the baked height gone."""
+    out = dict(pit_path)
+    out["segments"] = [{k: v for k, v in s.items()
+                        if k not in ("surfaceZCm", "surfaceCoverage")}
+                       for s in pit_path["segments"]]
+    out["provenance"] = {k: v for k, v in pit_path["provenance"].items()
+                         if k != "surfaceElevation"}
+    return out
 
 
 @needs_data

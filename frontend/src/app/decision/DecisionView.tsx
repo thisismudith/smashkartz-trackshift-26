@@ -35,14 +35,10 @@ function DecisionContent() {
           Live, <em>Honestly</em>
         </h1>
         <p className={s.lede}>
-          Where, not just whether, to spend electrical energy in a battle. The rule engine
-          (legal actions, the power envelope) is real and computed on every request. The four
-          strategic models — energy shadow price (M22), pass probability (M10), rival belief
-          (M09), and the recommendation (M24) — are moving from a placeholder stub to a
-          telemetry-derived estimate one at a time: a real formula over real 2026 data, with
-          an honest interval rather than a model's point guess. Whichever have not landed yet
-          still return a correctly-shaped, clearly badged stub (API.md §3.7). Adjust a
-          parameter and press Save to see the actual request and response.
+          Where, not just whether, to spend electrical energy in a battle. Pick an event, set the
+          state, and ask one of the four routes. Anything still a placeholder comes back badged{" "}
+          <strong>STUB</strong>; everything else is the real answer, with the full body behind{" "}
+          <em>Raw JSON</em>.
         </p>
       </header>
 
@@ -55,10 +51,8 @@ function DecisionContent() {
       <section className={s.footnote}>
         <h2 className={s.footHead}>Why a stub is badged, never silent</h2>
         <p className={s.footBody}>
-          Every number the system displays carries a provenance tag, and a value that is
-          unavailable is rendered as unavailable with a reason — never fabricated. A stub that
-          returns a well-shaped guess is fine to ship (API.md explicitly allows it), as long as
-          it is labelled loudly enough that nobody mistakes it for a result.{" "}
+          A well-shaped guess is fine to ship, as long as it is labelled loudly enough that nobody
+          mistakes it for a result.{" "}
           {preview ? (
             <>
               This <code>?preview=1</code> view is the offline exception: it makes no network
