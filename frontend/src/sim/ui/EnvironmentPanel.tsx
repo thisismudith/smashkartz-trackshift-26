@@ -5,6 +5,7 @@ import type { NeutralisationInterval, WeatherSeries } from "../contract/types";
 import {
   describePositionIntegrity, positionIntegrityUnknown, type SessionPositionIntegrity,
 } from "../replay/dashboard";
+import { describeCross, describeHead, windComponents } from "../replay/wind";
 import styles from "./panels.module.css";
 
 /** Index of the last weather reading at or before `t`. The feed samples roughly once
@@ -39,6 +40,7 @@ function show(v: number | undefined, digits: number, unit: string): string {
  */
 export function EnvironmentPanel({
   weather, sessionTime, duration, totalLaps, neutralisation, positionIntegrity,
+  headingRad, headingLabel,
 }: {
   weather: WeatherSeries | null;
   sessionTime: number;
@@ -49,10 +51,22 @@ export function EnvironmentPanel({
    * session. Undefined means the build did not report it -- which the panel prints as
    * "unknown", never as "none". */
   positionIntegrity?: SessionPositionIntegrity | null;
+  /** Direction of travel to resolve the wind against, radians in the ring frame.
+   * Undefined when no car is focused -- head/cross are only meaningful somewhere,
+   * so without a somewhere the panel shows the raw reading and says so. */
+  headingRad?: number | null;
+  /** Where that heading was taken, named on screen beside the components. */
+  headingLabel?: string | null;
 }) {
   const i = weather ? readingAt(weather.tS, sessionTime) : -1;
   const raining = i >= 0 && weather!.rain[i] === true;
   const bearing = i >= 0 ? weather!.windFromDeg?.[i] : undefined;
+  // API.md section 8: wind is shown as head/cross RELATIVE TO THE TRACK, never as a
+  // compass bearing -- the same 265 degrees is a headwind on one straight and a
+  // tailwind on the next, so the bearing alone cannot be acted on.
+  const wind = windComponents(
+    i >= 0 ? weather!.windMps[i] : undefined, bearing, headingRad,
+  );
   const integrity = describePositionIntegrity(positionIntegrity);
   const integrityUnknown = positionIntegrityUnknown(positionIntegrity);
 
@@ -79,24 +93,34 @@ export function EnvironmentPanel({
           <dt>Air temp</dt><dd>{show(weather!.airTempC[i], 1, "°C")}</dd>
           <dt>Track temp</dt><dd>{show(weather!.trackTempC[i], 1, "°C")}</dd>
           <dt>Humidity</dt><dd>{show(weather!.humidityPct[i], 0, "%")}</dd>
-          <dt>Wind</dt>
-          <dd>
-            {show(weather!.windMps[i], 1, "m/s")}
-            {bearing !== undefined && Number.isFinite(bearing) ? (
-              <>
-                {" "}
-                {/* arrow points the way the wind BLOWS, i.e. 180 deg from the bearing it comes from */}
-                <span
-                  className={styles.windArrow}
-                  style={{ transform: `rotate(${bearing + 180}deg)` }}
-                  aria-hidden="true"
-                >
-                  ↑
+          {wind ? (
+            <>
+              <dt>Head/tail</dt>
+              <dd>
+                {describeHead(wind.headMps)}
+                <span className={styles.windDeg}>
+                  {headingLabel ? `at ${headingLabel}` : "at the focused car"}
                 </span>
-                <span className={styles.windDeg}>from {Math.round(bearing)}°</span>
-              </>
-            ) : null}
-          </dd>
+              </dd>
+              <dt>Crosswind</dt>
+              <dd>{describeCross(wind.crossMps)}</dd>
+            </>
+          ) : (
+            <>
+              <dt>Wind</dt>
+              <dd>
+                {show(weather!.windMps[i], 1, "m/s")}
+                {/* No heading to resolve against, so no head/cross exists yet. The
+                    raw bearing is shown as the reading it is, explicitly not as
+                    something to act on -- see API.md section 8. */}
+                {bearing !== undefined && Number.isFinite(bearing) ? (
+                  <span className={styles.windDeg}>
+                    from {Math.round(bearing)}° — focus a car for head/cross
+                  </span>
+                ) : null}
+              </dd>
+            </>
+          )}
           <dt>Rain</dt>
           <dd className={raining ? styles.flagActive : undefined}>{raining ? "WET" : "dry"}</dd>
         </dl>

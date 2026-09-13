@@ -1,0 +1,72 @@
+{
+  "schema_version": "pass_fallback_rate_v1",
+  "season": "2023",
+  "label_definition": "zone_exit_v1",
+  "detection_gap_threshold_s": 1.0,
+  "events": [
+    "Australian Grand Prix",
+    "British Grand Prix",
+    "Canadian Grand Prix",
+    "Italian Grand Prix",
+    "Japanese Grand Prix",
+    "Miami Grand Prix",
+    "Monaco Grand Prix"
+  ],
+  "n_opportunities": 5032,
+  "buckets": [
+    {
+      "low_s": 0.0,
+      "high_s": 0.5,
+      "n": 671,
+      "passes": 79,
+      "rate": 0.11773472429210134,
+      "ci_low": 0.095497,
+      "ci_high": 0.144325
+    },
+    {
+      "low_s": 0.5,
+      "high_s": 1.0,
+      "n": 1315,
+      "passes": 15,
+      "rate": 0.011406844106463879,
+      "ci_low": 0.006925,
+      "ci_high": 0.018735
+    },
+    {
+      "low_s": 1.0,
+      "high_s": 1.5,
+      "n": 880,
+      "passes": 8,
+      "rate": 0.00909090909090909,
+      "ci_low": 0.004614,
+      "ci_high": 0.017836
+    },
+    {
+      "low_s": 1.5,
+      "high_s": 2.0,
+      "n": 564,
+      "passes": 4,
+      "rate": 0.0070921985815602835,
+      "ci_low": 0.002761,
+      "ci_high": 0.018092
+    },
+    {
+      "low_s": 2.0,
+      "high_s": 3.0,
+      "n": 804,
+      "passes": 5,
+      "rate": 0.006218905472636816,
+      "ci_low": 0.002659,
+      "ci_high": 0.014475
+    },
+    {
+      "low_s": 3.0,
+      "high_s": 5.0,
+      "n": 798,
+      "passes": 17,
+      "rate": 0.021303258145363407,
+      "ci_low": 0.013342,
+      "ci_high": 0.033851
+    }
+  ]
+}

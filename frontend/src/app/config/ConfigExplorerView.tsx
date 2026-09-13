@@ -10,11 +10,12 @@
  */
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { CONFIG_CATEGORIES, snapshotOf, type ConfigCategory, type ConfigVariable, type ValueSource } from "@/config-explorer/data";
-import { EVENT_PROFILES, DEFAULT_EVENT_CIRCUIT, eventProfile, type EventProfile } from "@/config-explorer/events";
+import { EVENT_PROFILES, DEFAULT_EVENT_CIRCUIT, type EventProfile } from "@/config-explorer/events";
 import { CHART } from "@/lib/palette";
 import { ChartFrame, Plot, Grid, XAxis, BandLabels, HBars, niceTicks } from "@/sim/charts";
+import { fetchConfigVariables, fetchConfigEvents } from "@/api-contract/client";
 import s from "./config.module.css";
 
 const SOURCE_BADGE: Record<ValueSource, { label: string; tone: "ok" | "warn" | "risk" | "muted" }> = {
@@ -309,8 +310,8 @@ function buildEventCategory(p: EventProfile): ConfigCategory {
  * measured/observed data (§ choosing-a-form: magnitude across categories -> ranked bars,
  * one hue, selected entity carries the accent per "color follows the entity").
  */
-function CircuitComparison({ selected }: { selected: string }) {
-  const withLap = EVENT_PROFILES.filter((p) => p.completeInMirror);
+function CircuitComparison({ selected, profiles }: { selected: string; profiles: EventProfile[] }) {
+  const withLap = profiles.filter((p) => p.completeInMirror);
   const rankedByLap = [...withLap].sort((a, b) => b.lapLengthM - a.lapLengthM);
   const lapDomain = niceTicks(0, Math.max(...rankedByLap.map((p) => p.lapLengthM)), 5);
 
@@ -403,12 +404,36 @@ export default function ConfigExplorerView() {
   const [copyState, setCopyState] = useState<"idle" | "copied">("idle");
   const [circuit, setCircuit] = useState(DEFAULT_EVENT_CIRCUIT);
 
-  const profile = eventProfile(circuit);
+  const [liveCategories, setLiveCategories] = useState<ConfigCategory[] | null>(null);
+  const [liveEvents, setLiveEvents] = useState<EventProfile[] | null>(null);
+  const [dataSource, setDataSource] = useState<"loading" | "live" | "snapshot">("loading");
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const [catsResult, eventsResult] = await Promise.all([fetchConfigVariables(), fetchConfigEvents()]);
+      if (cancelled) return;
+      if (catsResult.ok && eventsResult.ok) {
+        setLiveCategories((catsResult.data as { categories: ConfigCategory[] }).categories);
+        setLiveEvents((eventsResult.data as { events: EventProfile[] }).events);
+        setDataSource("live");
+      } else {
+        setDataSource("snapshot");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const baseCategories = liveCategories ?? CONFIG_CATEGORIES;
+  const eventProfiles = liveEvents ?? EVENT_PROFILES;
+  const profile = eventProfiles.find((p) => p.circuit === circuit) ?? eventProfiles[0];
   const eventCategory = useMemo(() => buildEventCategory(profile), [profile]);
 
   const categories = useMemo(
-    () => [CONFIG_CATEGORIES[0], eventCategory, ...CONFIG_CATEGORIES.slice(1)],
-    [eventCategory],
+    () => [baseCategories[0], eventCategory, ...baseCategories.slice(1)],
+    [baseCategories, eventCategory],
   );
 
   const totalVariables = useMemo(
@@ -463,12 +488,22 @@ export default function ConfigExplorerView() {
           Every <em>Variable</em>
         </h1>
         <p className={s.lede}>
-          Every configurable, non-learned value that a decision, model, or eligibility gate reads —
-          transcribed from <code>config/*.yaml</code> and cross-referenced against{" "}
-          <code>TrackShift AGENTS.md</code>, <code>MODELS.md</code>, and <code>API.md</code>. This is
-          a snapshot, not a live read: <code>{snapshotOf.join(", ")}</code> are the files it came from.
-          Editing here changes only what this page shows — there is no route in <code>API.md</code>{" "}
-          yet for writing config back, so nothing is silently saved.
+          Every configurable, non-learned value that a decision, model, or eligibility gate reads,
+          cross-referenced against <code>TrackShift AGENTS.md</code>, <code>MODELS.md</code>, and{" "}
+          <code>API.md</code>. Editing here changes only what this page shows — there is no route in{" "}
+          <code>API.md</code> yet for writing config back, so nothing is silently saved.
+        </p>
+        <p className={s.statusLine} data-source={dataSource}>
+          {dataSource === "loading" ? (
+            "connecting to the dev service…"
+          ) : dataSource === "live" ? (
+            <>● Live from FastAPI (GET /internal/config/variables, GET /internal/config/events) — values read off config/*.yaml on every request.</>
+          ) : (
+            <>
+              ● Backend unreachable — showing the static snapshot instead (<code>{snapshotOf.join(", ")}</code>).
+              Run <code>python scripts/serve/run_service.py</code> from the repo root for live values.
+            </>
+          )}
         </p>
       </header>
 
@@ -476,7 +511,7 @@ export default function ConfigExplorerView() {
         <label className={s.eventField}>
           <span>Race</span>
           <select value={circuit} onChange={(e) => setCircuit(e.target.value)}>
-            {EVENT_PROFILES.map((p) => (
+            {eventProfiles.map((p) => (
               <option key={p.circuit} value={p.circuit} disabled={!p.completeInMirror}>
                 {p.eventDisplay}
                 {p.completeInMirror ? "" : " (incomplete mirror)"}
@@ -549,7 +584,7 @@ export default function ConfigExplorerView() {
         {filtered.length === 0 ? <p className={s.empty}>No variable matches &quot;{query}&quot;.</p> : null}
       </div>
 
-      {query === "" ? <CircuitComparison selected={circuit} /> : null}
+      {query === "" ? <CircuitComparison selected={circuit} profiles={eventProfiles} /> : null}
     </main>
   );
 }

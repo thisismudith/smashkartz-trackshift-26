@@ -19,6 +19,7 @@ import {
   applyShadowPriceOverlay, buildPitLaneMesh, buildTrackMesh, buildTrackOutline,
   carOrientation, fromRenderFrame, renderForward, toRenderFrame,
 } from "./trackMesh";
+import { buildOvertakeLayer, type OvertakeGeometry } from "./overtakeZones";
 
 export type CameraMode = "broadcast" | "orbit" | "onboard" | "helicopter";
 
@@ -796,6 +797,11 @@ export interface TrackLayers {
   surface: THREE.Mesh;
   outline: THREE.LineSegments;
   pit: THREE.Group | null;
+  /** Detection Line, activation lines and zone bands. Null until the rules
+   * service supplies geometry, and on every circuit that has none -- it is
+   * installed separately from the rest because it arrives over the network
+   * after the circuit is already on screen. */
+  overtake: THREE.Group | null;
   ribbonDefaults: RibbonMaterialState;
 }
 
@@ -846,7 +852,7 @@ export function disposeRenderObject(obj: THREE.Object3D): void {
  * `layers` is a no-op, which is what the first setTrack call passes. */
 export function disposeTrackLayers(scene: THREE.Scene, layers: TrackLayers | null): void {
   if (!layers) return;
-  for (const obj of [layers.surface, layers.outline, layers.pit]) {
+  for (const obj of [layers.surface, layers.outline, layers.pit, layers.overtake]) {
     if (!obj) continue;
     scene.remove(obj);
     obj.traverse(disposeRenderObject);
@@ -862,7 +868,7 @@ export function installTrackLayers(scene: THREE.Scene, track: TrackModel): Track
   if (pit) scene.add(pit);
   const mat = surface.material as THREE.MeshStandardMaterial;
   return {
-    surface, outline, pit,
+    surface, outline, pit, overtake: null,
     ribbonDefaults: {
       transparent: mat.transparent, opacity: mat.opacity, depthWrite: mat.depthWrite,
       polygonOffset: mat.polygonOffset,
@@ -1173,6 +1179,31 @@ export class SimRenderer {
     // Null for twelve of thirteen circuits and for every artifact built before the
     // surface block existed, which is why this reads as one line and not as a branch.
     this.setEnvironment(environmentForTrack(track));
+    // A circuit swap invalidates the previous circuit's lines; the caller
+    // re-supplies them for the new one if the rules service has any.
+    this.setOvertakeGeometry(null);
+  }
+
+  /**
+   * Installs (or clears) the Detection Line and activation zones for the circuit
+   * currently on screen.
+   *
+   * Kept OFF setTrack deliberately: the geometry arrives from the rules service
+   * over the network, well after the circuit is drawn, and the scene must never
+   * block a frame waiting for it. Passing null removes whatever is installed,
+   * which is also what a circuit with no sourced geometry gets.
+   */
+  setOvertakeGeometry(geometry: OvertakeGeometry | null) {
+    if (this.layers?.overtake) {
+      this.scene.remove(this.layers.overtake);
+      this.layers.overtake.traverse(disposeRenderObject);
+      this.layers.overtake = null;
+    }
+    if (!geometry || !this.track || !this.layers) return;
+    const group = buildOvertakeLayer(this.track, geometry);
+    if (!group) return;
+    this.scene.add(group);
+    this.layers.overtake = group;
   }
 
   /**
