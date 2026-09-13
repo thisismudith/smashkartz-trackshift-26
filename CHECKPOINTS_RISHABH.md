@@ -741,6 +741,39 @@ Owner A route modules in **src/trackshift/serve/**, service tests, replay inputs
 
 ## Closure-loop v2 execution record — 2026-09-13
 
+### Regulation-era boundary closure — 2026-09-13
+
+- Branch: `rishabh/closure-loop-v2`; source changes are limited to registry,
+  C3/final-mode guards, API-adapter boundaries, tests, rule configuration, and
+  documentation. Generated data, models, manifests, plots, caches, and replay
+  bundles remain uncommitted.
+- Registry evidence: `src/trackshift/data/registry.py` now rejects raw
+  `drs`, `historical_drs_*`, and `PROXY_HISTORICAL_DRS` from 2026 consumers and
+  from final/release/replay mode. Explicit historical-audit/prior consumers for
+  2022–2025 remain accepted. The 2026 all-zero DRS channel is treated as
+  unavailable, not closed.
+- C3 evidence: final mode validates the 2026 rule snapshot and required rule
+  leaves before action generation; illegal actions remain excluded before any
+  scoring. The strategic-state adapter, planner, simulator, replay encoder,
+  and C4 calibration CLI now fail closed on proxy/DRS inputs or unresolved
+  final configuration.
+- Official rule ledger: `config/rules/sources_2026.yaml`; encoded snapshot:
+  `rules-2026-common-v2-fia-iss08-iss20`. The sourced power curves use FIA
+  C5.2.7/C5.2.8. British A1–A4 Detection/Activation landmarks are aligned to
+  the official 2026 circuit map; British remains replay/demo/final-held-out
+  only. Detection Gap, generic per-lap deployment budget, physical Energy Store
+  capacity, and event-specific recharge/zone-end inputs remain unresolved and
+  therefore block final mode.
+- Focused command and result:
+  `.venv/bin/python -m pytest -q tests/test_strategic_state.py
+  tests/test_registry.py tests/test_rules_config.py tests/test_rules.py
+  tests/test_pass_model.py tests/test_ensemble.py tests/test_rival_chain.py
+  tests/test_rival_cp07.py tests/test_twin.py` → `309 passed in 5.14s`.
+- No C6/M07 rebuild, C4 retraining, CP-10–CP-16 final run, route generation,
+  or replay generation was authorized by the evidence. Existing development
+  smoke evidence remains `/tmp/trackshift-chain-v-smoke.json`: p95
+  `3.350438 ms`, zero rule violations, `final_mode_permitted: false`.
+
 This record is for branch `rishabh/closure-loop-v2`. Local generated evidence
 is deliberately kept out of Git.
 

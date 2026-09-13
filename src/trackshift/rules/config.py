@@ -27,7 +27,7 @@ from __future__ import annotations
 import functools
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 import yaml
 
@@ -36,10 +36,14 @@ __all__ = [
     "TIERS",
     "CLAIMABLE_TIERS",
     "RuleConfigError",
+    "FinalModeError",
     "UnsourcedValue",
     "ResolvedValue",
     "load_common",
     "load_event_rules",
+    "FINAL_REQUIRED_RULE_KEYS",
+    "validate_final_mode_rules",
+    "assert_final_mode_rules",
     "available_events",
     "resolve",
     "unsourced_keys",
@@ -64,9 +68,26 @@ TIERS = {
 #: historical DRS is not 2026 Overtake (section 41).
 CLAIMABLE_TIERS = {"RULE_FIA", "OBSERVED_RCM", "OBSERVED", "DERIVED_TELEMETRY"}
 
+# Rule leaves consumed by the production C3 action evaluator. Development may
+# expose an unavailable filter, but final mode must not claim legality while
+# any of these inputs is absent or unsourced.
+FINAL_REQUIRED_RULE_KEYS = (
+    "overtake.detection_gap_s",
+    "power_envelope.normal",
+    "power_envelope.override",
+    "power_envelope.separation_speed_kmh",
+    "energy.deploy_limit_per_lap_mj",
+    "energy.harvest_limit_per_lap_mj",
+    "energy.store_capacity_mj",
+)
+
 
 class RuleConfigError(ValueError):
     """The configuration is missing, malformed, or internally inconsistent."""
+
+
+class FinalModeError(RuleConfigError):
+    """Final C3/replay mode is blocked by an incomplete rule configuration."""
 
 
 class UnsourcedValue(RuntimeError):
@@ -117,7 +138,7 @@ def load_common(season: str = "2026", rules_dir: Path | None = None) -> dict:
 
 @functools.lru_cache(maxsize=None)
 def load_event_rules(event: str, season: str = "2026", rules_dir: Path | None = None,
-                     strict: bool | None = None) -> dict:
+                     strict: bool | None = None, final_mode: bool = False) -> dict:
     """Load one event's rules, merged over the season defaults.
 
     Parameters
@@ -128,6 +149,10 @@ def load_event_rules(event: str, season: str = "2026", rules_dir: Path | None = 
         Overrides ``strict_mode`` from common.yaml. Leave as ``None`` to take
         the configured value, so strictness is a property of the configuration
         rather than something each caller decides.
+    final_mode:
+        Apply the complete C3 final-mode gate before returning. This checks all
+        required rule leaves, every Detection/Activation line, and the official
+        regulation snapshot rather than only the key a caller resolves first.
     """
     directory = (rules_dir or RULES_DIR) / str(season)
     common = load_common(season, rules_dir)
@@ -151,7 +176,9 @@ def load_event_rules(event: str, season: str = "2026", rules_dir: Path | None = 
     # Event-level overrides sit in their own block so the merge stays obvious.
     for key, value in (specific.get("overrides") or {}).items():
         merged[key] = value
-    merged["_strict"] = common.get("strict_mode", False) if strict is None else bool(strict)
+    merged["_strict"] = bool(final_mode) or (common.get("strict_mode", False) if strict is None else bool(strict))
+    if final_mode:
+        assert_final_mode_rules(merged)
     return merged
 
 
@@ -245,6 +272,104 @@ def unsourced_keys(rules: dict) -> list[str]:
             if node.get("value_source") not in CLAIMABLE_TIERS]
 
 
+def _node_at(rules: Mapping[str, Any], dotted: str) -> Any:
+    node: Any = rules
+    for part in dotted.split("."):
+        if not isinstance(node, Mapping) or part not in node:
+            return None
+        node = node[part]
+    return node
+
+
+def _final_leaf_problem(path: str, node: Any, *, allow_null: bool = False) -> str | None:
+    """Return one fail-closed explanation for a mandatory final leaf."""
+    if not isinstance(node, Mapping):
+        return f"{path}: missing value block"
+    tier = node.get("value_source")
+    source = node.get("source")
+    if tier not in CLAIMABLE_TIERS:
+        return f"{path}: value_source is {tier!r}; final mode requires a claimable sourced value"
+    if not isinstance(source, str) or not source.strip():
+        return f"{path}: missing source"
+    if "TODO" in source.upper() or "PROXY_HISTORICAL_DRS" in source.upper():
+        return f"{path}: source is unresolved/proxy: {source!r}"
+    if tier == "RULE_FIA" and "fia.com" not in source.lower():
+        return f"{path}: RULE_FIA source is not an official FIA reference"
+    if not allow_null and node.get("value") is None and "breakpoints_kmh" not in node:
+        return f"{path}: value is missing"
+    if allow_null and node.get("value") is None and not node.get("not_applicable"):
+        return f"{path}: null geometry must be explicitly marked not_applicable"
+    return None
+
+
+def validate_final_mode_rules(event_rules: Mapping[str, Any]) -> list[str]:
+    """Return every reason a 2026 rule configuration cannot enter final mode.
+
+    This validator is independent of ``strict_mode``. A caller cannot turn
+    final mode into development mode by supplying a permissive config flag or
+    by resolving only the value it happens to need today.
+    """
+    if not isinstance(event_rules, Mapping):
+        return ["event rules are not a mapping"]
+    problems: list[str] = []
+    if str(event_rules.get("_season", event_rules.get("season", ""))) != "2026":
+        problems.append("final mode is only defined for the 2026 regulation era")
+    snapshot = event_rules.get("regulation_snapshot")
+    if not isinstance(snapshot, Mapping):
+        problems.append("regulation_snapshot: missing official rule snapshot")
+    else:
+        if not str(snapshot.get("encoded_configuration_version") or "").strip():
+            problems.append("regulation_snapshot.encoded_configuration_version: missing rule-config version")
+        sources = snapshot.get("source_documents")
+        if not isinstance(sources, list) or not sources:
+            problems.append("regulation_snapshot.source_documents: missing official sources")
+
+    for path in FINAL_REQUIRED_RULE_KEYS:
+        problem = _final_leaf_problem(path, _node_at(event_rules, path))
+        if problem:
+            problems.append(problem)
+
+    overtake = event_rules.get("overtake")
+    zones = overtake.get("zones") if isinstance(overtake, Mapping) else None
+    if not isinstance(zones, list) or not zones:
+        problems.append("overtake.zones: missing Detection/Activation geometry")
+    else:
+        for index, zone in enumerate(zones):
+            if not isinstance(zone, Mapping):
+                problems.append(f"overtake.zones[{index}]: not a mapping")
+                continue
+            for field in ("detection_line_m", "activation_line_m"):
+                path = f"overtake.zones[{index}].{field}"
+                problem = _final_leaf_problem(
+                    path,
+                    zone.get(field),
+                    allow_null=(field == "detection_line_m"),
+                )
+                if problem:
+                    problems.append(problem)
+    return problems
+
+
+def assert_final_mode_rules(event_rules: Mapping[str, Any]) -> dict[str, Any]:
+    """Raise :class:`FinalModeError` unless all final C3 gates are satisfied."""
+    problems = validate_final_mode_rules(event_rules)
+    if problems:
+        event = event_rules.get("_event") if isinstance(event_rules, Mapping) else None
+        raise FinalModeError(
+            f"final mode blocked for {event or 'event'}: " + "; ".join(problems)
+        )
+    return {
+        "ok": True,
+        "event": event_rules.get("_event"),
+        "season": event_rules.get("_season", event_rules.get("season")),
+        "rule_configuration_version": (event_rules.get("regulation_snapshot") or {}).get(
+            "encoded_configuration_version"
+        ),
+        "required_rule_keys": list(FINAL_REQUIRED_RULE_KEYS),
+        "zone_count": len((event_rules.get("overtake") or {}).get("zones") or []),
+    }
+
+
 def _numeric_value(node: Any) -> float | None:
     """Return a configured scalar number, but leave unavailable values alone."""
     if not isinstance(node, dict):
@@ -262,8 +387,9 @@ def validate_overtake_zones(zones: Any) -> list[str]:
     """Check that configured Overtake activation/end intervals are unambiguous.
 
     Detection lines may honestly remain unavailable, so validation deliberately
-    does not demand them. When Activation and zone-end proxies are supplied,
-    however, they must form sorted, non-overlapping intervals. This prevents a
+    does not demand them. When Activation and zone-end values are supplied,
+    however, they must form ordered, non-overlapping intervals, except for one
+    explicitly marked zone that wraps across start/finish. This prevents a
     Tier-C artifact split from becoming two mutually incompatible rules.
     """
     if zones is None:
@@ -292,7 +418,7 @@ def validate_overtake_zones(zones: Any) -> list[str]:
                 problems.append(
                     f"overtake.zones[{index}] duplicates activation_line_m ({activation:g})"
                 )
-            elif activation < previous_activation:
+            elif activation < previous_activation and not zone.get("wraps_to_start_finish"):
                 problems.append(
                     f"overtake.zones[{index}] is unsorted: activation_line_m ({activation:g}) "
                     f"is before prior activation_line_m ({previous_activation:g})"

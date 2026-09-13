@@ -19,6 +19,8 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from trackshift.rules.config import (  # noqa: E402
     CLAIMABLE_TIERS,
+    FINAL_REQUIRED_RULE_KEYS,
+    FinalModeError,
     RULES_DIR,
     TIERS,
     RuleConfigError,
@@ -29,6 +31,7 @@ from trackshift.rules.config import (  # noqa: E402
     load_event_rules,
     resolve,
     unsourced_keys,
+    validate_final_mode_rules,
     validate_event_file,
     validate_overtake_zones,
 )
@@ -86,6 +89,19 @@ def test_common_file_is_versioned():
     assert common["season"] == 2026
 
 
+def test_official_source_ledger_records_rule_version_and_audit_fields():
+    ledger = yaml.safe_load(
+        (ROOT / "config" / "rules" / "sources_2026.yaml").read_text(encoding="utf-8")
+    )
+    assert ledger["rule_config_version"] == "rules-2026-common-v2-fia-iss08-iss20"
+    required = {"document", "article", "page", "url", "interpretation", "confidence"}
+    assert ledger["sources"]
+    assert all(required <= set(source) for source in ledger["sources"])
+    assert {entry["key"] for entry in ledger["entries"]} >= {
+        "overtake.detection_gap_s", "power_envelope.normal", "energy.store_capacity_mj"
+    }
+
+
 def test_every_value_block_has_a_tier_and_a_source():
     for path in ALL_FILES:
         for dotted, node in _walk(_load(path)):
@@ -106,7 +122,9 @@ def test_no_rule_fia_value_still_carries_a_todo_source():
 # -------------------------------------------------------------------- merging
 def test_event_inherits_the_season_power_envelope():
     rules = load_event_rules("british_grand_prix", SEASON)
-    assert resolve(rules, "power_envelope.normal").value["breakpoints_kmh"] == [0, 290, 340]
+    assert resolve(rules, "power_envelope.normal").value["breakpoints_kmh"] == [0, 290, 340, 345]
+    assert resolve(rules, "power_envelope.normal").value["max_power_kw"] == [350, 350, 100, 0]
+    assert resolve(rules, "power_envelope.normal").value_source == "RULE_FIA"
 
 
 def test_event_specific_values_are_present():
@@ -120,14 +138,14 @@ def test_strict_mode_blocks_an_unverified_value():
     """The whole point: an unsourced number may be modelled with, never claimed."""
     rules = load_event_rules("british_grand_prix", SEASON, strict=True)
     with pytest.raises(UnsourcedValue, match="strict_mode"):
-        resolve(rules, "power_envelope.normal")
+        resolve(rules, "overtake.detection_gap_s")
 
 
 def test_non_strict_mode_returns_the_same_value():
     """Development must not be blocked by a missing citation."""
     curve = resolve(load_event_rules("british_grand_prix", SEASON, strict=False), "power_envelope.normal")
-    assert curve.value["max_power_kw"] == [350, 350, 0]
-    assert curve.claimable is False
+    assert curve.value["max_power_kw"] == [350, 350, 100, 0]
+    assert curve.claimable is True
 
 
 def test_strict_mode_allows_a_measured_value():
@@ -191,7 +209,7 @@ def test_consolidated_proxy_configuration_has_one_australian_active_zone_per_int
 
 def test_unsourced_keys_lists_what_blocks_strict_mode():
     blocking = unsourced_keys(load_event_rules("british_grand_prix", SEASON))
-    assert any("power_envelope" in k for k in blocking)
+    assert "overtake.detection_gap_s" in blocking
     assert "lap_length_m" not in blocking
 
 
@@ -199,6 +217,21 @@ def test_strictness_comes_from_the_configuration():
     """A caller cannot quietly opt out of strict mode."""
     rules = load_event_rules("british_grand_prix", SEASON)
     assert rules["_strict"] == load_common(SEASON)["strict_mode"]
+
+
+def test_final_mode_report_is_explicitly_blocked_by_unresolved_inputs():
+    rules = load_event_rules("british_grand_prix", SEASON)
+    problems = validate_final_mode_rules(rules)
+    assert any("detection_gap_s" in problem for problem in problems)
+    assert any("deploy_limit_per_lap_mj" in problem for problem in problems)
+    assert any("store_capacity_mj" in problem for problem in problems)
+    with pytest.raises(FinalModeError, match="final mode blocked"):
+        load_event_rules("british_grand_prix", SEASON, final_mode=True)
+
+
+def test_final_mode_required_keys_are_the_c3_consumed_rule_contract():
+    assert "power_envelope.normal" in FINAL_REQUIRED_RULE_KEYS
+    assert "overtake.detection_gap_s" in FINAL_REQUIRED_RULE_KEYS
 
 
 # -------------------------------------------------------------------- lookups
@@ -303,9 +336,11 @@ def test_race_control_is_tagged_observed_not_verified():
         assert json.loads(path.read_text(encoding="utf-8"))["value_source"] == "OBSERVED_RCM"
 
 
-def test_race_control_cannot_supply_line_positions():
-    """Race control states whether Overtake is available, never where. Detection
-    and Activation lines stay UNVERIFIED until an FIA event note is found."""
-    zone = load_event_rules("british_grand_prix", SEASON)["overtake"]["zones"][0]
-    assert zone["detection_line_m"]["value_source"] == "UNVERIFIED"
-    assert zone["activation_line_m"]["value_source"] == "PROXY_HISTORICAL_DRS"
+def test_british_event_map_replaces_historical_proxy_geometry():
+    """British line landmarks are official FIA map inputs, aligned to observed
+    telemetry distance; no historical DRS proxy remains in the event config."""
+    zones = load_event_rules("british_grand_prix", SEASON)["overtake"]["zones"]
+    assert [zone["zone"] for zone in zones] == ["A1", "A2", "A3", "A4"]
+    assert all(zone["activation_line_m"]["value_source"] == "DERIVED_TELEMETRY" for zone in zones)
+    assert all("fia.com" in zone["activation_line_m"]["source"] for zone in zones)
+    assert zones[2]["detection_line_m"]["not_applicable"] is True

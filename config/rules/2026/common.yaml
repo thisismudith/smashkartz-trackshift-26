@@ -32,22 +32,38 @@ schema_version: 1
 season: 2026
 
 regulation_snapshot:
-  section_issues: []
-  publication_dates: []
-  effective_date: null
-  source_documents: []
-  retrieved_at: null
-  encoded_configuration_version: rules-2026-common-v1
+  section_issues:
+    section_b_sporting: 8
+    section_c_technical: 20
+  publication_dates:
+    section_b_sporting: 2026-08-05
+    section_c_technical: 2026-08-05
+  effective_date: 2026-08-05
+  source_documents:
+    - document: FIA 2026 F1 Regulations - Section B Sporting - Issue 08
+      article: B7.2.1, B7.2.2, B7.2.3
+      pages: [62, 63, 64]
+      url: https://www.fia.com/system/files/documents/fia_2026_f1_regulations_-_section_b_sporting_-_iss_08_-_2026-08-05_7.pdf
+      interpretation: Overtake enablement, Detection Gap/Line and Activation Line are competition inputs; race control can disable Overtake.
+      confidence: HIGH
+    - document: FIA 2026 F1 Regulations - Section C Technical - Issue 20
+      article: C5.2.7, C5.2.8, C5.2.9, C5.2.10
+      pages: [63, 64]
+      url: https://www.fia.com/system/files/documents/fia_2026_f1_regulations_-_section_c_technical_-_iss_20_-_2026-08-05.pdf
+      interpretation: Absolute ERS-K power, speed-dependent deployment curves, ES SOC excursion, and Recharge limits.
+      confidence: HIGH
+  retrieved_at: 2026-09-13
+  encoded_configuration_version: rules-2026-common-v2-fia-iss08-iss20
   note: >-
-    Populate when the FIA documents are obtained. Keep the published regulation,
-    the applicable competition configuration and this encoding separately
-    auditable (section 6).
+    The published regulation, applicable competition configuration and this
+    encoding are kept separately auditable (section 6). Final mode additionally
+    requires every consumed value to be resolved and sourced.
 
 overtake:
   detection_gap_s:
     value: 1.0
     value_source: UNVERIFIED
-    source: "TODO: FIA 2026 Sporting Regulations, Overtake article"
+    source: "UNRESOLVED: FIA Section B Sporting Issue 08, Article B7.2.1b(vii), https://www.fia.com/system/files/documents/fia_2026_f1_regulations_-_section_b_sporting_-_iss_08_-_2026-08-05_7.pdf; the public regulation requires a competition-provided Detection Gap but does not state its event value here"
     note: >-
       Gap threshold at the Detection Line for Overtake to arm. 1.0 s is the
       long-standing DRS threshold and is a plausible starting point, but it is a
@@ -63,21 +79,21 @@ overtake:
 # cap at the current speed, not of a fixed 350 kW.
 power_envelope:
   normal:
-    breakpoints_kmh: [0, 290, 340]
-    max_power_kw: [350, 350, 0]
-    value_source: UNVERIFIED
-    source: "TODO: FIA 2026 Technical Regulations, MGU-K deployment vs speed"
-    note: "Reported shape: full power to ~290 km/h, tapering to zero by ~340 km/h."
+    breakpoints_kmh: [0, 290, 340, 345]
+    max_power_kw: [350, 350, 100, 0]
+    value_source: RULE_FIA
+    source: "FIA Section C Technical Issue 20, Article C5.2.7 and C5.2.8i, pp. 63-64, https://www.fia.com/system/files/documents/fia_2026_f1_regulations_-_section_c_technical_-_iss_20_-_2026-08-05.pdf"
+    note: "The 350 kW absolute cap applies below 290 km/h; above it the Article C5.2.8i formula is 1800 - 5*speed below 340 km/h, then 6900 - 20*speed below 345 km/h, then zero."
   override:
-    breakpoints_kmh: [0, 337, 355]
+    breakpoints_kmh: [0, 337.5, 355]
     max_power_kw: [350, 350, 0]
-    value_source: UNVERIFIED
-    source: "TODO: FIA 2026 Sporting/Technical Regulations, Overtake override"
-    note: "Reported shape: ~350 kW to ~337 km/h, available to ~355 km/h."
+    value_source: RULE_FIA
+    source: "FIA Section C Technical Issue 20, Article C5.2.7 and C5.2.8ii, p. 63, https://www.fia.com/system/files/documents/fia_2026_f1_regulations_-_section_c_technical_-_iss_20_-_2026-08-05.pdf"
+    note: "The 350 kW absolute cap intersects 7100 - 20*speed at 337.5 km/h; the Overtake-active curve reaches zero at 355 km/h."
   separation_speed_kmh:
     value: 290
-    value_source: UNVERIFIED
-    source: "derived from the two curves above; not independently sourced"
+    value_source: RULE_FIA
+    source: "Calculated from the 350 kW absolute cap in FIA Section C Technical Issue 20 Article C5.2.7 and the non-Overtake formula in Article C5.2.8i, p. 63, https://www.fia.com/system/files/documents/fia_2026_f1_regulations_-_section_c_technical_-_iss_20_-_2026-08-05.pdf"
     note: >-
       Below this the curves coincide, so override confers no power advantage and
       the mode is not observable. The M35 discriminator must return UNKNOWN
@@ -88,15 +104,16 @@ energy:
   deploy_limit_per_lap_mj:
     value: null
     value_source: UNVERIFIED
-    source: "TODO: FIA 2026 Technical Regulations, energy flow limits"
+    source: "UNRESOLVED: FIA Section C Technical Issue 20 Articles C5.2.7-C5.2.10 specify instantaneous power, ES SOC excursion and Recharge limits, not a generic per-lap deployment budget; no substitute may be invented"
   harvest_limit_per_lap_mj:
-    value: null
-    value_source: UNVERIFIED
-    source: "TODO: FIA 2026 Technical Regulations, recovery limits"
+    value: 8.5
+    value_source: RULE_FIA
+    source: "FIA Section C Technical Issue 20 Article C5.2.10, p. 63, https://www.fia.com/system/files/documents/fia_2026_f1_regulations_-_section_c_technical_-_iss_20_-_2026-08-05.pdf"
+    note: "Base Recharge limit. Article C5.2.10 and Sporting Article B7.2.1 allow competition-specific reductions/additional conditions; the event-specific value remains a required final input."
   store_capacity_mj:
     value: null
     value_source: UNVERIFIED
-    source: "TODO: FIA 2026 Technical Regulations, Energy Store capacity"
+    source: "UNRESOLVED: FIA Section C Technical Issue 20 Article C5.2.9, p. 63, https://www.fia.com/system/files/documents/fia_2026_f1_regulations_-_section_c_technical_-_iss_20_-_2026-08-05.pdf; the rule gives a 4MJ maximum SOC excursion, not the physical ES capacity"
     note: >-
       The physical bound on ers_soc_est_mj, a different constraint from the
       per-lap flow limits above. A car can be short of deploy budget with a full

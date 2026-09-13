@@ -45,7 +45,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Iterable, Mapping
 
-from ..data.registry import load_feature_registry
+from ..data.registry import FeatureBoundaryError, load_feature_registry, validate_feature_admission
 from ..features.opportunities import (
     AUDIT_ONLY_COLUMNS,
     CHECKPOINTS,
@@ -62,6 +62,7 @@ __all__ = [
     "FeatureSelectionError",
     "audit_feature_matrix",
     "select_features",
+    "assert_model_feature_boundary",
     "build_matrix",
 ]
 
@@ -186,6 +187,9 @@ def select_features(
     include_identity: bool = False,
     registry: Mapping[str, Mapping[str, Any]] | None = None,
     dtypes: Mapping[str, Any] | None = None,
+    year: int | str | None = None,
+    consumer: str = "C4",
+    mode: str = "development",
 ) -> FeatureSelection:
     """Decide which of ``columns`` the model at ``checkpoint`` may train on."""
     if checkpoint not in CHECKPOINTS:
@@ -211,6 +215,16 @@ def select_features(
             # Checked before the registry on purpose -- see STRUCTURAL_COLUMNS.
             excluded[name] = "structural column of the opportunity schema; never a feature"
             continue
+        if name in {"drs", "drs_open", "historical_drs_open", "historical_drs_eligible"} or str(name).startswith("historical_drs_"):
+            try:
+                validate_feature_admission(
+                    [name], year=year, consumer=consumer, mode=mode,
+                )
+            except FeatureBoundaryError as exc:
+                if str(mode).lower() in {"final", "release", "replay"}:
+                    raise FeatureSelectionError(str(exc)) from exc
+                excluded[name] = str(exc)
+                continue
         entry = entries.get(name)
         if entry is None:
             excluded[name] = "not in config/feature_registry.yaml (CP-02 owns the namespace)"
@@ -259,6 +273,25 @@ def select_features(
         include_identity=include_identity,
         excluded=excluded,
     )
+
+
+def assert_model_feature_boundary(
+    frame,
+    *,
+    year: int | str | None,
+    consumer: str = "C4",
+    mode: str = "development",
+) -> None:
+    """Apply the registry era gate to a model/calibration frame.
+
+    Keeping this beside feature selection prevents a caller that supplies a
+    pre-built ``FeatureSelection`` from bypassing the same DRS policy.
+    """
+    columns = list(getattr(frame, "columns", frame))
+    try:
+        validate_feature_admission(columns, year=year, consumer=consumer, mode=mode)
+    except FeatureBoundaryError as exc:
+        raise FeatureSelectionError(str(exc)) from exc
 
 
 def audit_feature_matrix(frame, selection: FeatureSelection) -> dict[str, Any]:

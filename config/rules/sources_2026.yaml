@@ -1,0 +1,88 @@
+# Human/audit-readable source ledger for the 2026 rule configuration.
+# Only official FIA Sporting/Technical Regulations and official FIA event
+# competition notes are admissible here. Unresolved entries remain unresolved
+# in the YAML consumed by C3; this ledger does not promote a proxy.
+schema_version: 1
+rule_config_version: rules-2026-common-v2-fia-iss08-iss20
+retrieved_at: 2026-09-13
+sources:
+  - document: FIA 2026 F1 Regulations - Section B Sporting - Issue 08
+    article: B7.2.1-B7.2.3
+    page: 62-64
+    url: https://www.fia.com/system/files/documents/fia_2026_f1_regulations_-_section_b_sporting_-_iss_08_-_2026-08-05_7.pdf
+    interpretation: Overtake enablement, Detection Gap/Line and Activation Line are competition inputs; race control can disable/re-enable Overtake.
+    confidence: HIGH
+  - document: FIA 2026 F1 Regulations - Section C Technical - Issue 20
+    article: C5.2.7-C5.2.10
+    page: 63-64
+    url: https://www.fia.com/system/files/documents/fia_2026_f1_regulations_-_section_c_technical_-_iss_20_-_2026-08-05.pdf
+    interpretation: The absolute 350kW cap, speed-dependent ERS-K deployment formulas, 4MJ ES SOC excursion, and 8.5MJ base Recharge limit.
+    confidence: HIGH
+  - document: 2026 British Grand Prix Race Director's Competition Notes, Document 5
+    article: Competition Specific Instructions 16.2
+    page: 6
+    url: https://www.fia.com/system/files/decision-document/2026_british_grand_prix_-_race_directors_competition_notes.pdf
+    interpretation: The bollard at Safety Car Line 1 is the pit-entry reference; this is not an Overtake line position.
+    confidence: HIGH
+  - document: 2026 British Grand Prix Competition Notes - Circuit Map, Document 6, Version 2
+    article: Circuit Data / Overtake Straight Mode
+    page: 2
+    url: https://www.fia.com/system/files/decision-document/2026_british_grand_prix_-_competition_notes_-_circuit_map_pit_lane_drawing_emergency_exits_map_and_red_zone.pdf
+    interpretation: British Overtake zones A1-A4 and their Detection/Activation landmarks; metre positions are derived only by aligning those landmarks to observed corner distances.
+    confidence: HIGH
+
+entries:
+  - key: power_envelope.normal
+    status: SOURCED
+    value_source: RULE_FIA
+    document: FIA 2026 F1 Regulations - Section C Technical - Issue 20
+    article: C5.2.7-C5.2.8i
+    page: 63
+    url: https://www.fia.com/system/files/documents/fia_2026_f1_regulations_-_section_c_technical_-_iss_20_-_2026-08-05.pdf
+    interpretation: Apply the 350kW absolute cap, then 1800-5v below 340kph, 6900-20v from 340 to below 345kph, and zero at/above 345kph.
+    confidence: HIGH
+  - key: power_envelope.override
+    status: SOURCED
+    value_source: RULE_FIA
+    document: FIA 2026 F1 Regulations - Section C Technical - Issue 20
+    article: C5.2.7-C5.2.8ii
+    page: 63
+    url: https://www.fia.com/system/files/documents/fia_2026_f1_regulations_-_section_c_technical_-_iss_20_-_2026-08-05.pdf
+    interpretation: Apply the 350kW absolute cap, then 7100-20v below 355kph and zero at/above 355kph while Overtake is active.
+    confidence: HIGH
+  - key: energy.harvest_limit_per_lap_mj
+    status: BASELINE_SOURCED_EVENT_VALUE_UNRESOLVED
+    value_source: RULE_FIA
+    document: FIA 2026 F1 Regulations - Section C Technical - Issue 20
+    article: C5.2.10
+    page: 63-64
+    url: https://www.fia.com/system/files/documents/fia_2026_f1_regulations_-_section_c_technical_-_iss_20_-_2026-08-05.pdf
+    interpretation: 8.5MJ is the base Recharge limit, but B7.2.1 permits competition-specific reductions/additional conditions; final event values are not substituted.
+    confidence: MEDIUM
+  - key: overtake.detection_gap_s
+    status: UNRESOLVED
+    value_source: UNVERIFIED
+    document: FIA 2026 F1 Regulations - Section B Sporting - Issue 08
+    article: B7.2.1b(vii), B7.2.3
+    page: 62, 64
+    url: https://www.fia.com/system/files/documents/fia_2026_f1_regulations_-_section_b_sporting_-_iss_08_-_2026-08-05_7.pdf
+    interpretation: The Detection Gap is supplied as a competition input; no public value is invented from a historical DRS threshold.
+    confidence: UNRESOLVED
+  - key: energy.deploy_limit_per_lap_mj
+    status: UNRESOLVED
+    value_source: UNVERIFIED
+    document: FIA 2026 F1 Regulations - Section B Sporting / Section C Technical - Issue 08/20
+    article: B7.2.1b(i)-(ii), C5.2.7-C5.2.10
+    page: 62-64, 63-64
+    url: https://www.fia.com/system/files/documents/fia_2026_f1_regulations_-_section_b_sporting_-_iss_08_-_2026-08-05_7.pdf
+    interpretation: The public articles specify instantaneous deployment power and other energy limits, not a generic per-lap deployment budget.
+    confidence: UNRESOLVED
+  - key: energy.store_capacity_mj
+    status: UNRESOLVED
+    value_source: UNVERIFIED
+    document: FIA 2026 F1 Regulations - Section C Technical - Issue 20
+    article: C5.2.9
+    page: 63
+    url: https://www.fia.com/system/files/documents/fia_2026_f1_regulations_-_section_c_technical_-_iss_20_-_2026-08-05.pdf
+    interpretation: C5.2.9 provides a 4MJ maximum ES state-of-charge excursion, not the physical Energy Store capacity; the latter is not inferred.
+    confidence: UNRESOLVED

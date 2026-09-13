@@ -9,10 +9,14 @@ implementation of the speed-dependent cap in the system (AGENTS.md section 32).
 from .config import (
     ResolvedValue,
     RuleConfigError,
+    FinalModeError,
     UnsourcedValue,
     available_events,
     load_common,
     load_event_rules,
+    FINAL_REQUIRED_RULE_KEYS,
+    validate_final_mode_rules,
+    assert_final_mode_rules,
     resolve,
     unsourced_keys,
 )
@@ -52,10 +56,14 @@ __all__ = [
     # configuration
     "ResolvedValue",
     "RuleConfigError",
+    "FinalModeError",
     "UnsourcedValue",
     "available_events",
     "load_common",
     "load_event_rules",
+    "FINAL_REQUIRED_RULE_KEYS",
+    "validate_final_mode_rules",
+    "assert_final_mode_rules",
     "resolve",
     "unsourced_keys",
     # engine (C3)
