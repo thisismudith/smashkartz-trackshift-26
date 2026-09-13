@@ -42,7 +42,9 @@ from trackshift.pass_model.api import (  # noqa: E402
     check_gates,
     fit_cell,
     git_commit,
+    grade_evidence,
     identity_comparison,
+    load_assignments,
     plan_hardware,
     plan_splits,
     rank_results,
@@ -58,6 +60,7 @@ from trackshift.features.opportunities import CHECKPOINTS, LABEL_DEFINITION, OPP
 OPPORTUNITIES = ROOT / "data" / "processed" / "overtake_opportunities"
 MODELS_ROOT = ROOT / "artifacts" / "models" / "pass"
 REPORT = ROOT / "artifacts" / "validation" / "pass_model_report.md"
+SPLIT_ASSIGNMENTS = ROOT / "data" / "processed" / "split_assignments"
 CONFIG_FILES = ("config/feature_registry.yaml", "config/data_registry.yaml")
 
 
@@ -106,8 +109,11 @@ def load_opportunities(root: Path) -> tuple[Any, list[str]]:
         schemas.add(tuple(sorted(frame.columns)))
         frames.append(frame)
         # posix separators so a manifest written on Windows compares byte-for-byte
-        # against one written on Linux (MODELS.md section 6.3).
-        sources.append(path.resolve().relative_to(ROOT.resolve()).as_posix())
+        # against one written on Linux (MODELS.md section 6.3). --opportunities-root
+        # may legitimately point outside the tree (a scratch run, a shared drive),
+        # and a bare relative_to raises there -- which would refuse the dataset at
+        # load for a reason that has nothing to do with the data.
+        sources.append(Path(_display(path.resolve())).as_posix())
     if len(schemas) > 1:
         raise SystemExit(
             f"opportunity partitions under {root} disagree on their columns; "
@@ -179,6 +185,27 @@ def main() -> int:
         ),
     )
     parser.add_argument("--folds", type=int, default=5, help="k for the kfold design")
+    parser.add_argument(
+        "--split-assignments", type=Path, default=SPLIT_ASSIGNMENTS,
+        help="Persistent C9 assignment directory, read rather than re-derived")
+    parser.add_argument(
+        "--require-documented-split", action="store_true",
+        help=(
+            "Refuse to run unless the split is CP-14's documented one (train "
+            "2022-2024, validate 2025, test 2026 excluding British GP, grouped by "
+            "battle_id). Use this once the historical seasons are built, so a run "
+            "intended as the acceptance gate cannot quietly degrade to INTERIM."
+        ),
+    )
+    parser.add_argument(
+        "--allow-event-split", action="store_true",
+        help=(
+            "Permit the coarser event-level split when battle_id is unavailable. "
+            "CP-14 specifies unit=battle_id, so a run using this flag is REDUCED "
+            "EVIDENCE and is recorded as such in the manifest and the report -- it "
+            "does not satisfy CP-14's acceptance gate."
+        ),
+    )
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
     parser.add_argument("--jobs", type=int, default=None,
                         help="Concurrent fits; default is sized from cores and free memory")
@@ -209,10 +236,67 @@ def main() -> int:
     frame, sources = load_opportunities(args.opportunities_root)
     dataset = describe_dataset(frame)
 
+    # CP-14 splits on battle_id against a written C9 assignment. Both are
+    # required unless the operator explicitly asks for the reduced run, and that
+    # request is carried into the manifest and the report rather than quietly
+    # changing what "CP-14 passed" means.
+    require_unit = None if args.allow_event_split else "battle_id"
+    assignments = None
+    excluded_rows = {}
+    if require_unit:
+        assignments = load_assignments(args.split_assignments)
+        # An opportunity C8 has no episode for cannot be split safely, so it is
+        # dropped here rather than trained on. Dropping is the only honest
+        # option: inventing a battle_id would put unrelated rows in one split
+        # group, and keeping them unassigned would leave the split unit
+        # partially populated, which C9 refuses outright. The count is recorded
+        # because a coverage hole is evidence about the C8 join, not noise.
+        usable = frame[require_unit].notna() & (
+            frame[require_unit].astype(str).str.strip() != "")
+        dropped = int((~usable).sum())
+        if dropped:
+            reasons = {}
+            if "battle_join_status" in frame.columns:
+                reasons = {str(k): int(v) for k, v in
+                           frame.loc[~usable, "battle_join_status"]
+                           .value_counts(dropna=False).items()}
+            excluded_rows = {
+                "rows_dropped_without_battle_id": dropped,
+                "rows_kept": int(usable.sum()),
+                "share_dropped": round(dropped / len(frame), 6),
+                "battle_join_status": reasons,
+                "note": ("Excluded, never relabelled: C8 attests to no episode for "
+                         "these opportunities, so they have no leakage-safe split "
+                         "group. See A2 join coverage."),
+            }
+            print(f"excluding {dropped} of {len(frame)} rows with no battle_id "
+                  f"({dropped / len(frame):.1%}); reasons: {reasons}", flush=True)
+            frame = frame[usable].reset_index(drop=True)
+        if frame.empty:
+            raise SystemExit(
+                "every row was dropped for want of a battle_id; the A2 C8 join has "
+                "not been applied to this M07 build.")
+        dataset = describe_dataset(frame)
+
     plan = plan_splits(frame, design=args.design, seed=args.seed, folds=args.folds,
-                       demo_scope=DemoScope(args.demo_scope))
+                       demo_scope=DemoScope(args.demo_scope),
+                       require_unit=require_unit, assignments=assignments)
     assert_disjoint(plan)
     split_summary = summarise(frame, plan)
+
+    # What these numbers will be worth, decided before any of them exist so the
+    # answer cannot be adjusted to suit them.
+    evidence = grade_evidence(frame, plan)
+    if args.require_documented_split and not evidence["is_cp14_acceptance_run"]:
+        raise SystemExit(
+            "--require-documented-split was given but this run grades as "
+            f"{evidence['grade']}:\n  - " + "\n  - ".join(evidence["reasons"])
+            + "\nBuild the historical seasons first, or drop the flag to record an "
+              "INTERIM benchmark.")
+    if not evidence["is_cp14_acceptance_run"]:
+        print(f"EVIDENCE GRADE {evidence['grade']}: not a CP-14 pass", flush=True)
+        for reason in evidence["reasons"]:
+            print(f"  - {reason}", flush=True)
 
     train_rows = max((row["train_labelled"] for row in split_summary), default=0)
     n_cells = len(checkpoints) * len(families) * len(plan.folds)
@@ -231,6 +315,7 @@ def main() -> int:
             preview[checkpoint] = selection.as_schema()
         print(json.dumps({
             "dataset": dataset,
+            "evidence": evidence,
             "split": plan.as_dict(),
             "split_summary": split_summary,
             "hardware": hardware.as_dict(),
@@ -269,7 +354,7 @@ def main() -> int:
     results = all_results[primary]
     aggregated = aggregate(results)
     gates = check_gates(aggregated, expected_cells=len(checkpoints) * len(families),
-                        checkpoints=checkpoints)
+                        checkpoints=checkpoints, evidence=evidence)
     failures = [r.as_dict() for r in results if not r.ok]
 
     run = {
@@ -284,6 +369,13 @@ def main() -> int:
         "deterministic": not args.fast,
         "demo_scope": args.demo_scope,
         "primary_pass": primary,
+        "split_unit_required": require_unit,
+        "evidence": evidence,
+        "evidence_grade": evidence["grade"],
+        "is_cp14_acceptance_run": evidence["is_cp14_acceptance_run"],
+        "c9_assignment_version": (
+            assignments["manifest"].get("assignment_version") if assignments else None),
+        "excluded_rows": excluded_rows or None,
     }
 
     if not args.no_artifacts:
@@ -347,7 +439,7 @@ def main() -> int:
     args.report.write_text(render_report(
         run=run, dataset=dataset, split=plan.as_dict(), split_summary=split_summary,
         aggregated=aggregated, gates=gates, hardware=hardware.as_dict(), failures=failures,
-        identity=identity_rows,
+        identity=identity_rows, evidence=evidence,
     ), encoding="utf-8")
     print(f"report: {_display(args.report)}")
 

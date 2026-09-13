@@ -13,24 +13,33 @@ actually holds rather than from what CP-14 assumed it would hold:
     a pre-2026 year.
 ``leave_one_event_out``
     One outer fold per event, each event taking a turn as the test set. Selected
-    when the table holds a single season, which is the current state: the lake is
-    2026-only, and ``config/rules/`` only covers 2026, so no historical
-    opportunity can be built regardless of how much raw telemetry arrives.
-    This is CP-14's own leave-one-track-out check promoted from secondary to
-    primary, which is the honest thing to do when the year axis has one value.
+    when the table holds a single season, which is the current state while the
+    historical C1/C7 spine is still being materialised. This is CP-14's own
+    leave-one-track-out check promoted from secondary to primary, which is the
+    honest thing to do when the year axis has one value -- but it is **not**
+    CP-14's documented split, and :func:`grade_evidence` says so in every
+    manifest and report so the distinction cannot be lost between the run and
+    the write-up.
 ``kfold``
-    C9 k-fold over ``battle_id``, exactly as CP-14 specifies. Available only when
-    ``battle_id`` is populated. It is **not** populated today:
-    ``build_opportunities.py`` never sets it, so every row carries null and C9
-    would refuse the unit. That is a CP-13 join, not a missing-data problem, and
-    no amount of raw telemetry fixes it.
+    C9 k-fold over ``battle_id``, exactly as CP-14 specifies. Available once
+    ``battle_id`` is populated, which the A2 C8 join in
+    ``trackshift.features.battle_join`` now does.
 
 **Why the unit matters.** CP-14 asks for ``unit="battle_id"`` to stop one battle
 appearing in both train and test -- the same pair of cars, the same lap, scored
-twice. When ``battle_id`` is unavailable, grouping by event preserves that
-property by construction, because a battle cannot span two events. So the
-guarantee survives the fallback; only the granularity changes, and the manifest
-records which was used.
+twice. Grouping by event would also prevent that, because a battle cannot span
+two events, so the fallback keeps the guarantee and loses only granularity. It
+is nonetheless refused under ``require_unit="battle_id"``: CP-14 names the unit,
+and a run that quietly substitutes a coarser one answers a different question
+under the checkpoint's name.
+
+**Three things must hold before a run is a CP-14 pass**, and they fail
+independently: the unit must be ``battle_id``, the design must be the
+``year_table``, and the years that table names must actually be present. A run
+can be perfectly leakage-safe and still not be a CP-14 pass because the
+historical seasons do not exist yet. :func:`grade_evidence` separates those
+cases into FULL, INTERIM and REDUCED rather than letting "the benchmark ran"
+stand in for "the checkpoint passed".
 
 **Why the year table is not built through** ``make_split``. C9 promotes any group
 containing a British Grand Prix row to HOLDOUT. For a battle or event unit that
@@ -82,6 +91,12 @@ __all__ = [
     "Fold",
     "SplitPlan",
     "SplitPlanError",
+    "MIN_FOLD_POSITIVES",
+    "EVIDENCE_FULL",
+    "EVIDENCE_INTERIM",
+    "EVIDENCE_REDUCED",
+    "grade_evidence",
+    "load_assignments",
     "plan_splits",
     "resolve_unit",
 ]
@@ -140,19 +155,173 @@ class SplitPlan:
         }
 
 
-def resolve_unit(frame) -> tuple[str, str]:
-    """Return ``(unit, reason)``: ``battle_id`` when usable, else ``event``."""
-    if "battle_id" in frame.columns:
-        present = frame["battle_id"].notna()
-        if bool(present.all()):
-            return "battle_id", "battle_id populated on every row (CP-14 preferred unit)"
-        filled = int(present.sum())
-        return "event", (
-            f"battle_id populated on {filled} of {len(frame)} rows, so C9 would refuse it; "
-            "grouping by event instead, which still prevents a battle spanning two folds "
-            "because a battle cannot span two events"
-        )
-    return "event", "no battle_id column; grouping by event"
+def resolve_unit(frame, require: str | None = None) -> tuple[str, str]:
+    """Return ``(unit, reason)``: ``battle_id`` when usable, else ``event``.
+
+    ``require="battle_id"`` turns the fallback off and raises instead. CP-14
+    passes it: an event-level split there would answer a different question from
+    the one the checkpoint asks, and would do it under CP-14's name. The
+    fallback remains available to callers that genuinely want the coarser unit
+    and say so.
+    """
+    if "battle_id" not in frame.columns:
+        if require:
+            raise SplitPlanError(
+                f"{require!r} was required but the table has no battle_id column. "
+                "Run the M07 build with the C8 join, then "
+                "scripts/features/build_split_assignments.py.")
+        return "event", "no battle_id column; grouping by event"
+
+    present = frame["battle_id"].notna() & (
+        frame["battle_id"].astype(str).str.strip() != "")
+    if bool(present.all()):
+        return "battle_id", "battle_id populated on every row (CP-14 preferred unit)"
+
+    filled = int(present.sum())
+    if require:
+        raise SplitPlanError(
+            f"{require!r} was required but battle_id is populated on only {filled} of "
+            f"{len(frame)} rows. C9 refuses a partially populated unit, and falling back "
+            "to event would silently answer a different question under CP-14's name. "
+            "Fix the A2 C8 join rather than lowering the unit; rows that genuinely have "
+            "no episode must be excluded, not relabelled.")
+    return "event", (
+        f"battle_id populated on {filled} of {len(frame)} rows, so C9 would refuse it; "
+        "grouping by event instead, which still prevents a battle spanning two folds "
+        "because a battle cannot span two events"
+    )
+
+
+#: What a run has to be before its numbers may be quoted as a CP-14 pass.
+EVIDENCE_FULL = "FULL"
+EVIDENCE_INTERIM = "INTERIM"
+EVIDENCE_REDUCED = "REDUCED"
+
+
+def grade_evidence(frame, plan: SplitPlan) -> dict[str, Any]:
+    """State what this run's numbers are worth, and why.
+
+    CP-14's acceptance gate is not "a benchmark ran". It is a benchmark run on
+    the documented split: train 2022-2024, validate 2025, test 2026 without the
+    British Grand Prix, grouped by ``battle_id``. Three things can be true
+    instead, and they are not equivalent:
+
+    ``FULL``
+        The documented split. Only this may be reported as CP-14 passing.
+    ``INTERIM``
+        The split unit is ``battle_id``, so the leakage guarantee holds and the
+        numbers are real, but the year table was not available -- typically
+        because the historical seasons are not yet built. An honest benchmark
+        that does not answer CP-14's question about generalising across
+        regulation eras.
+    ``REDUCED``
+        The split unit is coarser than ``battle_id``. The leakage guarantee is
+        weaker than CP-14 requires and the numbers must not be compared with a
+        FULL run.
+
+    Returned rather than raised, because an INTERIM run is worth doing -- it is
+    how the pipeline gets exercised before the historical lake lands. What must
+    not happen is an INTERIM run being written up as a pass, so the grade
+    travels with the numbers into the manifest and the report.
+    """
+    reasons: list[str] = []
+    available = _years(frame)
+
+    if plan.unit != "battle_id":
+        grade = EVIDENCE_REDUCED
+        reasons.append(
+            f"split unit is {plan.unit!r}, not CP-14's 'battle_id'; the "
+            "no-battle-across-folds guarantee is coarser than the checkpoint requires")
+    elif plan.design != "year_table":
+        grade = EVIDENCE_INTERIM
+        missing_years = [y for y in (*TRAIN_YEARS, VALIDATION_YEAR) if y not in available]
+        reasons.append(
+            f"design is {plan.design!r}, not CP-14's documented 'year_table'"
+            + (f"; the table holds no {missing_years}" if missing_years else ""))
+        reasons.append(
+            "the benchmark is leakage-safe and its numbers are real, but it does not "
+            "measure generalisation across regulation eras, which is what CP-14's "
+            "year table exists to measure")
+    else:
+        grade = EVIDENCE_FULL
+        missing_train = [y for y in TRAIN_YEARS if y not in available]
+        if missing_train:
+            grade = EVIDENCE_INTERIM
+            reasons.append(
+                f"year_table ran but training years {missing_train} are absent, so "
+                "'train 2022-2024' overstates what the model saw")
+
+    return {
+        "grade": grade,
+        "is_cp14_acceptance_run": grade == EVIDENCE_FULL,
+        "design": plan.design,
+        "split_unit": plan.unit,
+        "years_present": sorted(available),
+        "train_years_required": list(TRAIN_YEARS),
+        "validation_year_required": VALIDATION_YEAR,
+        "test_year_required": TEST_YEAR,
+        "reasons": reasons,
+        "note": (
+            "Only a FULL run satisfies CP-14. An INTERIM or REDUCED run is evidence "
+            "that the pipeline works, not evidence that the checkpoint passed."
+        ),
+    }
+
+
+def load_assignments(root) -> dict[str, Any]:
+    """Read the persistent C9 assignment artifact written by A2.
+
+    Returns the manifest plus a ``group_key -> role`` map. Reading the
+    assignment rather than re-deriving it is the point: two runs that re-derive
+    can disagree, and nothing in the artifacts would say why.
+    """
+    from pathlib import Path
+
+    root = Path(root)
+    manifest_path = root / "split_manifest.json"
+    assignments_path = root / "split_assignments.parquet"
+    if not manifest_path.exists() or not assignments_path.exists():
+        raise SplitPlanError(
+            f"no persistent C9 assignment under {root}. CP-14 consumes a written "
+            "assignment so runs are comparable; build it with\n"
+            "  python scripts/features/build_split_assignments.py")
+
+    import json
+
+    import pandas as pd
+
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    table = pd.read_parquet(assignments_path)
+    for column in ("group_key", "split_role", "fold_id"):
+        if column not in table.columns:
+            raise SplitPlanError(
+                f"{assignments_path} is missing {column!r}; it was not written by "
+                "build_split_assignments.py")
+    return {
+        "manifest": manifest,
+        "unit": str(manifest.get("unit", "")),
+        "roles": dict(zip(table["group_key"].astype(str), table["split_role"].astype(str))),
+        "folds": dict(zip(table["group_key"].astype(str), table["fold_id"].astype(str))),
+    }
+
+
+def assert_assignment_covers(frame, assignments: Mapping[str, Any], unit: str) -> None:
+    """Refuse a frame carrying a group the persisted assignment never saw.
+
+    A row whose battle is absent from the assignment has no split role, so
+    including it would mean inventing one at training time -- exactly what
+    persisting the assignment was meant to stop.
+    """
+    if unit not in frame.columns:
+        raise SplitPlanError(f"frame has no {unit!r} column to check against the assignment")
+    known = set(assignments["roles"])
+    seen = {str(v) for v in frame[unit].dropna().unique()}
+    missing = sorted(seen - known)
+    if missing:
+        raise SplitPlanError(
+            f"{len(missing)} {unit} value(s) in the table are absent from the persisted "
+            f"C9 assignment (for example {missing[:3]}). The assignment is stale: rebuild "
+            "it with scripts/features/build_split_assignments.py after any M07 rebuild.")
 
 
 def _years(frame) -> set[str]:
@@ -244,15 +413,50 @@ def _year_table(frame, unit: str, seed: int, scope: DemoScope) -> SplitPlan:
     )
 
 
-def _leave_one_event_out(frame, unit: str, seed: int, scope: DemoScope) -> SplitPlan:
+#: An event scored as a test or validation fold needs at least this many
+#: positive labels for its metrics to mean anything. Below it, ROC-AUC and
+#: PR-AUC are noise and early stopping against it halts essentially at random.
+MIN_FOLD_POSITIVES = 10
+
+
+def _positives_by_event(frame) -> dict[str, int]:
+    """Labelled positives per event, counted once per opportunity."""
+    if "passed_by_outcome_horizon" not in frame.columns:
+        return {}
+    subset = frame
+    if "decision_checkpoint" in frame.columns:
+        # Three rows share one opportunity and one label; counting rows would
+        # treat a single pass as three.
+        subset = frame[frame["decision_checkpoint"] == "DETECTION"]
+    labelled = subset[subset["passed_by_outcome_horizon"].notna()]
+    if labelled.empty:
+        return {}
+    counts = labelled.groupby(labelled["event"].astype(str))[
+        "passed_by_outcome_horizon"].apply(lambda s: int(s.astype(bool).sum()))
+    return {str(k): int(v) for k, v in counts.items()}
+
+
+def _leave_one_event_out(frame, unit: str, seed: int, scope: DemoScope,
+                         min_fold_positives: int = MIN_FOLD_POSITIVES) -> SplitPlan:
     demo = _demo_mask(frame, scope)
     holdout = frame.index[demo]
     pool = frame.loc[~demo]
-    events = sorted({str(value) for value in pool["event"].dropna().unique()})
+    all_events = sorted({str(value) for value in pool["event"].dropna().unique()})
+
+    # An event too thin to score is kept in training and never used as a test or
+    # validation fold. Dropping it entirely would throw away usable training
+    # rows; scoring against it would put a meaningless ROC-AUC in the report and
+    # let one unmeasurable fold drive the cross-fold variance gate.
+    positives = _positives_by_event(pool)
+    thin = {e: positives.get(e, 0) for e in all_events
+            if positives.get(e, 0) < min_fold_positives}
+    events = [e for e in all_events if e not in thin]
     if len(events) < 3:
         raise SplitPlanError(
-            f"leave_one_event_out needs at least 3 non-demo events so each fold has a "
-            f"training set, a validation event and a test event; found {events}"
+            f"leave_one_event_out needs at least 3 non-demo events with at least "
+            f"{min_fold_positives} positive labels each so every fold has a training "
+            f"set, a scorable validation event and a scorable test event; scorable "
+            f"events are {events}, too thin to score: {thin}"
         )
 
     folds: list[Fold] = []
@@ -290,7 +494,14 @@ def _leave_one_event_out(frame, unit: str, seed: int, scope: DemoScope) -> Split
             "One outer fold per event. A battle cannot span two events, so the "
             "no-battle-across-folds property CP-14 wanted from battle_id holds here too.",
             "Per-fold n varies widely; read every metric against its own n.",
-        ),
+        ) + ((
+            f"events kept in training but never scored as a fold, having fewer than "
+            f"{min_fold_positives} positive labels: "
+            + ", ".join(f"{event} ({count})" for event, count in sorted(thin.items()))
+            + ". Scoring a fold against so few positives would put a meaningless "
+              "ROC-AUC in the report and let one unmeasurable fold drive the "
+              "cross-fold variance gate.",
+        ) if thin else ()),
     )
 
 
@@ -342,6 +553,9 @@ def plan_splits(
     unit: str | None = None,
     folds: int = 5,
     demo_scope: DemoScope = DemoScope.TRACK,
+    require_unit: str | None = None,
+    assignments: Mapping[str, Any] | None = None,
+    min_fold_positives: int = MIN_FOLD_POSITIVES,
 ) -> SplitPlan:
     """Build the split plan for ``frame``.
 
@@ -362,9 +576,28 @@ def plan_splits(
             raise SplitPlanError(f"frame is missing {column!r}, which every design needs")
     scope = DemoScope(demo_scope)
 
-    resolved_unit, reason = resolve_unit(frame)
+    resolved_unit, reason = resolve_unit(frame, require=require_unit)
     if unit is not None:
         resolved_unit = unit
+
+    assignment_note = "no persistent C9 assignment supplied; split derived in-run"
+    if assignments is not None:
+        persisted = str(assignments.get("unit", ""))
+        if require_unit and persisted != require_unit:
+            raise SplitPlanError(
+                f"the persisted C9 assignment is over {persisted!r} but {require_unit!r} "
+                "was required. Rebuild it with "
+                f"--unit {require_unit} rather than relaxing the requirement here.")
+        assert_assignment_covers(frame, assignments, persisted or resolved_unit)
+        version = assignments.get("manifest", {}).get("assignment_version", "unknown")
+        assignment_note = (
+            f"C9 assignment {version} over {persisted!r}, read from disk rather than "
+            "re-derived, so this run is comparable with any other that cites it")
+    elif require_unit:
+        raise SplitPlanError(
+            f"{require_unit!r} was required but no persistent C9 assignment was supplied. "
+            "CP-14 consumes a written assignment so two runs cannot silently disagree; "
+            "build it with scripts/features/build_split_assignments.py")
 
     if design == "auto":
         available = _years(frame)
@@ -376,7 +609,8 @@ def plan_splits(
     elif design == "kfold":
         plan = _kfold(frame, resolved_unit, seed, folds, scope)
     else:
-        plan = _leave_one_event_out(frame, resolved_unit, seed, scope)
+        plan = _leave_one_event_out(frame, resolved_unit, seed, scope,
+                                    min_fold_positives=min_fold_positives)
 
     scope_note = (
         f"demo holdout scope: {scope.value} -- "
@@ -392,8 +626,13 @@ def plan_splits(
         seed=plan.seed,
         folds=plan.folds,
         holdout=plan.holdout,
-        manifest={**plan.manifest, "demo_scope": scope.value},
-        notes=plan.notes + (f"split unit: {reason}", scope_note),
+        manifest={
+            **plan.manifest,
+            "demo_scope": scope.value,
+            "persistent_assignment": (
+                dict(assignments["manifest"]) if assignments is not None else None),
+        },
+        notes=plan.notes + (f"split unit: {reason}", scope_note, assignment_note),
     )
 
 

@@ -42,6 +42,8 @@ from trackshift.pass_model.api import (  # noqa: E402
     evaluate_variants,
     git_commit,
     plan_hardware,
+    grade_evidence,
+    load_assignments,
     plan_splits,
     recommended_method,
     select_variant,
@@ -51,6 +53,7 @@ from trackshift.pass_model.features import assert_model_feature_boundary  # noqa
 from trackshift.pass_model.reliability import plot_all, write_bin_table  # noqa: E402
 
 OPPORTUNITIES = ROOT / "data" / "processed" / "overtake_opportunities"
+SPLIT_ASSIGNMENTS = ROOT / "data" / "processed" / "split_assignments"
 VALIDATION = ROOT / "artifacts" / "validation"
 REPORT = VALIDATION / "calibration_report.md"
 PLOTS = VALIDATION / "reliability"
@@ -239,6 +242,16 @@ def main() -> int:
     parser.add_argument("--report", type=Path, default=REPORT)
     parser.add_argument("--plots", type=Path, default=PLOTS)
     parser.add_argument("--no-plots", action="store_true")
+    parser.add_argument(
+        "--split-assignments", type=Path, default=SPLIT_ASSIGNMENTS,
+        help="Persistent C9 assignment directory, read rather than re-derived")
+    parser.add_argument(
+        "--allow-event-split", action="store_true",
+        help=(
+            "Permit the coarser event-level split when battle_id is unavailable. "
+            "Recorded as REDUCED evidence; does not satisfy the checkpoint's gate."
+        ),
+    )
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument(
         "--final-mode", action="store_true",
@@ -271,9 +284,41 @@ def main() -> int:
             )
         except Exception as exc:
             raise SystemExit(f"final-mode C4 feature boundary rejected: {exc}") from exc
+    # Same split contract as CP-14: battle_id against a written C9 assignment,
+    # and rows C8 has no episode for are excluded rather than relabelled.
+    # Re-deriving the split here would let this stage disagree with the
+    # benchmark it is calibrating, with nothing in either artifact to say so.
+    require_unit = None if args.allow_event_split else "battle_id"
+    assignments = None
+    excluded_rows = {}
+    if require_unit:
+        assignments = load_assignments(args.split_assignments)
+        usable = frame[require_unit].notna() & (
+            frame[require_unit].astype(str).str.strip() != "")
+        dropped = int((~usable).sum())
+        if dropped:
+            excluded_rows = {
+                "rows_dropped_without_battle_id": dropped,
+                "rows_kept": int(usable.sum()),
+                "share_dropped": round(dropped / len(frame), 6),
+            }
+            print(f"excluding {dropped} of {len(frame)} rows with no battle_id "
+                  f"({dropped / len(frame):.1%})", flush=True)
+            frame = frame[usable].reset_index(drop=True)
+        if frame.empty:
+            raise SystemExit(
+                "every row was dropped for want of a battle_id; the A2 C8 join has "
+                "not been applied to this M07 build.")
+
     plan = plan_splits(frame, design=args.design, seed=args.seed,
-                       demo_scope=DemoScope(args.demo_scope))
+                       demo_scope=DemoScope(args.demo_scope),
+                       require_unit=require_unit, assignments=assignments)
     assert_disjoint(plan)
+    evidence = grade_evidence(frame, plan)
+    if not evidence["is_cp14_acceptance_run"]:
+        print(f"EVIDENCE GRADE {evidence['grade']}: not a full-gate run", flush=True)
+        for reason in evidence["reasons"]:
+            print(f"  - {reason}", flush=True)
     split_summary = summarise(frame, plan)
     train_rows = max((r["train_labelled"] for r in split_summary), default=0)
     hardware = plan_hardware(len(checkpoints) * len(families) * len(plan.folds),

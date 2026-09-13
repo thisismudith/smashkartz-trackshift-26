@@ -53,10 +53,28 @@ def check_gates(
     *,
     expected_cells: int,
     checkpoints: Sequence[str] = CHECKPOINTS,
+    evidence: Mapping[str, Any] | None = None,
 ) -> list[GateResult]:
     """Evaluate CP-14's acceptance list against an aggregated benchmark."""
     gates: list[GateResult] = []
     completed = [row for row in aggregated if row.get("folds_ok")]
+
+    # Provenance first, because it conditions every gate below it. A model gate
+    # passing on the wrong split is not evidence that CP-14 passed, and reading
+    # a report top-down should make that impossible to miss.
+    if evidence is not None:
+        grade = str(evidence.get("grade"))
+        gates.append(GateResult(
+            "Run uses CP-14's documented split (train 2022-2024 / validate 2025 / "
+            "test 2026 excluding British GP, grouped by battle_id)",
+            bool(evidence.get("is_cp14_acceptance_run")),
+            f"evidence grade {grade}"
+            + ("; this run may be quoted as a CP-14 pass"
+               if grade == "FULL" else
+               "; the gates below are real measurements on a leakage-safe split, but "
+               "this run does NOT satisfy CP-14. "
+               + " ".join(str(r) for r in evidence.get("reasons", []))),
+        ))
 
     gates.append(GateResult(
         "All benchmark cells produce an artifact with a locked feature schema",
@@ -198,6 +216,7 @@ def render_report(
     hardware: Mapping[str, Any],
     failures: Sequence[Mapping[str, Any]] = (),
     identity: Sequence[Mapping[str, Any]] = (),
+    evidence: Mapping[str, Any] | None = None,
 ) -> str:
     """Render ``artifacts/validation/pass_model_report.md``."""
     lines: list[str] = [
@@ -205,6 +224,39 @@ def render_report(
         "",
         f"Generated {run.get('created_utc')} at commit `{run.get('git_commit')}`.",
         "",
+    ]
+
+    # The standing of the whole document, before any number in it. A reader who
+    # stops after one paragraph must not come away thinking CP-14 passed.
+    if evidence is not None:
+        grade = str(evidence.get("grade"))
+        if evidence.get("is_cp14_acceptance_run"):
+            lines += [
+                f"**Evidence grade: {grade}.** This run uses CP-14's documented split "
+                "and its numbers may be quoted as a CP-14 result.",
+                "",
+            ]
+        else:
+            lines += [
+                f"> **Evidence grade: {grade} — this is NOT a CP-14 pass.**",
+                ">",
+                "> The measurements below are real and the split is leakage-safe, but "
+                "the run does not meet CP-14's acceptance conditions:",
+                ">",
+            ]
+            lines += [f"> - {reason}" for reason in evidence.get("reasons", [])]
+            lines += [
+                ">",
+                f"> Split unit `{evidence.get('split_unit')}`, design "
+                f"`{evidence.get('design')}`, years present "
+                f"{evidence.get('years_present')}. CP-14 requires train "
+                f"{evidence.get('train_years_required')}, validation "
+                f"`{evidence.get('validation_year_required')}`, test "
+                f"`{evidence.get('test_year_required')}` excluding the British Grand Prix.",
+                "",
+            ]
+
+    lines += [
         "| Run | Value |",
         "|---|---|",
         f"| Seed | {run.get('seed')} |",

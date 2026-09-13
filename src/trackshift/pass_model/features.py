@@ -33,12 +33,10 @@ unregistered
     declared has no recorded provenance, so it cannot enter a feature matrix.
     Refusing is not silent -- the selection reports every rejection and why.
 
-The consequence worth knowing before reading a report: with the registry as it
-stands, ``attacker_team`` and ``defender_team`` are **not registered**, so team
-identity is unavailable to CP-14 even though the column exists in the table.
-Driver identity (``attacker``, ``defender``) is registered and available. The
-identity ablation in section 17 is therefore a driver-identity ablation until
-the team columns are registered.
+Both driver identity (``attacker``, ``defender``) and team identity
+(``attacker_team``, ``defender_team``) are registered and sit in the
+``identity`` group, so the section 17 ablation covers both and both are held
+behind ``include_identity``.
 """
 from __future__ import annotations
 
@@ -61,6 +59,7 @@ __all__ = [
     "FeatureSelection",
     "FeatureSelectionError",
     "audit_feature_matrix",
+    "feature_groups",
     "select_features",
     "assert_model_feature_boundary",
     "build_matrix",
@@ -102,6 +101,14 @@ STRUCTURAL_COLUMNS: frozenset[str] = frozenset({
 MISSING_CATEGORY = "__missing__"
 
 METADATA_ONLY_GROUP = "metadata_only"
+
+#: Name fragments refused regardless of registration.
+#:
+#: DRS is deliberately *not* listed. It is already gated above by
+#: ``validate_feature_admission``, which scopes it by year and consumer: refused
+#: for 2026 model paths, admitted for named 2022-2025 audit and prior consumers.
+#: A blanket token ban here would override that carve-out and refuse the
+#: historical prior its own boundary check had just allowed.
 FORBIDDEN_MODEL_TOKENS = (
     "future", "outcome", "pass_attempted", "outcome_distance", "position_swap",
     "zone", "event_id", "circuit_id",
@@ -138,6 +145,28 @@ class FeatureSelection:
         artifact whose column order drifts cannot be checked against its manifest.
         """
         return tuple(self.numeric) + tuple(self.categorical)
+
+    def without(self, names: Iterable[str], reason: str = "ablated") -> "FeatureSelection":
+        """A copy with ``names`` removed, each recorded in ``excluded``.
+
+        Used by the CP-23 ablation harness. Removing columns rather than
+        re-selecting keeps every other decision identical between the baseline
+        and the ablated run, so the measured delta is the group's contribution
+        and not a side effect of re-deriving the selection.
+        """
+        drop = {str(n) for n in names}
+        if not drop:
+            return self
+        return FeatureSelection(
+            checkpoint=self.checkpoint,
+            numeric=tuple(n for n in self.numeric if n not in drop),
+            categorical=tuple(c for c in self.categorical if c not in drop),
+            identity=self.identity,
+            include_identity=self.include_identity,
+            excluded={**self.excluded,
+                      **{n: reason for n in sorted(drop & set(self.columns))}},
+            schema_version=self.schema_version,
+        )
 
     def as_schema(self) -> dict[str, Any]:
         return {
@@ -178,6 +207,28 @@ def _is_categorical(name: str, entry: Mapping[str, Any], dtypes: Mapping[str, An
             return kind in {"O", "U", "S", "b"}
         return str(dtypes[name]) in {"object", "string", "category", "bool", "str"}
     return entry.get("unit") is None
+
+
+def feature_groups(selection: "FeatureSelection",
+                   registry: Mapping[str, Mapping[str, Any]] | None = None
+                   ) -> dict[str, tuple[str, ...]]:
+    """``interaction_group`` -> the selected columns belonging to it (CP-23).
+
+    Read from the registry rather than hard-coded so a group added to
+    ``config/feature_registry.yaml`` is ablatable without touching the harness.
+    Only groups with at least one column *in this selection* are returned: a
+    group the checkpoint cannot see has no delta to measure, and reporting it as
+    zero would read as "measured and worthless" rather than "not present".
+    """
+    entries = registry if registry is not None else load_feature_registry()
+    groups: dict[str, list[str]] = {}
+    for name in selection.columns:
+        entry = entries.get(name) or {}
+        for group in _groups(name, entry):
+            if group in (KEY_GROUP, METADATA_ONLY_GROUP):
+                continue
+            groups.setdefault(str(group), []).append(name)
+    return {group: tuple(sorted(set(columns))) for group, columns in sorted(groups.items())}
 
 
 def select_features(
@@ -225,6 +276,7 @@ def select_features(
                     raise FeatureSelectionError(str(exc)) from exc
                 excluded[name] = str(exc)
                 continue
+
         entry = entries.get(name)
         if entry is None:
             excluded[name] = "not in config/feature_registry.yaml (CP-02 owns the namespace)"
@@ -232,6 +284,11 @@ def select_features(
         groups = _groups(name, entry)
         if METADATA_ONLY_GROUP in groups:
             excluded[name] = "rule/display/audit metadata; never a trainable feature"
+            continue
+        if any(token in str(name).lower() for token in FORBIDDEN_MODEL_TOKENS):
+            excluded[name] = (
+                "name contains a forbidden token; refused regardless of registration"
+            )
             continue
         if name not in allowed:
             excluded[name] = (

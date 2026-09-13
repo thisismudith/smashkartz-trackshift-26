@@ -1,7 +1,7 @@
 """Pass-probability chain (Chain P, Owner B).
 
 CP-14 benchmark (M10), and the surface CP-15 calibration (M11), CP-16 ensemble
-spread (M12) and CP-17 era handling (M13) build on.
+spread (M12) and CP-17 fine-tuning (M13) build on.
 
 The output is a **probability**, and it is selected as one. Section 26 makes
 calibration outrank ranking quality: the planner consumes `p_pass` to price

@@ -236,11 +236,17 @@ def test_identity_is_behind_the_flag(frame):
 
 def test_unregistered_columns_are_refused_not_guessed(frame):
     rows = frame[frame["decision_checkpoint"] == "DETECTION"]
-    selection = select_features("DETECTION", rows.columns, dtypes=rows.dtypes)
-    # attacker_team exists in the table but is not registered. Silently including
-    # it would put an unprovenanced column into a model artifact.
-    assert "attacker_team" not in selection.columns
-    assert "feature_registry" in selection.excluded["attacker_team"]
+    # A plausible-looking column nobody registered. Silently including it would
+    # put an unprovenanced column into a model artifact.
+    #
+    # This used to assert on ``attacker_team``, which was unregistered at the
+    # time. It is now a registered M07/M10 identity feature, so it no longer
+    # exercises this path -- an invented name does, and cannot drift back into
+    # the registry underneath the test.
+    columns = list(rows.columns) + ["attacker_favourite_sandwich"]
+    selection = select_features("DETECTION", columns, dtypes=rows.dtypes)
+    assert "attacker_favourite_sandwich" not in selection.columns
+    assert "feature_registry" in selection.excluded["attacker_favourite_sandwich"]
 
 
 def test_structural_columns_are_refused_even_when_registered(frame):

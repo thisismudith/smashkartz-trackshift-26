@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import sys
 from collections.abc import Callable, Iterable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -186,9 +186,18 @@ class OpportunityContext:
     attacker: Any
     defender: Any
     battle_id: Any = None
+    #: Why this opportunity does or does not carry a battle_id (A2). Recorded
+    #: per row so a coverage hole names its own cause instead of appearing as an
+    #: unexplained null.
+    battle_join_status: Any = None
     attacker_team: Any = None
     defender_team: Any = None
     regulation_era: Any = None
+    #: Lap- and segment-level CP-13 context (tyre, weather, geometry), constant
+    #: across the three checkpoints of one opportunity and knowable at the
+    #: Detection Line. Held as a map so adding a feature group does not mean
+    #: adding a field here and in three other places.
+    context_features: Mapping[str, Any] = field(default_factory=dict)
 
     def as_row(self) -> dict[str, Any]:
         return {
@@ -199,11 +208,13 @@ class OpportunityContext:
             "lap": self.lap,
             "zone": self.zone,
             "battle_id": self.battle_id,
+            "battle_join_status": self.battle_join_status,
             "attacker": self.attacker,
             "defender": self.defender,
             "attacker_team": self.attacker_team,
             "defender_team": self.defender_team,
             "regulation_era": self.regulation_era,
+            **dict(self.context_features or {}),
         }
 
 
