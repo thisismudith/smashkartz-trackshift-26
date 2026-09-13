@@ -6,7 +6,7 @@ import {
   CAMERA_CONTROL_HELP, SimRenderer,
   type CameraMode, type GpuInfo, type GpuPreference, type PerfStats,
 } from "../render/scene";
-import { parseTrackModel, type RawTrackModel } from "../data/manifest";
+import { parseTrackModel, trackPointAt, type RawTrackModel } from "../data/manifest";
 import { defaultSimSource, type RuleSet } from "../data/source";
 import { DriverPanel } from "./DriverPanel";
 import { EnvironmentPanel } from "./EnvironmentPanel";
@@ -16,6 +16,7 @@ import { type CatalogueTrack, type Selection, SessionSelector } from "./SessionS
 import { TimelineScrubber } from "./TimelineScrubber";
 import { TrackLegend } from "./TrackLegend";
 import { CollapsiblePanel } from "./CollapsiblePanel";
+import { OvertakePanel } from "./OvertakePanel";
 import { WeatherStrip } from "./WeatherStrip";
 import styles from "./sim.module.css";
 
@@ -49,6 +50,13 @@ export default function SimCanvas() {
   // subscribe/getSnapshot functions handed to useSyncExternalStore below.
   const [store] = useState(() => new SimStore());
   const rendererRef = useRef<SimRenderer | null>(null);
+  // The same renderer, mirrored into state purely so panels that need to talk
+  // to it re-render when it is (re)built. A ref alone never triggers one, so a
+  // panel reading rendererRef.current would hold the null it saw on first paint.
+  const [renderer, setRenderer] = useState<SimRenderer | null>(null);
+  // Held so panels can resolve a station into a point on the ring -- the wind's
+  // head/cross split needs the direction of travel, which only the ring knows.
+  const [trackModel, setTrackModel] = useState<ReturnType<typeof parseTrackModel> | null>(null);
   const [cameraMode, setCameraMode] = useState<CameraMode>("broadcast");
   const [loadError, setLoadError] = useState<string | null>(null);
   const [selectedDriver, setSelectedDriver] = useState<string | null>(null);
@@ -74,6 +82,14 @@ export default function SimCanvas() {
 
   const selectedRow = selectedDriver
     ? dashboard?.leaderboard.find((r) => r.driver === selectedDriver) ?? null
+    : null;
+
+  // Direction of travel at the focused car, for resolving the wind into head and
+  // cross components (API.md section 8). The board publishes lap PROGRESS rather
+  // than a station, so it is scaled by the ring's own length here rather than
+  // carrying a second copy of the station through the dashboard snapshot.
+  const focusHeadingRad = selectedRow && trackModel
+    ? trackPointAt(trackModel, selectedRow.lapProgress * trackModel.lengthMetres).heading
     : null;
 
   // The single place a session change is requested from: resets the per-session UI
@@ -166,8 +182,10 @@ export default function SimCanvas() {
 
         const teamColourBySlug = new Map(cat.teams.map((t) => [t.team, `#${t.colour}`]));
         const track = parseTrackModel(trackRaw);
+        setTrackModel(track);
         setHasPitLane(track.pitLanePath !== null);
         rendererRef.current?.dispose();
+        setRenderer(null); // the old one is gone; no panel may keep talking to it
         const renderer = new SimRenderer(canvasRef.current, store, gpuPref);
         renderer.setTrack(track);
         renderer.setDimUnfocused(dimField);
@@ -186,6 +204,7 @@ export default function SimCanvas() {
         renderer.onPerf(setPerf);
         renderer.start();
         rendererRef.current = renderer;
+        setRenderer(renderer);
         setGpuInfo(renderer.getGpuInfo());
 
         const ro = new ResizeObserver(() => renderer.resize());
@@ -336,10 +355,20 @@ export default function SimCanvas() {
             leaderboard, where a 20-row table pushed them below the fold. */}
         <div className={styles.leftDock}>
           <DriverPanel row={selectedRow} rules={rules} />
+          {/* The rules service knows circuits by the slug the artifacts use, so
+              the selection's own trackSlug is the key -- no second mapping to
+              drift out of step with the one the sim already loads by. */}
+          <OvertakePanel
+            event={selection?.trackSlug ?? null}
+            renderer={renderer}
+            dashboard={dashboard}
+          />
         </div>
 
         <EnvironmentPanel
           weather={meta?.weather ?? null}
+          headingRad={focusHeadingRad}
+          headingLabel={selectedRow ? `${selectedRow.driver}'s heading` : null}
           sessionTime={dashboard?.sessionTime ?? 0}
           duration={state.duration}
           totalLaps={state.totalLaps}
@@ -370,7 +399,11 @@ export default function SimCanvas() {
               </button>
             ))}
           </span>
-          <WeatherStrip weather={meta?.weather ?? null} sessionTime={dashboard?.sessionTime ?? 0} />
+          <WeatherStrip
+            weather={meta?.weather ?? null}
+            sessionTime={dashboard?.sessionTime ?? 0}
+            headingRad={focusHeadingRad}
+          />
         </div>
         {dashboard ? (
           <TimelineScrubber

@@ -46,6 +46,20 @@
   color: var(--haas-white);
 }
 
+.statusLine {
+  margin-top: 0.6rem;
+  font-size: 0.76rem;
+  color: var(--haas-grey);
+}
+
+.statusLine code {
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  color: var(--haas-white);
+}
+
+.statusLine[data-source="live"] { color: var(--haas-white); }
+.statusLine[data-source="snapshot"] { color: #d0a608; }
+
 .eventBar {
   display: flex;
   flex-wrap: wrap;

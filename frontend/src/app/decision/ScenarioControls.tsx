@@ -1,15 +1,16 @@
 /**
  * Parameter controls for the decision-state variables API.md's routes actually take as
- * input (energy, gap, eligibility, tyre, rival belief, horizon). "Save" does not fake a
- * response: it builds the exact request body API.md defines and calls the real client in
- * ./api-contract/client.ts. Today that always fails with a network error, because no
- * backend implements these routes yet — the failure is shown, not hidden, so this stays
- * honest about what is and isn't wired up. See DecisionView.tsx's own stance on that.
+ * input (energy, gap, eligibility, tyre, rival belief, horizon). "Save" builds the exact
+ * request body API.md defines and calls the real client in ./api-contract/client.ts,
+ * against src/trackshift/serve/app.py (run it with `python scripts/serve/run_service.py`).
+ * shadow_price and plan are both honest stubs there (M22 DP / M24 planner aren't built) —
+ * the response comes back 200 with `X-TrackShift-Stub: true`, badged below rather than
+ * shown as a real result. A network error means the backend isn't running at all.
  */
 "use client";
 
 import { useState } from "react";
-import { fetchShadowPrice, postPlan } from "@/api-contract/client";
+import { fetchShadowPrice, postPlan, postPassPredict, postRivalState } from "@/api-contract/client";
 import type { ApiCallResult, PlanRequestBody, PlanResponse, ShadowPriceResponse } from "@/api-contract/types";
 import s from "./scenario.module.css";
 
@@ -24,6 +25,21 @@ function StatusBlock<T>({ label, result }: { label: string; result: ApiCallResul
   if (result === null) return null;
   if (result === "pending") {
     return <p className={s.statusPending}>{label}: sending…</p>;
+  }
+  if (result.ok && result.stub) {
+    return (
+      <div className={s.statusStub}>
+        <p>
+          <span className={s.stubBadge}>STUB DATA</span> {label}: {result.status} — backend set{" "}
+          <code>X-TrackShift-Stub: true</code>
+        </p>
+        <p className={s.statusErrorNote}>
+          {(result.data as { reason?: string } | undefined)?.reason ??
+            "The underlying model isn't built yet; this is a correctly-shaped placeholder, not a prediction (API.md §3.7)."}
+        </p>
+        <pre className={s.pre}>{JSON.stringify(result.data, null, 2)}</pre>
+      </div>
+    );
   }
   if (result.ok) {
     return (
@@ -64,6 +80,8 @@ export function ScenarioControls() {
     null,
   );
   const [planResult, setPlanResult] = useState<ApiCallResult<PlanResponse> | "pending" | null>(null);
+  const [passResult, setPassResult] = useState<ApiCallResult<Record<string, unknown>> | "pending" | null>(null);
+  const [rivalResult, setRivalResult] = useState<ApiCallResult<Record<string, unknown>> | "pending" | null>(null);
 
   const planRequest: PlanRequestBody = {
     state: {
@@ -91,6 +109,29 @@ export function ScenarioControls() {
     setPlanResult("pending");
     const result = await postPlan(planRequest);
     setPlanResult(result);
+  }
+
+  async function savePassPredict() {
+    setPassResult("pending");
+    const result = await postPassPredict({
+      decision_checkpoint: "DETECTION",
+      feature_schema_id: "pass-det-2026.03",
+      features: {
+        gap_at_checkpoint_s: timeGapS,
+        overtake_eligible: eligibility === "ARMED",
+        overtake_state: eligibility,
+        attacker_tyre_compound: tyreCompound,
+        attacker_tyre_life: tyreLife,
+        ers_energy_delta_kj_est: energyKj,
+      },
+    });
+    setPassResult(result);
+  }
+
+  async function saveRivalState() {
+    setRivalResult("pending");
+    const result = await postRivalState({ segments: [] });
+    setRivalResult(result);
   }
 
   return (
@@ -163,10 +204,18 @@ export function ScenarioControls() {
         <button type="button" className={s.saveButton} onClick={savePlan}>
           Save → POST /plan
         </button>
+        <button type="button" className={s.saveButton} onClick={savePassPredict}>
+          Save → POST /pass/predict
+        </button>
+        <button type="button" className={s.saveButton} onClick={saveRivalState}>
+          Save → POST /rival/state
+        </button>
       </div>
 
       <StatusBlock label="shadow_price" result={shadowPriceResult} />
       <StatusBlock label="plan" result={planResult} />
+      <StatusBlock label="pass/predict" result={passResult} />
+      <StatusBlock label="rival/state" result={rivalResult} />
     </div>
   );
 }

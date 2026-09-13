@@ -152,9 +152,16 @@ export interface TrackResponse {
   track: string;
   lap_length_m: number;
   centreline: TrackCentrelinePoint[];
+  /** Present when the backend has no x/y polyline for this circuit and left centreline empty
+   * rather than fabricating one — see src/trackshift/serve/track_data.py. */
+  centreline_note?: string;
   segments: TrackSegment[];
   lines: TrackLine[];
   zones: TrackZone[];
+  geometry_version?: string;
+  corner_count?: number;
+  rotation_deg?: number;
+  segment_count?: number;
   versions: Versions;
 }
 
@@ -162,7 +169,7 @@ export interface TrackResponse {
 
 export interface RulesResponse {
   event: string;
-  year: number;
+  year: number | string;
   config_version: string;
   regulation_snapshot: {
     section_issues: string[];
@@ -452,5 +459,8 @@ export interface ApiCallResult<T> {
   data?: T;
   error?: string;
   status?: number;
+  /** True when the response carried `X-TrackShift-Stub: true` (API.md §3.7/§10) — the
+   * underlying model isn't built yet and the body is a correctly-shaped placeholder. */
+  stub?: boolean;
   request: { method: "GET" | "POST"; url: string; body?: unknown };
 }

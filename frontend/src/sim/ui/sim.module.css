@@ -558,3 +558,158 @@
   flex: none;
   pointer-events: auto;
 }
+
+/* ---------------------------------------------------------- Overtake panel
+
+   The Detection Line and the activation zones, plus the live closest battle
+   scored against the measured pass rate. Two kinds of number share this panel
+   and must not look alike: a measured position and a development proxy, so
+   .overtakeSource is always rendered, never a tooltip. */
+.overtakePanel {
+  background: rgba(17, 17, 17, 0.8);
+  border: 1px solid var(--haas-grey);
+  font-size: 0.7rem;
+  padding: 0.5rem 0.7rem;
+  color: var(--haas-grey);
+}
+
+.overtakeHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--haas-white);
+  margin-bottom: 0.4rem;
+}
+
+.overtakeTag {
+  font-size: 0.62rem;
+  letter-spacing: 0.08em;
+  padding: 0.1rem 0.35rem;
+  border: 1px solid var(--haas-grey);
+  color: var(--haas-grey);
+}
+
+.overtakeTag[data-armed="true"] {
+  border-color: var(--haas-red);
+  color: var(--haas-red);
+}
+
+.overtakeFacts {
+  margin: 0;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.15rem 0.6rem;
+}
+
+.overtakeFacts dt {
+  color: var(--haas-grey);
+  white-space: nowrap;
+}
+
+.overtakeFacts dd {
+  margin: 0;
+  color: var(--haas-white);
+  font-family: var(--font-mono, monospace);
+  display: flex;
+  flex-direction: column;
+}
+
+.overtakeZoneRow {
+  display: contents;
+}
+
+.overtakeSource {
+  color: var(--haas-grey);
+  font-size: 0.6rem;
+  font-family: inherit;
+  letter-spacing: 0.03em;
+}
+
+.overtakeBattle {
+  margin-top: 0.5rem;
+  padding-top: 0.45rem;
+  border-top: 1px solid rgba(174, 174, 174, 0.35);
+}
+
+.overtakeBattleWho {
+  margin: 0 0 0.3rem;
+  color: var(--haas-white);
+}
+
+.overtakeP {
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 0.45rem;
+}
+
+.overtakePValue {
+  font-size: 1.3rem;
+  color: var(--haas-white);
+  font-family: var(--font-mono, monospace);
+  line-height: 1;
+}
+
+.overtakePRange {
+  color: var(--haas-grey);
+  font-family: var(--font-mono, monospace);
+}
+
+.overtakeProv {
+  margin-left: auto;
+  font-size: 0.58rem;
+  letter-spacing: 0.08em;
+  padding: 0.08rem 0.3rem;
+  border: 1px solid var(--haas-grey);
+}
+
+.overtakeProv[data-stub="true"] {
+  border-color: var(--haas-red);
+  color: var(--haas-red);
+}
+
+.overtakeNote {
+  margin: 0.25rem 0 0;
+  color: var(--haas-grey);
+  font-size: 0.62rem;
+  line-height: 1.35;
+}
+
+.overtakeEras {
+  margin: 0.4rem 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.1rem;
+}
+
+.overtakeEras li {
+  display: grid;
+  grid-template-columns: 2.6rem 6.6rem 2.6rem auto;
+  gap: 0.3rem;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.62rem;
+  color: var(--haas-grey);
+}
+
+.overtakeEraTag {
+  letter-spacing: 0.05em;
+}
+
+.overtakeEraN {
+  color: rgba(174, 174, 174, 0.65);
+}
+
+/* A DRS-era row is dimmed and never carries the Overtake row's emphasis: the two
+   are different mechanisms and must not read as one series (API.md section 8). */
+.overtakeEras li[data-era="DRS"] .overtakeEraTag {
+  color: rgba(174, 174, 174, 0.75);
+  font-style: italic;
+}
+
+.overtakeEras li[data-era="OVERTAKE"] .overtakeEraTag {
+  color: var(--haas-white);
+}

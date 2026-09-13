@@ -271,25 +271,75 @@ const GRID_LATERAL_FALLBACK_M = 1.8;
  * therefore stood 1.2-1.8 m out on the grass, and the eleven that did not were jammed
  * against the left edge -- the field "strung out parallel to the road rather than on
  * it" that the screenshot shows.
+ *
+ * A first fix capped the stagger's SIZE but still centred it ON THE RING, which is
+ * wrong for exactly the same reason: the ring being 6.5 m off the road's true centre
+ * here means a ring-centred grid reads as the whole field parked against the left
+ * side of the road, with most of the actual tarmac empty to the right of every car.
+ * A real grid is laid out across the WIDTH OF THE ROAD, not around wherever the
+ * fastest lap happened to thread through the corner behind it -- so when BOTH sides
+ * are measured, the stagger is centred on the road's own measured midpoint
+ * (`leftRoom` and `rightRoom` together bound the true road, even though neither
+ * alone is the centre), and only falls back to ring-centred single-side placement
+ * when just one side has a measurement to place against.
  */
+/** Metres either side of a grid station to sample when smoothing the road's measured
+ * centre, small relative to the 8 m grid pitch so it never blends into a neighbouring
+ * car's own station. See roadCentreFromRing. */
+const CENTRE_SMOOTH_OFFSETS_M = [-4, -2, 0, 2, 4];
+
+/**
+ * The road's measured midpoint at `stationM`, in the ring's "+ = left" lateral frame,
+ * smoothed over a few nearby stations rather than trusted at the exact one: the
+ * per-station road-edge walk that produces edgeLeftM/edgeRightM is a GLB bake and can
+ * carry a single noisy station. Measured at the British GP grid: one slot's OWN
+ * station computed a centre 18-20 m from both immediate neighbours 8 m either side --
+ * a single-point spike, not a road feature 8 m of straight tarmac could produce. The
+ * median of a handful of samples is one bad reading away from the same spike; the
+ * single-station value was zero readings away. Null when fewer than two samples had
+ * both sides measured, i.e. there is nothing to smooth.
+ */
+function roadCentreFromRing(track: TrackModel, stationM: number): number | null {
+  const samples: number[] = [];
+  for (const d of CENTRE_SMOOTH_OFFSETS_M) {
+    const left = measuredLateralRoomM(track, stationM + d, 1);
+    const right = measuredLateralRoomM(track, stationM + d, -1);
+    if (left !== null && right !== null) samples.push((left - right) / 2);
+  }
+  if (samples.length < 2) return null;
+  samples.sort((a, b) => a - b);
+  const mid = samples.length >> 1;
+  return samples.length % 2 ? samples[mid] : (samples[mid - 1] + samples[mid]) / 2;
+}
+
 function columnLateral(
   track: TrackModel, stationM: number, sign: number,
 ): number {
   const surfaced = Boolean(track.surface);
-  const measured = surfaced ? measuredLateralRoomM(track, stationM, sign) : null;
-  // A surfaced circuit NEVER falls through to halfWidthAt: that RULE scale describes
-  // the ribbon, which is not what is drawn once a real model is on screen. Unmeasured
-  // means SINGLE FILE on that side (0), not the ribbon's flat stagger -- claiming a
-  // GRID_LATERAL_FALLBACK_M stagger on a road we have not measured would be exactly the
-  // fabrication this whole path exists to refuse.
   if (surfaced) {
+    const leftRoom = measuredLateralRoomM(track, stationM, 1);
+    const rightRoom = measuredLateralRoomM(track, stationM, -1);
+    const carHalfWidth = CAR_RENDER_WIDTH_M / 2;
+    if (leftRoom !== null && rightRoom !== null) {
+      // The road's own measured midpoint, in the ring's "+ = left" lateral frame --
+      // e.g. leftRoom 1.75 m, rightRoom 17.5 m puts the centre 7.875 m RIGHT of the
+      // ring, matching the 6.5 m this file's own measurement above found by hand.
+      // Smoothed against single-station bake noise (see roadCentreFromRing); falls
+      // back to this exact station's own value only when too few neighbours measured
+      // both sides to smooth with.
+      const centreFromRing = roadCentreFromRing(track, stationM) ?? (leftRoom - rightRoom) / 2;
+      const target = centreFromRing + sign * GRID_LATERAL_FALLBACK_M;
+      // Still never past the edge of the actually-measured road AT THIS STATION,
+      // regardless of what the smoothed aim point says -- a car parked here must fit
+      // on the road here, not on its neighbours' average road.
+      return Math.max(-(rightRoom - carHalfWidth), Math.min(leftRoom - carHalfWidth, target));
+    }
+    // Only one side has a measurement: there is no true centre to place against, so
+    // fall back to the single-side, ring-relative placement -- single file on the
+    // unmeasured side, exactly as when nothing at all is measured (see below).
+    const measured = sign >= 0 ? leftRoom : rightRoom;
     if (measured === null) return 0;
-    const fits = measured - CAR_RENDER_WIDTH_M / 2;
-    // The same fixed, realistic stagger as the ribbon's degenerate case (GRID_LATERAL_
-    // FALLBACK_M) -- NOT a fraction of `measured`. `measured` is this side's real paved
-    // extent, which can be many metres wider than the width of an actual grid box (a
-    // wide paved shoulder or pit apron is real road but is not where a car starts), so it
-    // is used only as a cap, never as the scale of the offset itself.
+    const fits = measured - carHalfWidth;
     const offset = Math.max(0, Math.min(GRID_LATERAL_FALLBACK_M, fits));
     return offset === 0 ? 0 : sign * offset;
   }

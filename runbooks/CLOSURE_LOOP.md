@@ -186,7 +186,7 @@ Exact outputs and local artifact paths are appended per iteration below.
   `CHECKPOINTS_RISHABH.md`. Generated data, models, caches, manifests, and
   `/tmp` evidence are not staged.
 
-### Regulation-era boundary closure — 2026-09-13
+### A2 — causal C8 battle join, persistent C9, CP-14 fail-closed — 2026-09-13 (Tanveer)
 
 - Registry/final-boundary source: `src/trackshift/data/registry.py`,
   `src/trackshift/rules/config.py`, `src/trackshift/rules/engine.py`, and
@@ -212,6 +212,7 @@ Exact outputs and local artifact paths are appended per iteration below.
   violations, `final_mode_permitted: false`).
 - Status remains `BLOCKED_FINAL_MODE`; British Grand Prix remains excluded from
   all training/calibration and reserved for held-out replay/demo/final use.
+
 ### A2 — causal C8 battle join, persistent C9, CP-14 fail-closed — 2026-09-13 (Tanveer)
 
 - Scope: Track A item A2 only. The historical C1/C7 spine was not rerun or modified. CP-20, CP-21 and CP-22 were not rerun and their caveats stand unchanged.

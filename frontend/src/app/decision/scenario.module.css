@@ -96,6 +96,21 @@
   color: #d0a608;
 }
 
+.statusStub {
+  font-size: 0.78rem;
+  color: var(--haas-white);
+}
+
+.stubBadge {
+  font-size: 0.62rem;
+  letter-spacing: 0.08em;
+  color: var(--haas-black);
+  background: var(--haas-yellow);
+  border-radius: 2px;
+  padding: 0.08rem 0.4rem;
+  font-weight: 700;
+}
+
 .statusErrorNote {
   color: var(--haas-grey);
   font-size: 0.74rem;
