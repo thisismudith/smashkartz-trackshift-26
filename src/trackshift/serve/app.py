@@ -7,11 +7,13 @@ not promote synthetic values to observed telemetry or final release evidence.
 from __future__ import annotations
 
 import copy
+import os
 from pathlib import Path
 from typing import Any, Mapping
 
 from fastapi import FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from trackshift.data.registry import FeatureBoundaryError, assert_final_feature_boundary, validate_feature_admission
 from trackshift.planner.api import RiskSpec, generate_baseline_plans, plan
@@ -37,6 +39,7 @@ from trackshift.value.counterattack import evaluate_counterattack
 PASS_MODELS = Path(__file__).resolve().parents[3] / "artifacts" / "models" / "pass"
 
 from . import config_data
+from . import demo_data
 from .fixture import (
     EVENT,
     BATTLE_ID,
@@ -289,12 +292,16 @@ def _pass_predictor_factory(app: FastAPI):
     return get
 
 
-def create_app(*, mode: str = "service", final_mode: bool = False) -> FastAPI:
+def create_app(*, mode: str = "service", final_mode: bool = False, demo_mode: bool | None = None) -> FastAPI:
     """Create the deterministic development service.
 
     ``final_mode=True`` is intentionally rejected at startup until official
     rules and accepted C4/C5 callbacks exist; this is a hard release boundary.
     """
+    if demo_mode is None:
+        demo_mode = os.getenv("TRACKSHIFT_DEMO_MODE", "").strip().lower() in {"1", "true", "yes", "on"}
+    if final_mode and demo_mode:
+        raise ValueError("final_mode and demo_mode cannot be enabled together")
     if final_mode:
         # This raises on unresolved Detection Gap/deployment/store inputs and
         # prevents a route from quietly falling back to the synthetic fixture.
@@ -314,25 +321,57 @@ def create_app(*, mode: str = "service", final_mode: bool = False) -> FastAPI:
         # from the very client that has to render it.
         expose_headers=[STUB_HEADER, UNVERIFIED_HEADER],
     )
-    app.state.mode = mode
+    app.state.mode = "demo" if demo_mode else mode
+    app.state.demo_mode = demo_mode
     app.state.final_mode = final_mode
     app.state.synthetic = True
     app.state.fixture_version = SYNTHETIC_FIXTURE_VERSION
-    app.state.rival_model = synthetic_rival_model()
+    # Deployment demo mode must start without trained artifacts or telemetry.
+    # The middleware below returns self-contained fixture bodies before route
+    # handlers access any model or data resource.
+    app.state.rival_model = None if demo_mode else synthetic_rival_model()
 
     app.state.pass_predictors = {}
     # Counted pass rates per season, loaded once. Absent artifacts are not an
     # error: the route then answers from the model alone and says so, rather
     # than failing to start over a comparison that is nice to have.
-    try:
-        app.state.pass_rate_tables = pass_fallback.load_all_tables()
-    except Exception:
+    if demo_mode:
         app.state.pass_rate_tables = {}
+    else:
+        try:
+            app.state.pass_rate_tables = pass_fallback.load_all_tables()
+        except Exception:
+            app.state.pass_rate_tables = {}
     # Every route that answers from a placeholder adds its name here, so the
     # replay bundle can report what it actually shipped instead of asserting an
     # empty list.
     app.state.stubs_used = set()
     _pass_predictor = _pass_predictor_factory(app)
+
+    @app.middleware("http")
+    async def deployment_demo(request, call_next):  # type: ignore[no-untyped-def]
+        """Serve the small fixture before any real-mode dependency is touched."""
+        if not app.state.demo_mode:
+            return await call_next(request)
+        payload: dict[str, Any] | None = None
+        if request.method == "POST":
+            try:
+                decoded = await request.json()
+                payload = decoded if isinstance(decoded, dict) else {}
+            except Exception:
+                payload = {}
+        body = demo_data.response(request.method, request.url.path, payload, dict(request.query_params))
+        if body is not None:
+            headers = {STUB_HEADER: "true"}
+            # This middleware is outermost, so a short-circuit response would
+            # otherwise bypass CORSMiddleware for a browser using a direct dev
+            # origin instead of the Next proxy.
+            origin = request.headers.get("origin")
+            if origin in DEV_ORIGINS:
+                headers["Access-Control-Allow-Origin"] = origin
+                headers["Access-Control-Expose-Headers"] = f"{STUB_HEADER}, {UNVERIFIED_HEADER}"
+            return JSONResponse(body, headers=headers)
+        return await call_next(request)
 
     def _mark_stub(response: Response, name: str) -> None:
         """Record a placeholder answer in all three places it has to appear.
@@ -1001,6 +1040,11 @@ def create_app(*, mode: str = "service", final_mode: bool = False) -> FastAPI:
         ("POST", "/api/v1/plan"): lambda payload: planner(payload, Response()),
         ("POST", "/api/v1/simulate"): lambda payload: simulation(payload, Response()),
     }
+    # request_json() uses this in-process shortcut for replay generation. In
+    # demo mode it must traverse the middleware too, otherwise it would invoke
+    # the real handlers and defeat the no-artifact guarantee.
+    if demo_mode:
+        app.state.route_handlers = {}
     return app
 
 

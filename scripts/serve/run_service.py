@@ -31,6 +31,13 @@ DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8000
 
 
+def demo_mode_enabled() -> bool:
+    """Match the service's explicit deployment-mode environment switch."""
+    import os
+
+    return os.getenv("TRACKSHIFT_DEMO_MODE", "").strip().lower() in {"1", "true", "yes", "on"}
+
+
 def readiness() -> dict[str, object]:
     """What the service would actually answer with, before it starts.
 
@@ -64,16 +71,18 @@ def main() -> int:
                         help="Report readiness and exit without binding a port")
     args = parser.parse_args()
 
-    report = readiness()
+    demo_mode = demo_mode_enabled()
+    report = ({"mode": "demo", "fixture": "deployment-demo-v1", "cpu_only": True}
+              if demo_mode else readiness())
     if args.check:
         print(json.dumps(report, indent=2))
         return 0
 
     # Construct before binding, so a configuration failure is a clean error
     # rather than a half-started server.
-    create_app(mode="service", final_mode=args.final)
+    create_app(mode="service", final_mode=args.final, demo_mode=demo_mode)
 
-    stubbed = report["checkpoints_that_would_use_the_synthetic_model"]
+    stubbed = report.get("checkpoints_that_would_use_the_synthetic_model", [])
     if stubbed:
         print(f"WARNING: {stubbed} have no CP-14 artifact and will answer from the "
               "synthetic development model. Responses carry is_stub: true.",
