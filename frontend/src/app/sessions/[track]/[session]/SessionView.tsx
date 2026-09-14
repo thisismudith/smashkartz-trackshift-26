@@ -12,6 +12,7 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { defaultSimSource } from "@/sim/data/source";
 import type { RawSessionManifest, RawDriverEntry, RawLapEntry } from "@/sim/data/manifest";
@@ -54,9 +55,22 @@ export default function SessionView({
   const [view, setViewState] = useState<View>(initialView);
 
   // ?view= keeps a view linkable without making each one its own route, which would re-fetch the
-  // manifest on every tab change. The initial value is resolved on the server and passed in, so
-  // there is no client-side URL read to go out of step with the server render; subsequent changes
-  // only rewrite the address bar.
+  // manifest on every tab change.
+  //
+  // Read HERE rather than on the server: under `output: "export"` one HTML file is built per
+  // session and served for every query string, so a server-resolved view would be whichever
+  // value was baked in at build time and would be wrong for every other link. Applied in an
+  // effect so the first render matches the prerendered markup and React does not report a
+  // hydration mismatch. An unknown value is ignored and `initialView` stands — a bad link
+  // should still land somewhere useful.
+  const search = useSearchParams();
+  useEffect(() => {
+    const requested = search.get("view");
+    if (requested && VIEWS.some((v) => v.value === requested)) {
+      setViewState(requested as View);
+    }
+  }, [search]);
+
   const setView = (v: View) => {
     setViewState(v);
     const url = new URL(window.location.href);

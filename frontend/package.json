@@ -5,8 +5,9 @@
   "scripts": {
     "predev": "node scripts/ensure-sim-data.mjs",
     "dev": "next dev",
-    "prebuild": "node scripts/ensure-sim-data.mjs",
+    "prebuild": "node scripts/ensure-sim-data.mjs && node scripts/stage-replay-bundle.mjs",
     "build": "next build",
+    "replay:public": "node scripts/stage-replay-bundle.mjs",
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",

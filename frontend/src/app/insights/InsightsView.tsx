@@ -30,6 +30,7 @@
  */
 "use client";
 
+import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { CHART } from "@/lib/palette";
 import {
@@ -40,7 +41,7 @@ import {
   type SimIndex,
 } from "@/sim/data/source";
 import { teamColour, type Catalogue } from "@/sim/data/catalogue";
-import { FilterBar, useFilters, type FilterState } from "@/components/filters";
+import { FilterBar, parseFilters, useFilters, type FilterState } from "@/components/filters";
 import { Segmented } from "@/components/ui";
 import type { FittedParams, Leaf } from "@/sim/engine/params";
 import {
@@ -492,7 +493,31 @@ const METRICS: Metric[] = [
   },
 ];
 
-export default function InsightsView({ initialFilters }: { initialFilters: FilterState }) {
+export default function InsightsView() {
+  /**
+   * Filters come off the URL HERE rather than from the server.
+   *
+   * A static export serves one prebuilt HTML file for every query string, so resolving
+   * these on the server would bake in whichever set the build happened to see and every
+   * shared link after that would render the wrong filters.
+   *
+   * Repeated params keep the behaviour the server had: `?event=a&event=b` becomes
+   * `event=a,b`, which is the comma form `parseFilters` splits on. Dropping the join would
+   * silently keep only the last value of a multi-select someone shared.
+   */
+  const search = useSearchParams();
+  const initialFilters = useMemo<FilterState>(() => {
+    const q = new URLSearchParams();
+    for (const key of new Set(search.keys())) {
+      const all = search.getAll(key);
+      if (all.length) q.set(key, all.join(","));
+    }
+    return parseFilters(q);
+    // Read once, at mount: it seeds `useState` below, and re-parsing on every URL change
+    // would fight the user's own filter edits, which write back to the address bar.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const [params, setParams] = useState<FittedParams | null>(null);
   const [cat, setCat] = useState<Catalogue | null>(null);
   const [index, setIndex] = useState<SimIndex | null>(null);

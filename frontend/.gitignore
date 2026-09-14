@@ -39,3 +39,11 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# static export output
+/out/
+
+# The replay bundle staged for the static export by `npm run replay:public`.
+# Generated from TRACKSHIFT_REPLAY_DIR at build time and never a source of truth,
+# the same rule public/sim/ already follows.
+/public/api/replay/

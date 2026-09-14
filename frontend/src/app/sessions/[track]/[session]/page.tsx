@@ -1,33 +1,39 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import SessionView from "./SessionView";
+
+export { generateStaticParams } from "../../staticParams";
 
 export const metadata: Metadata = {
   title: "Session · SmashKartz",
 };
 
-const VIEWS = ["energy", "overtake", "pace"] as const;
-type View = (typeof VIEWS)[number];
-
-/** ?view= is resolved on the server so the first paint already shows the requested view and the
- * client never has to read the URL and correct itself. An unknown value falls back to energy
- * rather than erroring — a bad link should still land somewhere useful. */
+/**
+ * `?view=` is read on the CLIENT, in SessionView.
+ *
+ * It used to be resolved here so the first paint already showed the requested view. A
+ * static export cannot do that: one HTML file is built per (track, session) and served for
+ * every query string, so a server-rendered view would be whichever value happened to be
+ * baked in. The page therefore hands over the plain default and SessionView corrects it
+ * from the URL on mount — the same validation, the same fallback to energy for an unknown
+ * value, just a frame later.
+ */
 export default async function SessionPage({
   params,
-  searchParams,
 }: {
   params: Promise<{ track: string; session: string }>;
-  searchParams: Promise<{ view?: string }>;
 }) {
   const { track, session } = await params;
-  const { view } = await searchParams;
-  const initialView: View = (VIEWS as readonly string[]).includes(view ?? "")
-    ? (view as View)
-    : "energy";
+  // Suspense because SessionView calls useSearchParams, which Next requires a boundary
+  // around in a prerendered route. The fallback is never seen in practice -- the component
+  // renders its own loading state -- but without the boundary the export fails outright.
   return (
-    <SessionView
-      track={track}
-      session={decodeURIComponent(session)}
-      initialView={initialView}
-    />
+    <Suspense>
+      <SessionView
+        track={track}
+        session={decodeURIComponent(session)}
+        initialView="energy"
+      />
+    </Suspense>
   );
 }

@@ -40,7 +40,7 @@ import {
 import { assessEvidence } from "@/serve/evidence";
 import type { Result } from "@/serve/guards";
 import { CORE_TAGS } from "@/serve/provenance";
-import { makeSource, type SourceMode } from "@/serve/source";
+import { makeSource, REPLAY_BASE, type SourceMode } from "@/serve/source";
 import type {
   BattlesResponse,
   MetaResponse,
@@ -116,7 +116,7 @@ function IntegrationShell() {
               />
               <span className={s.sourceName}>{m === "live" ? "Live service" : "Replay bundle"}</span>
               <span className={s.sourceWhere}>
-                {m === "live" ? live.label : "TRACKSHIFT_REPLAY_DIR"}
+                {m === "live" ? live.label : REPLAY_BASE}
               </span>
             </label>
           ))}

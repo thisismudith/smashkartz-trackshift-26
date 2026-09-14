@@ -203,13 +203,32 @@ CURRENT_SEASON = "2026"
 STUB_HEADER = "X-TrackShift-Stub"
 UNVERIFIED_HEADER = "X-TrackShift-Unverified"
 
-#: Where the Next dev server runs. Named explicitly rather than allowing every
-#: origin: the service answers from local telemetry on a developer's machine and
-#: a wildcard would let any page that host visits read it.
+#: Where the Next dev server runs. The fallback when nothing is configured.
 DEV_ORIGINS = (
     "http://localhost:3000", "http://127.0.0.1:3000",
     "http://localhost:3001", "http://127.0.0.1:3001",
 )
+
+
+def allowed_origins() -> list[str]:
+    """Origins permitted to call this service, from ``TRACKSHIFT_ALLOWED_ORIGINS``.
+
+    The frontend is now a static export on its own origin -- a CDN, not this host --
+    so the list cannot stay hardcoded to localhost or the deployed site could never
+    reach the container. It is read from the environment as a comma-separated list
+    and falls back to the dev-server origins when unset, which keeps
+    ``npm run dev`` against a local service working with no configuration at all.
+
+    NO WILDCARD AND NO REGEX, deliberately. This service answers from real telemetry
+    on whatever machine it runs on, and ``*`` would let any page a browser visits
+    read it. A pattern is the same hazard one typo further away: an unanchored
+    ``.*\\.example\\.com`` also matches ``evil.com/x.example.com``. An origin that is
+    not on this list is a deployment that has not been configured yet, which is a
+    thing to fix rather than to wave through.
+    """
+    raw = os.environ.get("TRACKSHIFT_ALLOWED_ORIGINS", "")
+    configured = [origin.strip() for origin in raw.split(",") if origin.strip()]
+    return configured or list(DEV_ORIGINS)
 
 
 def _empirical_pass(app: FastAPI, gap_s: Any) -> dict[str, Any]:
@@ -307,13 +326,15 @@ def create_app(*, mode: str = "service", final_mode: bool = False, demo_mode: bo
         # prevents a route from quietly falling back to the synthetic fixture.
         rules_api.load_event_rules(EVENT, final_mode=True)
     app = FastAPI(title="TrackShift", version=API_VERSION)
-    # The UI is served from the Next dev server, a different origin from this
-    # one. Without this every browser call fails at the preflight and the panels
-    # report "backend unreachable" while curl against the same URL succeeds --
-    # which sends the reader looking for a fault that is not there.
+    # The UI is always a different origin from this one -- the Next dev server in
+    # development, a static host in deployment. Without this every browser call
+    # fails at the preflight and the panels report "backend unreachable" while
+    # curl against the same URL succeeds, which sends the reader looking for a
+    # fault that is not there. See allowed_origins() for why the list is
+    # configured rather than hardcoded, and why it is never a wildcard.
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=list(DEV_ORIGINS),
+        allow_origins=allowed_origins(),
         allow_methods=["GET", "POST", "OPTIONS"],
         allow_headers=["Content-Type"],
         # Nothing can read a custom response header cross-origin unless it is

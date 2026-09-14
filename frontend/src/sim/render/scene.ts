@@ -774,14 +774,20 @@ export const CAMERA_CONTROL_HELP: readonly { keys: string; action: string }[] = 
  * rather than snaps.
  *
  * `order` is a caller-owned scratch array, reused so the hot path allocates nothing.
+ *
+ * `laneStepScale` widens the lane spacing for a view that needs two cars to be plainly
+ * separate rather than merely not-coincident. The default 1.15 car-widths leaves ~0.3 m of
+ * daylight between two 2 m cars, which is correct for a pack and reads as touching when the
+ * shot is of exactly one pair. The road width still caps the result, so a wider setting
+ * cannot push a car off the circuit -- it only uses more of the space that is already there.
  */
 export function declutterLanes(
   n: number, pose: Float32Array, station: Float32Array, lateral: Float32Array,
-  track: TrackModel, order: number[],
+  track: TrackModel, order: number[], laneStepScale = 1,
 ): void {
   const trackLen = track.lengthMetres;
   const windowM = CAR.lengthM * 1.15;
-  const laneStepM = CAR.widthM * 1.15;
+  const laneStepM = CAR.widthM * 1.15 * laneStepScale;
 
   order.length = 0;
   for (let i = 0; i < n; i++) {
@@ -1183,6 +1189,8 @@ export class SimRenderer {
    * do. Blending toward the background is visually the same against this dark track,
    * costs one buffer upload when the focus changes, and keeps the single draw call. */
   private dimUnfocused = false;
+  /** Multiplier on the declutter lane step; see setLaneSpread. 1 is the pack default. */
+  private laneSpread = 1;
   /** Extra cars kept bright while the field is dimmed; see setHighlightIndices. */
   private highlight: Set<number> | null = null;
   /** Focus index the current instanceColor buffer was written for; -2 forces a rewrite. */
@@ -1538,6 +1546,22 @@ export class SimRenderer {
   setDimUnfocused(v: boolean) {
     this.dimUnfocused = v;
     this.applyDim(this.lastFocusIdx);
+  }
+
+  /**
+   * Widen the render-only lane spacing, for a shot of one pair rather than a pack.
+   *
+   * The evidence reel frames two specific cars at the moment one passes the other, and the
+   * default spacing leaves them about 0.3 m apart on screen -- correct as a pack rule and
+   * unreadable as a picture of an overtake. This does NOT move the cars in any reported
+   * sense: it is the same render-only nudge declutterLanes already applies, turned up, and
+   * still capped by the measured road width. Gaps, positions and every number on the HUD
+   * are untouched.
+   *
+   * 1 restores the default.
+   */
+  setLaneSpread(scale: number) {
+    this.laneSpread = Number.isFinite(scale) && scale > 0 ? scale : 1;
   }
 
   /**
@@ -1906,7 +1930,7 @@ export class SimRenderer {
     // finished/retired cars are already queued nose-to-tail along the station axis
     // (see timeline.ts's parkedStation), well outside this window, so no separate
     // "is this car still racing" check is needed here.
-    declutterLanes(n, pose, station, lateral, this.track, this.declutterOrder);
+    declutterLanes(n, pose, station, lateral, this.track, this.declutterOrder, this.laneSpread);
 
     // ease toward the assigned lane; the first frame snaps so cars do not fly in
     const k = this.smoothedValid ? 1 - Math.exp(-dtWall * 6) : 1;

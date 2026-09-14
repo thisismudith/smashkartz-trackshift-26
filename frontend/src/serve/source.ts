@@ -18,9 +18,11 @@
  *     mode reports the sampled envelope as unavailable and the panel falls back to
  *     plotting the rule breakpoints, labelled as breakpoints.
  *
- * The bundle is read through a Next route handler (`/api/replay/...`) that streams it from
- * a directory OUTSIDE the repo, so generated bundle files are never copied into
- * `public/` and never end up committed.
+ * The bundle is served as STATIC FILES from `public/api/replay/`, copied there by the
+ * `replay:public` npm script before the build. It used to be streamed by a Next route
+ * handler from a directory outside the repo; `output: "export"` has no server to run one,
+ * so the files are staged into `public/` at build time instead and `.gitignore` keeps the
+ * generated copies out of the tree.
  */
 
 export type SourceMode = "live" | "replay";
@@ -38,50 +40,33 @@ export interface DataSource {
  *
  *   1. a `base` passed to `makeSource`  — the console reads one from `?api=`
  *   2. NEXT_PUBLIC_TRACKSHIFT_API_BASE  — baked in at build time
- *   3. the same-origin proxy            — which forwards to TRACKSHIFT_API_ORIGIN,
- *                                         defaulting to http://127.0.0.1:8000/api/v1,
- *                                         the address in the integration brief
+ *   3. `/api/v1` on the current origin   — only useful behind a reverse proxy
  *
- * The default is the proxy rather than the absolute URL so that the address of the backend
- * is a SERVER-side setting. Baking it into the client bundle means it can only be changed by
- * rebuilding, and it is exactly the sort of thing that differs between machines — 8000 is
- * not reliably free. `?api=` remains for pointing one page somewhere else without touching
- * configuration at all.
+ * Under `output: "export"` the backend's address has to be a BUILD-time setting: there is
+ * no server left to hold a runtime one, and the browser now calls the service directly
+ * rather than through a same-origin proxy. So NEXT_PUBLIC_TRACKSHIFT_API_BASE must be set
+ * to the container's absolute URL when the site is built, and that URL must appear in the
+ * service's TRACKSHIFT_ALLOWED_ORIGINS — a cross-origin call the backend has not been told
+ * to accept fails at the preflight. `?api=` remains for pointing one page somewhere else
+ * without rebuilding.
  */
 export const LIVE_BASE = (
-  process.env.NEXT_PUBLIC_TRACKSHIFT_API_BASE || "/api/live"
+  process.env.NEXT_PUBLIC_TRACKSHIFT_API_BASE || "/api/v1"
 ).replace(/\/+$/, "");
 
-/** Served by src/app/api/replay/[...path]/route.ts from TRACKSHIFT_REPLAY_DIR. */
-export const REPLAY_BASE = "/api/replay";
-
-
 /**
- * Same-origin proxy to the model service (src/app/api/live/[...path]/route.ts).
- *
- * The backend mounts no CORS middleware, so the browser cannot call it directly: the request
- * is blocked before it leaves and surfaces as an unexplained network failure. Absolute live
- * bases are therefore rewritten through this proxy, which runs server-side where the same
- * origin policy does not apply. A base that is already a path is left alone — it is
- * same-origin by definition.
+ * Static replay bundle, staged into `public/api/replay/` by the `replay:public` npm
+ * script. Still `/api/replay` because the path is what the exported site serves the files
+ * at — there is no route handler behind it any more, just nine JSON files.
  */
-export const PROXY_BASE = "/api/live";
-
-function isAbsolute(base: string): boolean {
-  return /^https?:\/\//i.test(base);
-}
+export const REPLAY_BASE = "/api/replay";
 
 export function makeSource(mode: SourceMode, base?: string): DataSource {
   const resolved = (base || LIVE_BASE).replace(/\/+$/, "");
   return {
     mode,
     base: resolved,
-    label:
-      mode === "replay"
-        ? "replay bundle (TRACKSHIFT_REPLAY_DIR)"
-        : resolved === PROXY_BASE
-          ? "TRACKSHIFT_API_ORIGIN via /api/live"
-          : resolved,
+    label: mode === "replay" ? "replay bundle (static)" : resolved,
   };
 }
 
@@ -143,16 +128,12 @@ export function resolveUrl(source: DataSource, route: RouteResolution, query?: R
   if (source.mode === "replay") {
     return route.replayFile ? `${REPLAY_BASE}/${route.replayFile}.json` : null;
   }
+  // Fetched DIRECTLY, absolute or not. An absolute base used to be rewritten through a
+  // same-origin proxy because the service mounted no CORS; it does now, and the exported
+  // site has no server to proxy through, so the browser calls the service itself.
   const params = new URLSearchParams(
     query ? Object.entries(query).map(([k, v]) => [k, String(v)]) : [],
   );
-
-  if (isAbsolute(source.base)) {
-    // `__base` tells the proxy which loopback service to forward to; it validates the host.
-    params.set("__base", source.base);
-    return `${PROXY_BASE}${route.livePath}?${params.toString()}`;
-  }
-
   const qs = params.toString();
   return `${source.base}${route.livePath}${qs ? `?${qs}` : ""}`;
 }

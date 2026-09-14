@@ -30,21 +30,23 @@ describe("route resolution", () => {
     expect(url).toContain("/battles/a%20b%2Fc/timeline");
   });
 
-  it("routes an absolute live base through the same-origin proxy (the backend sets no CORS)", () => {
+  it("fetches an absolute live base directly, with no proxy rewrite", () => {
+    // The service mounts CORS and the exported site has no server to proxy through, so the
+    // browser calls the container's origin itself. A rewrite here would send every request
+    // to a path that does not exist in a static export.
     const url = resolveUrl(makeSource("live", "http://127.0.0.1:8010/api/v1"), ROUTES.meta());
-    expect(url).toBe("/api/live/meta?__base=http%3A%2F%2F127.0.0.1%3A8010%2Fapi%2Fv1");
+    expect(url).toBe("http://127.0.0.1:8010/api/v1/meta");
   });
 
   it("leaves an already same-origin base alone", () => {
-    const url = resolveUrl(makeSource("live", "/api/live"), ROUTES.meta());
-    expect(url).toBe("/api/live/meta");
+    const url = resolveUrl(makeSource("live", "/api/v1"), ROUTES.meta());
+    expect(url).toBe("/api/v1/meta");
   });
 
-  it("carries route query params through the proxy alongside __base", () => {
+  it("carries route query params onto an absolute base, and adds no __base", () => {
     const url = resolveUrl(makeSource("live", "http://127.0.0.1:8010/api/v1"), ROUTES.powerEnvelope("e"), { mode: "both", step_kmh: 5 });
-    expect(url).toContain("mode=both");
-    expect(url).toContain("step_kmh=5");
-    expect(url).toContain("__base=");
+    expect(url).toBe("http://127.0.0.1:8010/api/v1/rules/e/power_envelope?mode=both&step_kmh=5");
+    expect(url).not.toContain("__base");
   });
 });
 

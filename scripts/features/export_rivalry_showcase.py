@@ -48,6 +48,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "scripts"))
 
+from trackshift.rules.api import load_event_rules, max_electrical_power_kw  # noqa: E402
 from trackshift.serve.pass_service import load_predictor  # noqa: E402
 
 from build_sim_data import OUT_DIR, write_json  # noqa: E402
@@ -188,12 +189,29 @@ def _telemetry(event: str, session: str,
     return cache[key]
 
 
-#: The 2026 machine limit, kW. The rule engine owns the speed-dependent envelope
-#: (AGENTS.md section 32); this is only the ceiling the split is clamped to.
-MACHINE_LIMIT_KW = 350.0
+def _machine_limit_kw(event: str, speed_kmh: Any) -> float:
+    """The regulatory electrical cap, from the rule engine. Never a local constant.
+
+    This was a hardcoded ``350.0``, which AGENTS.md section 32 forbids and
+    ``tests/test_rules.py::test_no_new_envelope_constant_outside_config`` catches:
+    the cap is a speed-dependent curve owned by ``max_electrical_power_kw``, and a
+    second copy of one point on it drifts the moment the config changes.
+
+    Evaluated at the window's PEAK speed, because ``electrical_split_kw`` takes a
+    single ceiling for the whole trace. That is the loosest bound in the window,
+    so it never clips a sample the regulations would have allowed; the twin's own
+    over-estimates stay visible rather than being hidden by a tight clamp.
+
+    NORMAL mode, not override: whether a car had override armed is not in the feed,
+    and assuming the higher cap would quietly licence a bigger number than the
+    evidence supports.
+    """
+    rules = load_event_rules(event)
+    peak = float(speed_kmh) if speed_kmh == speed_kmh else 0.0
+    return float(max_electrical_power_kw(peak, "normal", rules))
 
 
-def _energy_channels(rows: pd.DataFrame) -> dict[str, Any]:
+def _energy_channels(rows: pd.DataFrame, event: str) -> dict[str, Any]:
     """Wheel power and the ERS split, from the twin that already owns this physics.
 
     SIMULATED, not measured. The public feed carries no battery, no MGU-K power
@@ -221,8 +239,9 @@ def _energy_channels(rows: pd.DataFrame) -> dict[str, Any]:
     forces = twin.force_split(speed_mps, accel, np.zeros(len(rows)), params)
     wheel = twin.wheel_power_kw(forces, speed_mps)
     ice, _, _ = twin.ice_power_kw(throttle, brake, params, rpm=rpm)
+    peak_kmh = float(rows["speed_kmh"].max()) if len(rows) else 0.0
     split = twin.electrical_split_kw(wheel, ice, brake, params,
-                                     machine_limit_kw=MACHINE_LIMIT_KW)
+                                     machine_limit_kw=_machine_limit_kw(event, peak_kmh))
     deploy = split.get("deploy_kw") if isinstance(split, dict) else None
     harvest = split.get("harvest_kw") if isinstance(split, dict) else None
     return {"wheel": wheel, "deploy": deploy, "harvest": harvest}
@@ -240,7 +259,7 @@ def _sample_time(frame: pd.DataFrame) -> pd.Series:
     return frame["lap_start_session_s"] + frame["lap_elapsed_s"]
 
 
-def _trace(car: pd.DataFrame, centre: float, t0: float, t1: float,
+def _trace(car: pd.DataFrame, centre: float, t0: float, t1: float, event: str,
            rival: pd.DataFrame | None = None) -> list[dict[str, Any]]:
     """One car's measured channels across the window, relative to the centre.
 
@@ -264,7 +283,7 @@ def _trace(car: pd.DataFrame, centre: float, t0: float, t1: float,
             left=float("nan"), right=float("nan"),
         ) - rows["_total_m"].to_numpy(dtype=float)
 
-    energy = _energy_channels(rows)
+    energy = _energy_channels(rows, event)
 
     out: list[dict[str, Any]] = []
     for i, (_, r) in enumerate(rows.iterrows()):
@@ -412,8 +431,8 @@ def _window(event: str, session: str, row: Any, attacker: str, defender: str,
         return None
 
     t0, t1 = centre - WINDOW_S, centre + WINDOW_S
-    attacker_trace = _trace(attacker_car, centre, t0, t1, defender_car)
-    defender_trace = _trace(defender_car, centre, t0, t1, attacker_car)
+    attacker_trace = _trace(attacker_car, centre, t0, t1, event, defender_car)
+    defender_trace = _trace(defender_car, centre, t0, t1, event, attacker_car)
     if not attacker_trace:
         return None
     return {

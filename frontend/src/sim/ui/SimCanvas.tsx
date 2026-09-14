@@ -47,6 +47,15 @@ const CAMERA_MODES: CameraMode[] = ["broadcast", "onboard", "helicopter", "orbit
 // 20x is already the point where one drawn frame ~ one telemetry sample.
 const SPEEDS = [1, 2, 5, 10, 20];
 
+/**
+ * Lane-spacing multiplier while the evidence reel is running.
+ *
+ * 2.2 puts about 2.5 m of daylight between the two cars instead of 0.3 m, which is what
+ * makes the pass legible in a still. Still render-only and still capped by the measured
+ * road half-width, so it cannot put a car on the grass.
+ */
+const REEL_LANE_SPREAD = 2.2;
+
 /** Opened on by default: see the comment at the selection that uses it. */
 const PREFERRED_SLUG = "british-grand-prix";
 
@@ -265,6 +274,11 @@ export default function SimCanvas() {
       .filter((i) => i >= 0);
     rendererRef.current?.setHighlightIndices(pair);
     rendererRef.current?.setDimUnfocused(true);
+    // Widen the render-only lane spacing while the reel is up. The pack default puts
+    // two cars ~0.3 m apart on screen, which is right for twenty of them and reads as
+    // one car when the shot is of exactly two. Reset on exit so ordinary replay keeps
+    // its calibrated look.
+    rendererRef.current?.setLaneSpread(REEL_LANE_SPREAD);
 
     // Seek to the EXACT session second the window opens on. This used to be a
     // proportional guess from the lap number (duration * lap / totalLaps), which
@@ -297,6 +311,7 @@ export default function SimCanvas() {
     setDimField(false);
     rendererRef.current?.setHighlightIndices(null);
     rendererRef.current?.setDimUnfocused(false);
+    rendererRef.current?.setLaneSpread(1);
   }
 
   /**

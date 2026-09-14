@@ -1,0 +1,25 @@
+# The frontend is a static export served from a CDN; none of it belongs in the
+# service image, and node_modules alone would add hundreds of megabytes to the
+# build context before a single layer is written.
+frontend/
+
+# The telemetry lake. Regenerable, gitignored, and many GB once built.
+data/
+
+.git
+.gitignore
+node_modules/
+*.md
+
+# Local Python environments -- the image builds its own from the lock file.
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# Test and tooling trees that the service does not import at runtime.
+tests/
+runbooks/
+env_sim/
+.pytest_cache/
+.ruff_cache/

@@ -119,15 +119,25 @@ export default function TelemetryView({
   session,
   manifest,
   drivers,
-  styleOf,
+  styles,
 }: {
   track: string;
   session: string;
   manifest: RawSessionManifest;
   /** Already ordered by finishing classification — the default pair is the first two. */
   drivers: RawDriverEntry[];
-  styleOf: (d: RawDriverEntry) => DriverStyle;
+  /**
+   * driver code -> colour, as `driverStyles` builds it. A PLAIN RECORD, deliberately:
+   * this used to be a `styleOf` lookup FUNCTION, which Next cannot serialise across the
+   * server/client boundary, so the page threw on every render and only ever displayed its
+   * "Telemetry is unavailable" catch branch. Data crosses; behaviour is rebuilt here.
+   */
+  styles: Record<string, DriverStyle>;
 }) {
+  /** The lookup the rest of this component was already written against. */
+  const styleOf = (d: RawDriverEntry): DriverStyle =>
+    styles[d.driver] ?? { colour: "#AEAEAE", dashed: false };
+
   const trackLengthM = manifest.trackLengthMetres;
 
   const [buf, setBuf] = useState<ArrayBuffer | null>(null);

@@ -253,6 +253,43 @@ describe("declutterLanes", () => {
     for (const l of lateral) expect(Math.abs(l)).toBeLessThanOrEqual(halfW - CAR.widthM / 2 + 1e-9);
   });
 
+  it("widens the gap for the evidence reel without leaving the road", () => {
+    // The reel frames exactly two cars at the moment one passes the other. The pack
+    // default leaves ~0.3 m of daylight between two 2 m cars, which reads as one car in
+    // a still; the scale opens that up. It must stay a RENDER nudge inside the measured
+    // road, so the half-width bound is asserted at the wider setting too.
+    const track = makeRing();
+    const n = 2;
+    const stations = [2000, 2000.4];
+    const laterals = [0, 0];
+    const pose = makePose(stations, laterals);
+
+    const normal = new Float32Array(laterals);
+    declutterLanes(n, pose, new Float32Array(stations), normal, track, []);
+    const wide = new Float32Array(laterals);
+    declutterLanes(n, pose, new Float32Array(stations), wide, track, [], 2.2);
+
+    const gapOf = (a: Float32Array) => Math.abs(a[0] - a[1]);
+    expect(gapOf(wide)).toBeGreaterThan(gapOf(normal) * 2);
+    // Enough daylight that the two cars are plainly apart rather than merely distinct.
+    expect(gapOf(wide) - CAR.widthM).toBeGreaterThan(1.5);
+
+    const halfW = track.halfWidth[0];
+    for (const l of wide) expect(Math.abs(l)).toBeLessThanOrEqual(halfW - CAR.widthM / 2 + 1e-9);
+  });
+
+  it("treats a scale of 1 as the unchanged default", () => {
+    const track = makeRing();
+    const n = 4;
+    const stations = [1000, 1000.5, 1001, 1001.5];
+    const laterals = [0, 0, 0, 0];
+    const pose = makePose(stations, laterals);
+    const a = new Float32Array(laterals), b = new Float32Array(laterals);
+    declutterLanes(n, pose, new Float32Array(stations), a, track, []);
+    declutterLanes(n, pose, new Float32Array(stations), b, track, [], 1);
+    expect(Array.from(b)).toEqual(Array.from(a));
+  });
+
   it("is STABLE: the same pose always yields the same lanes", () => {
     const track = makeRing();
     const n = 20;
